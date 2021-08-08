@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import { Agent as HTTPAgent } from 'http';
 import { Agent as HTTPSAgent } from 'https';
+import { URL } from 'url';
 import { Cookie, CookieJar, MemoryCookieStore } from 'tough-cookie';
 import FormData from 'form-data';
 import { EventEmitter } from 'events';

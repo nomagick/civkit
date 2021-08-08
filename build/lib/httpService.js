@@ -4,6 +4,7 @@ exports.HTTPService = exports.HTTPServiceError = exports.parseSimpleCookie = exp
 const tslib_1 = require("tslib");
 const http_1 = require("http");
 const https_1 = require("https");
+const url_1 = require("url");
 const tough_cookie_1 = require("tough-cookie");
 const form_data_1 = tslib_1.__importDefault(require("form-data"));
 const lodash_1 = tslib_1.__importDefault(require("lodash"));
@@ -146,7 +147,7 @@ class HTTPService extends events_1.EventEmitter {
             initialCookies: {}
         });
         this.baseUrl = baseUrl;
-        this.baseURL = new URL(baseUrl);
+        this.baseURL = new url_1.URL(baseUrl);
         const inertStore = new InertMemoryCookieStore();
         const newJar = new tough_cookie_1.CookieJar(inertStore);
         patchCookieJar(newJar, inertStore);
@@ -191,7 +192,7 @@ class HTTPService extends events_1.EventEmitter {
         (this.baseUrl.startsWith('https') ? this.httpsAgent : this.httpAgent).maxSockets = size;
     }
     urlOf(pathName, queryParams = {}) {
-        const params = new URLSearchParams(this.baseParams);
+        const params = new url_1.URLSearchParams(this.baseParams);
         for (const [k, v] of Object.entries(queryParams || {})) {
             if (Array.isArray(v)) {
                 if (v.length) {
@@ -208,7 +209,7 @@ class HTTPService extends events_1.EventEmitter {
             }
         }
         const pString = params.toString();
-        const url = new URL(pString ? `${pathName}?${pString}` : pathName, this.baseUrl);
+        const url = new url_1.URL(pString ? `${pathName}?${pString}` : pathName, this.baseUrl);
         url.pathname = `${this.baseURL.pathname}${url.pathname}`.replace(/^\/+/, '/');
         return url.toString();
     }

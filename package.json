@@ -33,6 +33,10 @@
         "tsyringe": "^4.3.0",
         "uuid": "^8.3.2"
     },
+    "peerDependencies": {
+        "node-fetch": "^2.6.1",
+        "tsyringe": "^4.3.0"
+    },
     "devDependencies": {
         "@types/fs-extra": "^9.0.7",
         "@types/lodash": "^4.14.168",
