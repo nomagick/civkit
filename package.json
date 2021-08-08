@@ -1,5 +1,5 @@
 {
-    "name": "typescript-toolkit",
+    "name": "tskit",
     "version": "1.0.0",
     "description": "sets of tools, in typescript",
     "main": "build/index.js",
