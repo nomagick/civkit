@@ -5,12 +5,12 @@ const tslib_1 = require("tslib");
 require("reflect-metadata");
 const lang_1 = require("../utils/lang");
 const errors_1 = require("./errors");
-const async_service_1 = tslib_1.__importDefault(require("../lib/async-service"));
+const async_service_1 = require("../lib/async-service");
 const lodash_1 = tslib_1.__importDefault(require("lodash"));
 const meta_1 = require("./meta");
 exports.RPCPARAM_OPTIONS_SYMBOL = Symbol('RPCParam options');
 exports.NOT_RESOLVED = Symbol('Not-Resolved');
-class RPCHost extends async_service_1.default {
+class RPCHost extends async_service_1.AsyncService {
     setResultMeta(target, metaToSet) {
         meta_1.assignMeta(target, metaToSet);
         return target;

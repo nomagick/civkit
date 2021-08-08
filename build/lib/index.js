@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TemporaryFileManger = exports.PromiseThrottle = exports.SubProcessRoutine = exports.routedNestedProxy = exports.isPositiveInt = exports.routeJoin = exports.isNative = exports.parseContentType = exports.restoreContentType = exports.mimeOf = exports.detectFile = exports.detectBuff = exports.extOfMime = exports.mimeOfExt = exports.mimeTypeCompatible = exports.CUSTOM_MIME = exports.parseSimpleCookie = exports.InertMemoryCookieStore = exports.HTTPService = exports.HTTPServiceError = exports.FetchError = exports.objHashMd5B64Of = exports.SaltedHashManager = exports.HMacManager = exports.HashManager = exports.BFsWalk = exports.FancyFile = exports.ResolvedFile = exports.decodeWithHintEncoding = exports.decode = exports.detectEncoding = exports.GCProofDefer = exports.TimeoutError = exports.TimedDefer = exports.Defer = exports.AsyncService = void 0;
-const tslib_1 = require("tslib");
-exports.AsyncService = tslib_1.__importStar(require("./async-service"));
+var async_service_1 = require("./async-service");
+Object.defineProperty(exports, "AsyncService", { enumerable: true, get: function () { return async_service_1.AsyncService; } });
 var defer_1 = require("./defer");
 Object.defineProperty(exports, "Defer", { enumerable: true, get: function () { return defer_1.Defer; } });
 Object.defineProperty(exports, "TimedDefer", { enumerable: true, get: function () { return defer_1.TimedDefer; } });

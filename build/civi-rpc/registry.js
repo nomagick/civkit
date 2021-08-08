@@ -4,11 +4,11 @@ exports.makeRPCKit = exports.AbstractRPCRegistry = exports.RPC_CALL_ENVIROMENT =
 const tslib_1 = require("tslib");
 const lodash_1 = tslib_1.__importDefault(require("lodash"));
 const base_1 = require("./base");
-const async_service_1 = tslib_1.__importDefault(require("../lib/async-service"));
+const async_service_1 = require("../lib/async-service");
 const errors_1 = require("./errors");
 exports.PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
 exports.RPC_CALL_ENVIROMENT = Symbol('RPCEnv');
-class AbstractRPCRegistry extends async_service_1.default {
+class AbstractRPCRegistry extends async_service_1.AsyncService {
     constructor() {
         super();
         this.__tick = 0;

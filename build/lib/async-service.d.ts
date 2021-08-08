@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { EventEmitter } from 'events';
-export default abstract class AsyncService extends EventEmitter {
+export declare abstract class AsyncService extends EventEmitter {
     protected __serviceReady: Promise<this>;
     protected __dependencies: AsyncService[];
     protected __status: 'ready' | 'revoked' | 'pending';

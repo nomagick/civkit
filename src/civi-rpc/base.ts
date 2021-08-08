@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { isConstructor, chainEntries } from '../utils/lang';
 import { ParamValidationError } from './errors';
-import AsyncService from '../lib/async-service';
+import { AsyncService } from '../lib/async-service';
 import _ from 'lodash';
 import { assignMeta, extractMeta } from './meta';
 

@@ -1,4 +1,4 @@
-export * as AsyncService from './async-service';
+export { AsyncService } from './async-service';
 
 export {
     Defer, Deferred,
@@ -27,7 +27,7 @@ export {
 export {
     FetchError, PromiseWithCancel,
 
-    HTTPServiceOptions,HTTPServiceConfig,
+    HTTPServiceOptions, HTTPServiceConfig,
     HTTPServiceError, HTTPService,
     HTTPServiceResponse,
 

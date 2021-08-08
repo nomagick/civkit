@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import AsyncService from '../lib/async-service';
+import { AsyncService } from '../lib/async-service';
 export declare const RPCPARAM_OPTIONS_SYMBOL: unique symbol;
 export declare const NOT_RESOLVED: unique symbol;
 export declare class RPCHost extends AsyncService {

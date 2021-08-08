@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.AsyncService = void 0;
 const events_1 = require("events");
 const defer_1 = require("./defer");
 const nextTickFunc = process?.nextTick || setImmediate || setTimeout;
@@ -72,5 +73,5 @@ class AsyncService extends events_1.EventEmitter {
         });
     }
 }
-exports.default = AsyncService;
+exports.AsyncService = AsyncService;
 //# sourceMappingURL=async-service.js.map

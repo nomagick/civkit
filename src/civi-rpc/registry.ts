@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { RPCHost, RPCParam, castToType, NOT_RESOLVED } from './base';
-import AsyncService from '../lib/async-service';
+import { AsyncService } from '../lib/async-service';
 import { ParamValidationError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
 

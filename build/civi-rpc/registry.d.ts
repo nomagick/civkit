@@ -1,5 +1,5 @@
 import { RPCHost, RPCParam } from './base';
-import AsyncService from '../lib/async-service';
+import { AsyncService } from '../lib/async-service';
 import type { container as DIContainer } from 'tsyringe';
 export interface RPCOptions {
     name: string | string[];

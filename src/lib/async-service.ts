@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { Defer, TimeoutError } from './defer';
 
 const nextTickFunc = process?.nextTick || setImmediate || setTimeout;
-export default abstract class AsyncService extends EventEmitter {
+export abstract class AsyncService extends EventEmitter {
 
     protected __serviceReady: Promise<this>;
 

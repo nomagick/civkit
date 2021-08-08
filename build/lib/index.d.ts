@@ -1,4 +1,4 @@
-export * as AsyncService from './async-service';
+export { AsyncService } from './async-service';
 export { Defer, Deferred, TimedDefer, TimeoutError, GCProofDefer, GCProofDeferred } from './defer';
 export { detectEncoding, decode, decodeWithHintEncoding } from './encoding';
 export { PartialFile, ResolvedFile, HashedFile, FancyFile } from './fancy-file';

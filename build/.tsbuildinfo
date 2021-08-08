@@ -492,8 +492,8 @@
         "affectsGlobalScope": false
       },
       "../src/lib/async-service.ts": {
-        "version": "1a6f6e2a000811053a5cc7efa0d69e6bfb0c097f623e77f73c223c27ad5f0191",
-        "signature": "b10b973b8fffe4ed782f166d43dcd8b6e86aa8dd38307fdad97d574cf011d533",
+        "version": "8c8cf96de27c797dd9c878f67526116b598633949aa66caacae63ebb0810b72e",
+        "signature": "f00fc22b1b8cb17b6a62c039bc90a405c72a6fc741a7d1eb20b14ab740e52481",
         "affectsGlobalScope": false
       },
       "../node_modules/jschardet/index.d.ts": {
@@ -717,8 +717,8 @@
         "affectsGlobalScope": false
       },
       "../src/lib/index.ts": {
-        "version": "1de87c19917dc5c928474bfb6296f1616cbbe6355b5f7a803126511269cca690",
-        "signature": "67b76cae45fc307fbc1822c9d86132b598e9e9f73e003f72cb7ac3ad44d5c06a",
+        "version": "f569901dcb3d7ac8acc79ba118394e0da3ab1bea54f9a6821014f64b8e6ffe23",
+        "signature": "73ce31e1fbff8ffe21387560986639917a8e3a7ddb46edbdbc17a297630ae287",
         "affectsGlobalScope": false
       },
       "../src/utils/defuse.ts": {
@@ -787,8 +787,8 @@
         "affectsGlobalScope": false
       },
       "../src/civi-rpc/base.ts": {
-        "version": "addb2f3f1887adb1109a2b06287c66060c54e94a709f514b9faedca4828aabc2",
-        "signature": "968157fc2a1d4188acdf9489fbbdcafcc06b3621ee92433db82d3e2e250fb2f7",
+        "version": "4ba23577bdbee57f96aa8e783b13e28548709bc3fb2f0d5cfff1318290138db3",
+        "signature": "9920d5f99191acf3cb7e5c06442bc6094533f13e5a5cd9cef3fad36dd519206e",
         "affectsGlobalScope": false
       },
       "../src/civi-rpc/decorators.ts": {
@@ -962,8 +962,8 @@
         "affectsGlobalScope": false
       },
       "../src/civi-rpc/registry.ts": {
-        "version": "3702ef7751914a30515a9a162cfff3d842d656a3036073982ca7de653cc341ae",
-        "signature": "36a69c7dda6a3357ae8bb510b0e0989dfa93c64ea7afb32705dd1fa363c34c49",
+        "version": "55188498fb0ceb399bf1f93fd04fcfcc173a10a5acaa393aa52ff2e1f35a4a85",
+        "signature": "2bb5380f906aa4035dff1352a518c943fd3ce4c21e7ec57f8948a99883620286",
         "affectsGlobalScope": false
       },
       "../src/civi-rpc/index.ts": {
