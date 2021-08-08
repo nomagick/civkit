@@ -1,0 +1,28 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.makeRPCKit = exports.RPC_CALL_ENVIROMENT = exports.PICK_RPC_PARAM_DECORATION_META_KEY = exports.AbstractRPCRegistry = exports.extractMeta = exports.assignMeta = exports.RPC_RESULT_META_SYMBOL = exports.SSOSuperUserRequiredError = exports.OperationNotAllowedError = exports.ResourceNotFoundError = exports.ResourceIdConflictError = exports.ParamValidationError = exports.ApplicationError = exports.APPLICATION_ERROR = exports.Prop = exports.castToType = exports.RPCPARAM_OPTIONS_SYMBOL = exports.RPCParam = exports.RPCHost = void 0;
+var base_1 = require("./base");
+Object.defineProperty(exports, "RPCHost", { enumerable: true, get: function () { return base_1.RPCHost; } });
+Object.defineProperty(exports, "RPCParam", { enumerable: true, get: function () { return base_1.RPCParam; } });
+Object.defineProperty(exports, "RPCPARAM_OPTIONS_SYMBOL", { enumerable: true, get: function () { return base_1.RPCPARAM_OPTIONS_SYMBOL; } });
+Object.defineProperty(exports, "castToType", { enumerable: true, get: function () { return base_1.castToType; } });
+var decorators_1 = require("./decorators");
+Object.defineProperty(exports, "Prop", { enumerable: true, get: function () { return decorators_1.Prop; } });
+var errors_1 = require("./errors");
+Object.defineProperty(exports, "APPLICATION_ERROR", { enumerable: true, get: function () { return errors_1.APPLICATION_ERROR; } });
+Object.defineProperty(exports, "ApplicationError", { enumerable: true, get: function () { return errors_1.ApplicationError; } });
+Object.defineProperty(exports, "ParamValidationError", { enumerable: true, get: function () { return errors_1.ParamValidationError; } });
+Object.defineProperty(exports, "ResourceIdConflictError", { enumerable: true, get: function () { return errors_1.ResourceIdConflictError; } });
+Object.defineProperty(exports, "ResourceNotFoundError", { enumerable: true, get: function () { return errors_1.ResourceNotFoundError; } });
+Object.defineProperty(exports, "OperationNotAllowedError", { enumerable: true, get: function () { return errors_1.OperationNotAllowedError; } });
+Object.defineProperty(exports, "SSOSuperUserRequiredError", { enumerable: true, get: function () { return errors_1.SSOSuperUserRequiredError; } });
+var meta_1 = require("./meta");
+Object.defineProperty(exports, "RPC_RESULT_META_SYMBOL", { enumerable: true, get: function () { return meta_1.RPC_RESULT_META_SYMBOL; } });
+Object.defineProperty(exports, "assignMeta", { enumerable: true, get: function () { return meta_1.assignMeta; } });
+Object.defineProperty(exports, "extractMeta", { enumerable: true, get: function () { return meta_1.extractMeta; } });
+var registry_1 = require("./registry");
+Object.defineProperty(exports, "AbstractRPCRegistry", { enumerable: true, get: function () { return registry_1.AbstractRPCRegistry; } });
+Object.defineProperty(exports, "PICK_RPC_PARAM_DECORATION_META_KEY", { enumerable: true, get: function () { return registry_1.PICK_RPC_PARAM_DECORATION_META_KEY; } });
+Object.defineProperty(exports, "RPC_CALL_ENVIROMENT", { enumerable: true, get: function () { return registry_1.RPC_CALL_ENVIROMENT; } });
+Object.defineProperty(exports, "makeRPCKit", { enumerable: true, get: function () { return registry_1.makeRPCKit; } });
+//# sourceMappingURL=index.js.map
