@@ -228,17 +228,29 @@ class HTTPService extends events_1.EventEmitter {
         deferred.promise.cancel = abortCtrl.abort;
         node_fetch_1.default(url, options)
             .then(async (r) => {
-            Object.defineProperties(r, {
-                data: { value: await this.__processResponse(options, r) },
-                config: { value: { ...options, url } }
-            });
-            return r;
+            try {
+                const parsed = await this.__processResponse(options, r);
+                Object.defineProperties(r, {
+                    data: { value: parsed },
+                    config: { value: { ...options, url } }
+                });
+                deferred.resolve(r);
+                return;
+            }
+            catch (err) {
+                Object.defineProperties(r, {
+                    config: { value: { ...options, url } },
+                    data: { value: err }
+                });
+                deferred.reject(r);
+            }
         }, (err) => {
             Object.defineProperties(err, {
-                config: { value: { ...options, url } }
+                config: { value: { ...options, url } },
+                status: { value: err.code || err.errno }
             });
-            return Promise.reject(err);
-        }).then(deferred.resolve, deferred.reject);
+            deferred.reject(err);
+        }).catch(deferred.reject);
         return deferred.promise;
     }
     async __processResponse(options, r) {
