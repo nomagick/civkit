@@ -12,7 +12,7 @@ import _ from 'lodash';
 import { EventEmitter } from 'events';
 import { stringify as formDataStringify } from 'querystring';
 import { Defer, TimeoutError } from './defer';
-import fetch, { RequestInit, Response } from 'node-fetch';
+import fetch, { RequestInit, Response, FetchError } from 'node-fetch';
 import AbortController from "abort-controller";
 
 export { FetchError } from 'node-fetch';
@@ -326,21 +326,35 @@ export abstract class HTTPService extends EventEmitter {
         fetch(url, options)
             .then(
                 async (r) => {
-                    Object.defineProperties(r, {
-                        data: { value: await this.__processResponse(options, r) },
-                        config: { value: { ...options, url } }
-                    });
+                    try {
+                        const parsed = await this.__processResponse(options, r);
+                        Object.defineProperties(r, {
+                            data: { value: parsed },
+                            config: { value: { ...options, url } }
+                        });
 
-                    return r;
+                        deferred.resolve(r);
+
+                        return;
+                    } catch (err) {
+                        Object.defineProperties(r, {
+                            config: { value: { ...options, url } },
+                            data: { value: err }
+                        });
+
+                        deferred.reject(r);
+                    }
+
                 },
-                (err) => {
+                (err: FetchError) => {
                     Object.defineProperties(err, {
-                        config: { value: { ...options, url } }
+                        config: { value: { ...options, url } },
+                        status: { value: err.code || err.errno }
                     });
 
-                    return Promise.reject(err);
+                    deferred.reject(err);
                 }
-            ).then(deferred.resolve, deferred.reject);
+            ).catch(deferred.reject);
 
 
         return deferred.promise as any;
@@ -369,7 +383,7 @@ export abstract class HTTPService extends EventEmitter {
                 bodyParsed = await r.textConverted();
             }
             break;
-        // eslint-disable-next-line no-constant-condition
+            // eslint-disable-next-line no-constant-condition
         } while (false);
 
         if (r.ok) {
