@@ -6,7 +6,7 @@ export declare abstract class AsyncService extends EventEmitter {
     protected __status: 'ready' | 'revoked' | 'pending';
     constructor(...argv: AsyncService[]);
     init(): any;
-    get serviceReady(): Promise<this>;
-    get dependencyReady(): Promise<AsyncService[]>;
+    serviceReady(): Promise<this>;
+    dependencyReady(): Promise<AsyncService[]>;
 }
 //# sourceMappingURL=async-service.d.ts.map

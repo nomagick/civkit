@@ -22,7 +22,7 @@ class AsyncService extends events_1.EventEmitter {
         this.once('error', (err) => {
             readyDeferred.reject(err);
         });
-        this.dependencyReady.catch((err) => this.emit('error', err));
+        this.dependencyReady().catch((err) => this.emit('error', err));
         this.on('revoked', () => {
             this.__status = 'revoked';
         });
@@ -33,13 +33,13 @@ class AsyncService extends events_1.EventEmitter {
     init() {
         throw new Error('Not implemented');
     }
-    get serviceReady() {
+    serviceReady() {
         if (this.__status === 'revoked') {
             this.__status = 'pending';
             this.__serviceReady = new Promise((_resolve, _reject) => {
                 this.once('ready', () => _resolve(this));
                 this.once('error', _reject);
-                this.dependencyReady.catch((err) => this.emit('error', err));
+                this.dependencyReady().catch((err) => this.emit('error', err));
             });
             nextTickFunc(() => {
                 try {
@@ -57,15 +57,15 @@ class AsyncService extends events_1.EventEmitter {
         }
         return this.__serviceReady;
     }
-    get dependencyReady() {
+    dependencyReady() {
         return new Promise((_resolve, _reject) => {
             setTimeout(() => {
                 _reject(new defer_1.TimeoutError('Timeout waiting for dependencies to be ready.'));
             }, 5000);
-            _resolve(Promise.all(this.__dependencies.map((x) => x.serviceReady)).then((r) => {
+            _resolve(Promise.all(this.__dependencies.map((x) => x.serviceReady())).then((r) => {
                 for (const x of r) {
                     if (x.__status !== 'ready') {
-                        return this.dependencyReady;
+                        return this.dependencyReady();
                     }
                 }
                 return r;
