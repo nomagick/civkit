@@ -32,7 +32,7 @@ export abstract class AsyncService extends EventEmitter {
             readyDeferred.reject(err);
         });
 
-        this.dependencyReady.catch((err) => this.emit('error', err));
+        this.dependencyReady().catch((err) => this.emit('error', err));
 
         this.on('revoked', () => {
             this.__status = 'revoked';
@@ -52,14 +52,14 @@ export abstract class AsyncService extends EventEmitter {
         throw new Error('Not implemented');
     }
 
-    get serviceReady(): Promise<this> {
+    serviceReady(): Promise<this> {
         if (this.__status === 'revoked') {
             this.__status = 'pending';
 
             this.__serviceReady = new Promise((_resolve, _reject) => {
                 this.once('ready', () => _resolve(this));
                 this.once('error', _reject);
-                this.dependencyReady.catch((err) => this.emit('error', err));
+                this.dependencyReady().catch((err) => this.emit('error', err));
             });
 
             nextTickFunc(() => {
@@ -80,19 +80,19 @@ export abstract class AsyncService extends EventEmitter {
         return this.__serviceReady;
     }
 
-    get dependencyReady(): Promise<AsyncService[]> {
+    dependencyReady(): Promise<AsyncService[]> {
         return new Promise((_resolve, _reject) => {
 
             setTimeout(() => {
                 _reject(new TimeoutError('Timeout waiting for dependencies to be ready.'));
             }, 5000);
 
-            _resolve(Promise.all(this.__dependencies.map((x) => x.serviceReady)).then((r) => {
+            _resolve(Promise.all(this.__dependencies.map((x) => x.serviceReady())).then((r) => {
                 for (const x of r) {
                     if (x.__status !== 'ready') {
                         // Someone revoked, try activation again
 
-                        return this.dependencyReady;
+                        return this.dependencyReady();
                     }
                 }
 
