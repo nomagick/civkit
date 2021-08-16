@@ -13,8 +13,9 @@ declare const _default: {
     civiRPC: typeof civiRPC;
     RPCHost: typeof civiRPC.RPCHost;
     RPCParam: typeof civiRPC.RPCParam;
-    RPCPARAM_OPTIONS_SYMBOL: typeof civiRPC.RPCPARAM_OPTIONS_SYMBOL;
     castToType: (ensureTypes: any[], inputProp: any) => any;
+    RPCPARAM_OPTIONS_SYMBOL: typeof civiRPC.RPCPARAM_OPTIONS_SYMBOL;
+    RPC_CALL_ENVIROMENT: typeof civiRPC.RPC_CALL_ENVIROMENT;
     Prop: typeof civiRPC.Prop;
     APPLICATION_ERROR: typeof civiRPC.APPLICATION_ERROR;
     ApplicationError: typeof civiRPC.ApplicationError;
@@ -27,9 +28,8 @@ declare const _default: {
     assignMeta: typeof civiRPC.assignMeta;
     extractMeta: typeof civiRPC.extractMeta;
     AbstractRPCRegistry: typeof civiRPC.AbstractRPCRegistry;
-    PICK_RPC_PARAM_DECORATION_META_KEY: "PickPram";
-    RPC_CALL_ENVIROMENT: typeof civiRPC.RPC_CALL_ENVIROMENT;
     makeRPCKit: typeof civiRPC.makeRPCKit;
+    PICK_RPC_PARAM_DECORATION_META_KEY: "PickPram";
     defuse: typeof utils.defuse;
     defuseObj: typeof utils.defuseObj;
     safeAwaitObj: typeof utils.safeAwaitObj;

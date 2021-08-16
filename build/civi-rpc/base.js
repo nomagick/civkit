@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.castToType = exports.RPCParam = exports.RPCHost = exports.NOT_RESOLVED = exports.RPCPARAM_OPTIONS_SYMBOL = void 0;
+exports.castToType = exports.RPCParam = exports.RPCHost = exports.NOT_RESOLVED = exports.RPC_CALL_ENVIROMENT = exports.RPCPARAM_OPTIONS_SYMBOL = void 0;
 const tslib_1 = require("tslib");
 require("reflect-metadata");
 const lang_1 = require("../utils/lang");
@@ -9,6 +9,7 @@ const async_service_1 = require("../lib/async-service");
 const lodash_1 = tslib_1.__importDefault(require("lodash"));
 const meta_1 = require("./meta");
 exports.RPCPARAM_OPTIONS_SYMBOL = Symbol('RPCParam options');
+exports.RPC_CALL_ENVIROMENT = Symbol('RPCEnv');
 exports.NOT_RESOLVED = Symbol('Not-Resolved');
 class RPCHost extends async_service_1.AsyncService {
     setResultMeta(target, metaToSet) {

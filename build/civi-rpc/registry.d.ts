@@ -14,7 +14,6 @@ export interface RPCOptions {
     method?: Function;
 }
 export declare const PICK_RPC_PARAM_DECORATION_META_KEY = "PickPram";
-export declare const RPC_CALL_ENVIROMENT: unique symbol;
 export declare abstract class AbstractRPCRegistry extends AsyncService {
     private __tick;
     abstract container: typeof DIContainer;

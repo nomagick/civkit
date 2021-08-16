@@ -1,13 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.makeRPCKit = exports.AbstractRPCRegistry = exports.RPC_CALL_ENVIROMENT = exports.PICK_RPC_PARAM_DECORATION_META_KEY = void 0;
+exports.makeRPCKit = exports.AbstractRPCRegistry = exports.PICK_RPC_PARAM_DECORATION_META_KEY = void 0;
 const tslib_1 = require("tslib");
 const lodash_1 = tslib_1.__importDefault(require("lodash"));
 const base_1 = require("./base");
 const async_service_1 = require("../lib/async-service");
 const errors_1 = require("./errors");
 exports.PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
-exports.RPC_CALL_ENVIROMENT = Symbol('RPCEnv');
 class AbstractRPCRegistry extends async_service_1.AsyncService {
     constructor() {
         super();

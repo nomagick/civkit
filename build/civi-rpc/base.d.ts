@@ -1,17 +1,19 @@
 import 'reflect-metadata';
 import { AsyncService } from '../lib/async-service';
 export declare const RPCPARAM_OPTIONS_SYMBOL: unique symbol;
+export declare const RPC_CALL_ENVIROMENT: unique symbol;
 export declare const NOT_RESOLVED: unique symbol;
 export declare class RPCHost extends AsyncService {
     setResultMeta(target: object, metaToSet: object): object;
     getResultMeta(target: object): object | undefined;
 }
-export declare class RPCParam {
+export declare class RPCParam<T = any> {
     [RPCPARAM_OPTIONS_SYMBOL]: {
         [k: string]: PropOptions<any>;
     };
-    static fromObject(input: object): RPCParam;
-    static fromContext<T extends object>(ctx: T): RPCParam;
+    [RPC_CALL_ENVIROMENT]?: T;
+    static fromObject(input: object): RPCParam<any>;
+    static fromContext<T extends object>(ctx: T): RPCParam<any>;
 }
 declare function __parseInput(ensureTypes: any[], inputProp: any): any;
 export declare const castToType: typeof __parseInput;
