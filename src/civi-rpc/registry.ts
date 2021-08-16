@@ -19,8 +19,6 @@ export interface RPCOptions {
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
 
-export const RPC_CALL_ENVIROMENT = Symbol('RPCEnv');
-
 export abstract class AbstractRPCRegistry extends AsyncService {
     private __tick: number = 0;
 

@@ -1,4 +1,8 @@
-export { RPCHost, RPCParam, RPCPARAM_OPTIONS_SYMBOL, PropOptions, Enum, castToType } from './base';
+export {
+    RPCHost, RPCParam,
+    PropOptions, Enum, castToType,
+    RPCPARAM_OPTIONS_SYMBOL, RPC_CALL_ENVIROMENT
+} from './base';
 
 export { Prop } from './decorators';
 export {
@@ -16,7 +20,6 @@ export {
 export {
     AbstractRPCRegistry,
     RPCOptions,
-    PICK_RPC_PARAM_DECORATION_META_KEY,
-    RPC_CALL_ENVIROMENT,
-    makeRPCKit
+    makeRPCKit,
+    PICK_RPC_PARAM_DECORATION_META_KEY
 } from './registry';

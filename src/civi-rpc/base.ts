@@ -7,6 +7,7 @@ import { assignMeta, extractMeta } from './meta';
 
 export const RPCPARAM_OPTIONS_SYMBOL = Symbol('RPCParam options');
 
+export const RPC_CALL_ENVIROMENT = Symbol('RPCEnv');
 
 export const NOT_RESOLVED = Symbol('Not-Resolved');
 
@@ -23,8 +24,9 @@ export class RPCHost extends AsyncService {
     }
 }
 
-export class RPCParam {
+export class RPCParam<T = any> {
     [RPCPARAM_OPTIONS_SYMBOL]: { [k: string]: PropOptions<any> };
+    [RPC_CALL_ENVIROMENT]?: T;
 
     static fromObject(input: object) {
         const instance = new this();
