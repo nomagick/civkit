@@ -30,5 +30,10 @@ export declare abstract class AbstractRPCRegistry extends AsyncService {
         Pick: (path?: string | symbol | ((ctx: object) => any) | undefined) => (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => void;
     };
 }
-export declare function makeRPCKit(container: typeof DIContainer): typeof AbstractRPCRegistry;
+export interface PRCRegistryType<T extends typeof DIContainer> extends AbstractRPCRegistry {
+    container: T;
+}
+export declare function makeRPCKit<T extends typeof DIContainer>(container: T): {
+    new (): PRCRegistryType<T>;
+};
 //# sourceMappingURL=registry.d.ts.map
