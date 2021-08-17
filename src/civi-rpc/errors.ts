@@ -11,6 +11,7 @@ export enum APPLICATION_ERROR {
     SSO_SUPER_USER_REQUIRED = 40302,
 
     INTERNAL_RESOURCE_NOT_FOUND = 40401,
+    RPC_METHOD_NOT_FOUND = 40402,
 
     INTERNAL_RESOURCE_ID_CONFLICT = 40901,
 }
@@ -78,6 +79,13 @@ export class ResourceNotFoundError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.INTERNAL_RESOURCE_NOT_FOUND, detail);
         this.readableMessage = `未找到资源: ${this.message} ${JSON.stringify(this.detail)}`;
+    }
+}
+
+export class RPCMethodNotFoundError extends ApplicationError {
+    constructor(detail?: any) {
+        super(APPLICATION_ERROR.RPC_METHOD_NOT_FOUND, detail);
+        this.readableMessage = `未找到方法: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 

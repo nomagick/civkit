@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import { RPCHost, RPCParam, castToType, NOT_RESOLVED } from './base';
 import { AsyncService } from '../lib/async-service';
-import { ParamValidationError } from './errors';
+import { ParamValidationError, RPCMethodNotFoundError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
 
 export interface RPCOptions {
@@ -27,8 +27,6 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     conf: Map<string, RPCOptions> = new Map();
 
     wrapped: Map<string, Function> = new Map();
-
-    httpSignature: Map<string, string> = new Map();
 
     constructor() {
         super();
@@ -65,19 +63,6 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         }
 
         this.conf.set(name, options);
-
-        if (options.http?.action) {
-            if (Array.isArray(options.http.action)) {
-                for (const x of options.http.action) {
-                    this.httpSignature.set(`${x.toUpperCase()} ${options.http.path || '/' + name.split('.').join('/')}`, name);
-                }
-            } else {
-                this.httpSignature.set(`${options.http.action.toUpperCase()} ${options.http.path || '/' + name.split('.').join('/')}`, name);
-            }
-        } else {
-            this.httpSignature.set(`GET ${options.http?.path || '/' + name.split('.').join('/')}`, name);
-            this.httpSignature.set(`POST ${options.http?.path || '/' + name.split('.').join('/')}`, name);
-        }
 
         if (this.__tick === 1) {
             setImmediate(() => {
@@ -166,6 +151,17 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         return Array.from(this.conf.keys()).map((x) => {
             return [x.split('.'), this.wrapRPCMethod(x), this.conf.get(x)];
         }) as [string[], Function, RPCOptions][];
+    }
+
+    exec(name: string, input: object) {
+        const conf = this.conf.get(name);
+        const func = this.wrapped.get(name);
+
+        if (!(conf && func)) {
+            throw new RPCMethodNotFoundError({ message: `Could not found method of name: ${name}.`, method: name });
+        }
+
+        return func.call(conf.host, input);
     }
 
 
