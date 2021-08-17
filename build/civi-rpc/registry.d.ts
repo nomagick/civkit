@@ -19,12 +19,12 @@ export declare abstract class AbstractRPCRegistry extends AsyncService {
     abstract container: typeof DIContainer;
     conf: Map<string, RPCOptions>;
     wrapped: Map<string, Function>;
-    httpSignature: Map<string, string>;
     constructor();
     init(): void;
     register(options: RPCOptions): Function | undefined;
     wrapRPCMethod(name: string): Function | undefined;
     dump(): [string[], Function, RPCOptions][];
+    exec(name: string, input: object): any;
     decorators(): {
         RPCMethod: (options?: Partial<RPCOptions> | string) => (tgt: typeof RPCHost.prototype, methodName: string) => void;
         Pick: (path?: string | symbol | ((ctx: object) => any) | undefined) => (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => void;

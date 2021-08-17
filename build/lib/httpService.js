@@ -221,7 +221,8 @@ class HTTPService extends events_1.EventEmitter {
         const abortCtrl = new abort_controller_1.default();
         const url = this.urlOf(uri, queryParams);
         const options = this.__composeOption({
-            method: method, signal: abortCtrl.signal
+            method: method,
+            signal: abortCtrl.signal
         }, _options, ..._moreOptions);
         const deferred = defer_1.Defer();
         deferred.promise.cancel = abortCtrl.abort;

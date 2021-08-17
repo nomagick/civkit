@@ -6,6 +6,7 @@ export declare enum APPLICATION_ERROR {
     OPERATION_NOT_ALLOWED = 40301,
     SSO_SUPER_USER_REQUIRED = 40302,
     INTERNAL_RESOURCE_NOT_FOUND = 40401,
+    RPC_METHOD_NOT_FOUND = 40402,
     INTERNAL_RESOURCE_ID_CONFLICT = 40901
 }
 export declare class ApplicationError extends Error {
@@ -49,6 +50,9 @@ export declare class ParamValidationError extends ApplicationError {
     constructor(detail?: any);
 }
 export declare class ResourceNotFoundError extends ApplicationError {
+    constructor(detail?: any);
+}
+export declare class RPCMethodNotFoundError extends ApplicationError {
     constructor(detail?: any);
 }
 export declare class OperationNotAllowedError extends ApplicationError {

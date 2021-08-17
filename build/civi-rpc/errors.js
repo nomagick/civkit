@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ResourceIdConflictError = exports.SSOSuperUserRequiredError = exports.OperationNotAllowedError = exports.ResourceNotFoundError = exports.ParamValidationError = exports.ApplicationError = exports.APPLICATION_ERROR = void 0;
+exports.ResourceIdConflictError = exports.SSOSuperUserRequiredError = exports.OperationNotAllowedError = exports.RPCMethodNotFoundError = exports.ResourceNotFoundError = exports.ParamValidationError = exports.ApplicationError = exports.APPLICATION_ERROR = void 0;
 var APPLICATION_ERROR;
 (function (APPLICATION_ERROR) {
     APPLICATION_ERROR[APPLICATION_ERROR["UNKNOWN_ERROR"] = -1] = "UNKNOWN_ERROR";
@@ -10,6 +10,7 @@ var APPLICATION_ERROR;
     APPLICATION_ERROR[APPLICATION_ERROR["OPERATION_NOT_ALLOWED"] = 40301] = "OPERATION_NOT_ALLOWED";
     APPLICATION_ERROR[APPLICATION_ERROR["SSO_SUPER_USER_REQUIRED"] = 40302] = "SSO_SUPER_USER_REQUIRED";
     APPLICATION_ERROR[APPLICATION_ERROR["INTERNAL_RESOURCE_NOT_FOUND"] = 40401] = "INTERNAL_RESOURCE_NOT_FOUND";
+    APPLICATION_ERROR[APPLICATION_ERROR["RPC_METHOD_NOT_FOUND"] = 40402] = "RPC_METHOD_NOT_FOUND";
     APPLICATION_ERROR[APPLICATION_ERROR["INTERNAL_RESOURCE_ID_CONFLICT"] = 40901] = "INTERNAL_RESOURCE_ID_CONFLICT";
 })(APPLICATION_ERROR = exports.APPLICATION_ERROR || (exports.APPLICATION_ERROR = {}));
 const keyExcept = new Set(['status', 'stack', 'message', 'name', 'readableMessage']);
@@ -66,6 +67,13 @@ class ResourceNotFoundError extends ApplicationError {
     }
 }
 exports.ResourceNotFoundError = ResourceNotFoundError;
+class RPCMethodNotFoundError extends ApplicationError {
+    constructor(detail) {
+        super(APPLICATION_ERROR.RPC_METHOD_NOT_FOUND, detail);
+        this.readableMessage = `未找到方法: ${this.message} ${JSON.stringify(this.detail)}`;
+    }
+}
+exports.RPCMethodNotFoundError = RPCMethodNotFoundError;
 class OperationNotAllowedError extends ApplicationError {
     constructor(detail) {
         super(APPLICATION_ERROR.OPERATION_NOT_ALLOWED, detail);

@@ -13,7 +13,6 @@ class AbstractRPCRegistry extends async_service_1.AsyncService {
         this.__tick = 0;
         this.conf = new Map();
         this.wrapped = new Map();
-        this.httpSignature = new Map();
         this.__tick = 1;
         this.init();
     }
@@ -40,20 +39,6 @@ class AbstractRPCRegistry extends async_service_1.AsyncService {
             throw new Error(`Unable to resolve RPC ${options.name}: found non-function entity, function required.`);
         }
         this.conf.set(name, options);
-        if (options.http?.action) {
-            if (Array.isArray(options.http.action)) {
-                for (const x of options.http.action) {
-                    this.httpSignature.set(`${x.toUpperCase()} ${options.http.path || '/' + name.split('.').join('/')}`, name);
-                }
-            }
-            else {
-                this.httpSignature.set(`${options.http.action.toUpperCase()} ${options.http.path || '/' + name.split('.').join('/')}`, name);
-            }
-        }
-        else {
-            this.httpSignature.set(`GET ${options.http?.path || '/' + name.split('.').join('/')}`, name);
-            this.httpSignature.set(`POST ${options.http?.path || '/' + name.split('.').join('/')}`, name);
-        }
         if (this.__tick === 1) {
             setImmediate(() => {
                 this.wrapRPCMethod(name);
@@ -124,6 +109,14 @@ class AbstractRPCRegistry extends async_service_1.AsyncService {
         return Array.from(this.conf.keys()).map((x) => {
             return [x.split('.'), this.wrapRPCMethod(x), this.conf.get(x)];
         });
+    }
+    exec(name, input) {
+        const conf = this.conf.get(name);
+        const func = this.wrapped.get(name);
+        if (!(conf && func)) {
+            throw new errors_1.RPCMethodNotFoundError({ message: `Could not found method of name: ${name}.`, method: name });
+        }
+        return func.call(conf.host, input);
     }
     decorators() {
         const RPCMethod = (options = {}) => {
