@@ -215,10 +215,11 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
 }
 
+export interface PRCRegistryType<T extends typeof DIContainer> extends AbstractRPCRegistry {
+    container: T;
+}
 
-
-
-export function makeRPCKit(container: typeof DIContainer): typeof AbstractRPCRegistry {
+export function makeRPCKit<T extends typeof DIContainer>(container: T): { new(): PRCRegistryType<T> } {
 
     class RPCRegistry extends AbstractRPCRegistry {
         container = container;
