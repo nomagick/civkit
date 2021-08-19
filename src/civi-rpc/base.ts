@@ -31,6 +31,10 @@ export class RPCParam<T = any> {
     static fromObject(input: object) {
         const instance = new this();
 
+        if (input.hasOwnProperty(RPC_CALL_ENVIROMENT)) {
+            instance[RPC_CALL_ENVIROMENT] = (input as any)[RPC_CALL_ENVIROMENT];
+        }
+
         for (const [prop, config] of chainEntries(this.prototype[RPCPARAM_OPTIONS_SYMBOL] || {})) {
             let types: any;
             let isArray = false;
