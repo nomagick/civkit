@@ -24,6 +24,9 @@ exports.RPCHost = RPCHost;
 class RPCParam {
     static fromObject(input) {
         const instance = new this();
+        if (input.hasOwnProperty(exports.RPC_CALL_ENVIROMENT)) {
+            instance[exports.RPC_CALL_ENVIROMENT] = input[exports.RPC_CALL_ENVIROMENT];
+        }
         for (const [prop, config] of lang_1.chainEntries(this.prototype[exports.RPCPARAM_OPTIONS_SYMBOL] || {})) {
             let types;
             let isArray = false;
