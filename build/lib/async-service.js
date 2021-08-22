@@ -22,7 +22,9 @@ class AsyncService extends events_1.EventEmitter {
         this.once('error', (err) => {
             readyDeferred.reject(err);
         });
-        this.dependencyReady().catch((err) => this.emit('error', err));
+        nextTickFunc(() => {
+            this.dependencyReady().catch((err) => this.emit('error', err));
+        });
         this.on('revoked', () => {
             this.__status = 'revoked';
         });
