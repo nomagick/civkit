@@ -15,3 +15,5 @@ export { vectorize, specialDeepVectorize, parseJSONText, deepCreate } from './ve
 export { FileTailer } from './watch-tailer';
 
 export { loadYamlBase64Text, loadYamlFile, loadYamlText } from './yaml';
+
+export { propertyInjectorFactory } from './property-injector';
