@@ -7,4 +7,5 @@ export { timeout, delay } from './timeout';
 export { vectorize, specialDeepVectorize, parseJSONText, deepCreate } from './vectorize';
 export { FileTailer } from './watch-tailer';
 export { loadYamlBase64Text, loadYamlFile, loadYamlText } from './yaml';
+export { propertyInjectorFactory } from './property-injector';
 //# sourceMappingURL=index.d.ts.map

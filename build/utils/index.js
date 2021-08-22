@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.loadYamlText = exports.loadYamlFile = exports.loadYamlBase64Text = exports.FileTailer = exports.deepCreate = exports.parseJSONText = exports.specialDeepVectorize = exports.vectorize = exports.delay = exports.timeout = exports.subEmitter = exports.systemPathToUrl = exports.urlPathToSystemPath = exports.formatDateUTC = exports.chainEntries = exports.chainKeys = exports.isConstructor = exports.downloadFile = exports.awaitObj = exports.safeAwaitObj = exports.defuseObj = exports.defuse = void 0;
+exports.propertyInjectorFactory = exports.loadYamlText = exports.loadYamlFile = exports.loadYamlBase64Text = exports.FileTailer = exports.deepCreate = exports.parseJSONText = exports.specialDeepVectorize = exports.vectorize = exports.delay = exports.timeout = exports.subEmitter = exports.systemPathToUrl = exports.urlPathToSystemPath = exports.formatDateUTC = exports.chainEntries = exports.chainKeys = exports.isConstructor = exports.downloadFile = exports.awaitObj = exports.safeAwaitObj = exports.defuseObj = exports.defuse = void 0;
 var defuse_1 = require("./defuse");
 Object.defineProperty(exports, "defuse", { enumerable: true, get: function () { return defuse_1.defuse; } });
 Object.defineProperty(exports, "defuseObj", { enumerable: true, get: function () { return defuse_1.defuseObj; } });
@@ -32,4 +32,6 @@ var yaml_1 = require("./yaml");
 Object.defineProperty(exports, "loadYamlBase64Text", { enumerable: true, get: function () { return yaml_1.loadYamlBase64Text; } });
 Object.defineProperty(exports, "loadYamlFile", { enumerable: true, get: function () { return yaml_1.loadYamlFile; } });
 Object.defineProperty(exports, "loadYamlText", { enumerable: true, get: function () { return yaml_1.loadYamlText; } });
+var property_injector_1 = require("./property-injector");
+Object.defineProperty(exports, "propertyInjectorFactory", { enumerable: true, get: function () { return property_injector_1.propertyInjectorFactory; } });
 //# sourceMappingURL=index.js.map

@@ -52,6 +52,7 @@ declare const _default: {
     loadYamlBase64Text: typeof utils.loadYamlBase64Text;
     loadYamlFile: typeof utils.loadYamlFile;
     loadYamlText: typeof utils.loadYamlText;
+    propertyInjectorFactory: typeof utils.propertyInjectorFactory;
     AsyncService: typeof lib.AsyncService;
     Defer: typeof lib.Defer;
     TimedDefer: typeof lib.TimedDefer;
