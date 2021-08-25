@@ -340,8 +340,8 @@ export type Enum = Set<number | string> | { [k: string]: number | string, [w: nu
 
 export interface PropOptions<T> {
     path?: string;
-    type?: (new () => T) | Array<(new () => T) | Enum | null> | Enum | null;
-    arrayOf?: (new () => T) | Array<(new () => T) | Enum | null> | Enum | null;
+    type?: (new (...whatever: any[]) => T) | Array<(new (...whatever: any[]) => T) | Enum | null> | Enum | null;
+    arrayOf?: (new (...whatever: any[]) => T) | Array<(new (...whatever: any[]) => T) | Enum | null> | Enum | null;
     validate?: (val: T, obj?: any) => boolean;
     required?: boolean;
     default?: T;
