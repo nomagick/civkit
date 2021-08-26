@@ -154,8 +154,12 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         };
 
         const Pick = <T>(path?: string | symbol | PropOptions<T>, conf?: PropOptions<T>) => {
-            if ((typeof path === 'string' || typeof path === 'symbol') && !conf) {
-                conf = { path: path };
+            if ((typeof path === 'string' || typeof path === 'symbol')) {
+                if (conf) {
+                    conf.path = path;
+                } else {
+                    conf = { path: path };
+                }
             } else if (typeof path === 'object') {
                 conf = path;
             }
