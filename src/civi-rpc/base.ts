@@ -36,143 +36,8 @@ export class RPCParam<T = any> {
         }
 
         for (const [prop, config] of chainEntries(this.prototype[RPCPARAM_OPTIONS_SYMBOL] || {})) {
-            let types: any;
-            let isArray = false;
 
-            if (config.arrayOf) {
-                isArray = true;
-                types = Array.isArray(config.arrayOf) ? config.arrayOf : [config.arrayOf];
-            } else if (config.type) {
-                types = Array.isArray(config.type) ? config.type : [config.type];
-            } else {
-                throw new Error(`Type info not provided: ${this.name}.${prop}`);
-            }
-
-            const inputProp = _.get(input, config.path || prop);
-
-            if (inputProp === undefined && config.default !== undefined) {
-                (instance as any)[prop] = config.default;
-
-                continue;
-            }
-
-            if (inputProp === undefined && config.required) {
-                throw new ParamValidationError({
-                    message: `Validation failed for ${this.name}.${prop}: ${config.path} is required but not provided.`,
-                    path: config.path, value: inputProp
-                });
-            }
-
-            if (isArray) {
-                if (inputProp === null) {
-                    (instance as any)[prop] = [] as any;
-
-                    continue;
-                }
-                if (inputProp === undefined) {
-                    continue;
-                }
-
-                const arrayInput = Array.isArray(inputProp) ? inputProp : [inputProp];
-
-                const values: any[] = [];
-
-                for (const [i, x] of arrayInput.entries()) {
-                    let elem = NOT_RESOLVED;
-                    try {
-                        elem = __parseInput(types, x);
-
-                    } catch (err: any) {
-                        const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
-                        throw new ParamValidationError({
-                            message: `Validation failed for ${this.name}.${prop}: ${config.path}[${i}] not within type [${typeNames.join('|')}].`,
-                            path: `${config.path}[${i}]`, value: x, types: typeNames, error: err.toString()
-                        });
-                    }
-
-                    if (elem === NOT_RESOLVED) {
-                        const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
-                        throw new ParamValidationError({
-                            message: `Validation failed for ${this.name}.${prop}: ${config.path}[${i}] not within type [${typeNames.join('|')}].`,
-                            path: `${config.path}[${i}]`, value: x, types: typeNames
-                        });
-                    }
-
-                    if (config.validate) {
-                        const result = config.validate(elem, input);
-
-                        if (!result) {
-                            throw new ParamValidationError({
-                                message: `Validation failed for ${this.name}.${prop}: ${config.path}[${i}] rejected by validator ${config.validate.name}.`,
-                                path: `${config.path}[${i}]`, value: x, validator: config.validate.name
-                            });
-                        }
-                    }
-
-                    if (elem === undefined) {
-                        continue;
-                    }
-
-                    values.push(elem);
-                }
-
-                (instance as any)[prop] = values;
-
-                continue;
-            }
-
-            if (inputProp === null) {
-                (instance as any)[prop] = null;
-
-                continue;
-            }
-
-            let item = NOT_RESOLVED;
-
-            try {
-                item = __parseInput(types, inputProp);
-            } catch (err: any) {
-                if (inputProp !== undefined) {
-                    const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
-                    throw new ParamValidationError({
-                        message: `Validation failed for ${this.name}.${prop}: ${config.path} not within type [${typeNames.join('|')}].`,
-                        path: `${config.path}`, value: inputProp, types: typeNames, error: err.toString()
-                    });
-                }
-
-            }
-
-            if (item === NOT_RESOLVED || item === undefined) {
-
-                if (config.default) {
-                    (instance as any)[prop] = config.default;
-
-                    continue;
-                }
-
-                if (config.required || inputProp !== undefined) {
-                    const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
-                    throw new ParamValidationError({
-                        message: `Validation failed for ${this.name}.${prop}: ${config.path} not within type [${typeNames.join('|')}].`,
-                        path: `${config.path}`, value: inputProp, types: typeNames
-                    });
-                }
-
-                continue;
-            }
-
-            if (config.validate) {
-                const result = config.validate(item, input);
-
-                if (!result) {
-                    throw new ParamValidationError({
-                        message: `Validation failed for ${this.name}.${prop}: ${config.path} rejected by validator ${config.validate.name}.`,
-                        path: `${config.path}`, value: inputProp, validator: config.validate.name
-                    });
-                }
-            }
-
-            (instance as any)[prop] = item;
+            (instance as any)[prop] = inputSingle(this, input, prop, config);
 
         }
 
@@ -191,7 +56,7 @@ const nativeTypes = new Set<new (p: any) => any>([
 ]);
 
 
-function __parseInput(ensureTypes: any[], inputProp: any) {
+export function castToType(ensureTypes: any[], inputProp: any) {
     let val: any = NOT_RESOLVED;
     let lastErr: Error | undefined | unknown;
     if (inputProp === undefined) {
@@ -334,12 +199,142 @@ function __parseInput(ensureTypes: any[], inputProp: any) {
     return val;
 }
 
-export const castToType = __parseInput;
+export function inputSingle<T>(host: Function | undefined, input: any, prop: string | symbol, config: PropOptions<T>) {
+    let types: any;
+    let isArray = false;
+    const access = config.path || prop;
+    const mappedPath = (host?.name && prop) ? `${host.name}.${prop.toString()}` : `input[${access.toString()}]`;
+
+    if (config.arrayOf) {
+        isArray = true;
+        types = Array.isArray(config.arrayOf) ? config.arrayOf : [config.arrayOf];
+    } else if (config.type) {
+        types = Array.isArray(config.type) ? config.type : [config.type];
+    } else {
+        throw new Error(`Type info not provided: ${access.toString()}`);
+    }
+
+    const inputProp = _.get(input, access);
+
+    if (inputProp === undefined && config.default !== undefined) {
+        return config.default;
+    }
+
+    if (inputProp === undefined && config.required) {
+        throw new ParamValidationError({
+            message: `Validation failed for ${mappedPath}: ${access.toString()} is required but not provided.`,
+            path: config.path, value: inputProp
+        });
+    }
+
+    if (isArray) {
+        if (inputProp === null) {
+            return [];
+        }
+        if (inputProp === undefined) {
+            return undefined;
+        }
+
+        const arrayInput = Array.isArray(inputProp) ? inputProp : [inputProp];
+
+        const values: any[] = [];
+
+        for (const [i, x] of arrayInput.entries()) {
+            let elem: any = NOT_RESOLVED;
+            try {
+                elem = castToType(types, x);
+
+            } catch (err: any) {
+                const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
+                throw new ParamValidationError({
+                    message: `Validation failed for ${mappedPath}: ${access.toString()}[${i}] not within type [${typeNames.join('|')}].`,
+                    path: `${access.toString()}[${i}]`, value: x, types: typeNames, error: err.toString()
+                });
+            }
+
+            if (elem === NOT_RESOLVED) {
+                const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
+                throw new ParamValidationError({
+                    message: `Validation failed for ${mappedPath}: ${access.toString()}[${i}] not within type [${typeNames.join('|')}].`,
+                    path: `${access.toString()}[${i}]`, value: x, types: typeNames
+                });
+            }
+
+            if (config.validate) {
+                const result = config.validate(elem, input);
+
+                if (!result) {
+                    throw new ParamValidationError({
+                        message: `Validation failed for ${mappedPath}: ${access.toString()}[${i}] rejected by validator ${config.validate.name}.`,
+                        path: `${access.toString()}[${i}]`, value: x, validator: config.validate.name
+                    });
+                }
+            }
+
+            if (elem === undefined) {
+                continue;
+            }
+
+            values.push(elem);
+        }
+
+        return values;
+    }
+
+    if (inputProp === null) {
+        return null;
+    }
+
+    let item: any = NOT_RESOLVED;
+
+    try {
+        item = castToType(types, inputProp);
+    } catch (err: any) {
+        if (inputProp !== undefined) {
+            const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
+            throw new ParamValidationError({
+                message: `Validation failed for ${mappedPath}: ${access.toString()} not within type [${typeNames.join('|')}].`,
+                path: `${access.toString()}`, value: inputProp, types: typeNames, error: err.toString()
+            });
+        }
+
+    }
+
+    if (item === NOT_RESOLVED || item === undefined) {
+
+        if (config.default) {
+            return config.default;
+        }
+
+        if (config.required || inputProp !== undefined) {
+            const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
+            throw new ParamValidationError({
+                message: `Validation failed for ${mappedPath}: ${access.toString()} not within type [${typeNames.join('|')}].`,
+                path: `${access.toString()}`, value: inputProp, types: typeNames
+            });
+        }
+
+        return undefined;
+    }
+
+    if (config.validate) {
+        const result = config.validate(item, input);
+
+        if (!result) {
+            throw new ParamValidationError({
+                message: `Validation failed for ${mappedPath}: ${access.toString()} rejected by validator ${config.validate.name}.`,
+                path: `${access.toString()}`, value: inputProp, validator: config.validate.name
+            });
+        }
+    }
+
+    return item;
+}
 
 export type Enum = Set<number | string> | { [k: string]: number | string, [w: number]: number | string };
 
 export interface PropOptions<T> {
-    path?: string;
+    path?: string | symbol;
     type?: any | any[];
     arrayOf?: any | any[];
     validate?: (val: T, obj?: any) => boolean;

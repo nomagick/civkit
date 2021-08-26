@@ -1,7 +1,7 @@
 import _ from 'lodash';
-import { RPCHost, RPCParam, castToType, NOT_RESOLVED } from './base';
+import { RPCHost, PropOptions, inputSingle } from './base';
 import { AsyncService } from '../lib/async-service';
-import { ParamValidationError, RPCMethodNotFoundError } from './errors';
+import { RPCMethodNotFoundError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
 
 export interface RPCOptions {
@@ -18,6 +18,8 @@ export interface RPCOptions {
 }
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
+
+const ITSELF = Symbol('itself');
 
 export abstract class AbstractRPCRegistry extends AsyncService {
     private __tick: number = 0;
@@ -93,50 +95,15 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         const host = this.container.resolve(conf!.hostProto.constructor);
 
-        function patchedRPCMethod<T extends object = any>(this: RPCHost, ctx: T) {
+        function patchedRPCMethod<T extends object = any>(this: RPCHost, input: T) {
             const params = paramTypes.map((t, i) => {
-                const access = paramPickerConf?.[i];
+                const propOps = paramPickerConf?.[i];
 
-                if (!access && (t.prototype instanceof RPCParam)) {
-                    return (t as typeof RPCParam).fromObject(ctx);
-                }
-                let input;
-
-                if (typeof access === 'string' || typeof access === 'symbol') {
-                    input = _.get(ctx, access);
-                } else if (typeof access === 'function') {
-                    input = (access as Function).call(this, ctx);
-                } else {
-                    input = ctx;
+                if (!propOps) {
+                    return inputSingle(undefined, { [ITSELF]: input }, ITSELF, { path: ITSELF, type: t });
                 }
 
-
-                if (access === undefined) {
-                    return input;
-                }
-                if (input === undefined) {
-                    return input;
-                }
-
-                let output: any;
-
-                try {
-                    output = castToType([t], input);
-                } catch (err) {
-                    throw new ParamValidationError({
-                        message: `Validation failed for param[${i}] of method ${name}: input[${access}] not of type [${t.name}].`,
-                        path: access, value: input, type: t.name, err
-                    });
-                }
-
-                if (output === NOT_RESOLVED) {
-                    throw new ParamValidationError({
-                        message: `Validation failed for param[${i}] of method ${name}: input[${access}] not of type [${t.name}].`,
-                        path: access, value: input, type: t.name
-                    });
-                }
-
-                return output;
+                return inputSingle(undefined, input, propOps.path, { type: t, ...propOps });
             });
 
             return func.apply(host, params);
@@ -186,7 +153,10 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             return RPCDecorator;
         };
 
-        const Pick = (path?: string | symbol | ((ctx: object) => any)) => {
+        const Pick = <T>(path?: string | symbol | PropOptions<T>) => {
+            if (typeof path === 'string' || typeof path === 'symbol') {
+                path = { path: path };
+            }
             const PickCtxParamDecorator = (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => {
                 let paramConf = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, tgt);
                 if (!paramConf) {
@@ -200,7 +170,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                     paramConf[methodName] = methodConf;
                 }
 
-                methodConf[paramIdx] = path || true;
+                methodConf[paramIdx] = path;
             };
 
             return PickCtxParamDecorator;
