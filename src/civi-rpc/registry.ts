@@ -153,9 +153,11 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             return RPCDecorator;
         };
 
-        const Pick = <T>(path?: string | symbol | PropOptions<T>) => {
-            if (typeof path === 'string' || typeof path === 'symbol') {
-                path = { path: path };
+        const Pick = <T>(path?: string | symbol | PropOptions<T>, conf?: PropOptions<T>) => {
+            if ((typeof path === 'string' || typeof path === 'symbol') && !conf) {
+                conf = { path: path };
+            } else if (typeof path === 'object') {
+                conf = path;
             }
             const PickCtxParamDecorator = (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => {
                 let paramConf = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, tgt);
@@ -170,7 +172,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                     paramConf[methodName] = methodConf;
                 }
 
-                methodConf[paramIdx] = path;
+                methodConf[paramIdx] = conf;
             };
 
             return PickCtxParamDecorator;
