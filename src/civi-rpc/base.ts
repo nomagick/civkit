@@ -50,9 +50,8 @@ export class RPCParam<T = any> {
 
 }
 
-const nativeTypes = new Set<new (p: any) => any>([
-    RegExp,
-    Buffer
+export const nativeTypes = new Set<new (p: any) => any>([
+    RegExp
 ]);
 
 
@@ -84,7 +83,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
             continue;
         }
 
-        // Native types like Date, RegExp, Buffer, etc..
+        // Native types like Date, RegExp, etc..
         if (nativeTypes.has(typeShouldbe)) {
             try {
                 val = new typeShouldbe(inputProp);
@@ -102,8 +101,16 @@ export function castToType(ensureTypes: any[], inputProp: any) {
         // Primitive types like Number, String, etc...
         switch (typeShouldbe) {
 
+            case Buffer: {
+                val = Buffer.from(inputProp);
+                break;
+            }
+
             case Number: {
                 val = Number(inputProp);
+                if (isNaN(val)) {
+                    continue;
+                }
                 break;
             }
 

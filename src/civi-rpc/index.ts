@@ -1,4 +1,5 @@
 export {
+    nativeTypes,
     RPCHost, RPCParam,
     PropOptions, Enum, castToType, inputSingle,
     RPCPARAM_OPTIONS_SYMBOL, RPC_CALL_ENVIROMENT
