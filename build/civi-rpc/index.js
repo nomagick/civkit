@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PICK_RPC_PARAM_DECORATION_META_KEY = exports.makeRPCKit = exports.AbstractRPCRegistry = exports.extractMeta = exports.assignMeta = exports.RPC_RESULT_META_SYMBOL = exports.SSOSuperUserRequiredError = exports.OperationNotAllowedError = exports.ResourceNotFoundError = exports.ResourceIdConflictError = exports.ParamValidationError = exports.ApplicationError = exports.APPLICATION_ERROR = exports.Prop = exports.RPC_CALL_ENVIROMENT = exports.RPCPARAM_OPTIONS_SYMBOL = exports.inputSingle = exports.castToType = exports.RPCParam = exports.RPCHost = void 0;
+exports.PICK_RPC_PARAM_DECORATION_META_KEY = exports.makeRPCKit = exports.AbstractRPCRegistry = exports.extractMeta = exports.assignMeta = exports.RPC_RESULT_META_SYMBOL = exports.SSOSuperUserRequiredError = exports.OperationNotAllowedError = exports.ResourceNotFoundError = exports.ResourceIdConflictError = exports.ParamValidationError = exports.ApplicationError = exports.APPLICATION_ERROR = exports.Prop = exports.RPC_CALL_ENVIROMENT = exports.RPCPARAM_OPTIONS_SYMBOL = exports.inputSingle = exports.castToType = exports.RPCParam = exports.RPCHost = exports.nativeTypes = void 0;
 var base_1 = require("./base");
+Object.defineProperty(exports, "nativeTypes", { enumerable: true, get: function () { return base_1.nativeTypes; } });
 Object.defineProperty(exports, "RPCHost", { enumerable: true, get: function () { return base_1.RPCHost; } });
 Object.defineProperty(exports, "RPCParam", { enumerable: true, get: function () { return base_1.RPCParam; } });
 Object.defineProperty(exports, "castToType", { enumerable: true, get: function () { return base_1.castToType; } });

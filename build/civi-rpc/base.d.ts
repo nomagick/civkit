@@ -15,6 +15,7 @@ export declare class RPCParam<T = any> {
     static fromObject(input: object): RPCParam<any>;
     static fromContext<T extends object>(ctx: T): RPCParam<any>;
 }
+export declare const nativeTypes: Set<new (p: any) => any>;
 export declare function castToType(ensureTypes: any[], inputProp: any): any;
 export declare function inputSingle<T>(host: Function | undefined, input: any, prop: string | symbol, config: PropOptions<T>): any;
 export declare type Enum = Set<number | string> | {

@@ -11,6 +11,7 @@ declare const _default: {
     lib: typeof lib;
     utils: typeof utils;
     civiRPC: typeof civiRPC;
+    nativeTypes: Set<new (p: any) => any>;
     RPCHost: typeof civiRPC.RPCHost;
     RPCParam: typeof civiRPC.RPCParam;
     castToType: typeof civiRPC.castToType;

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.inputSingle = exports.castToType = exports.RPCParam = exports.RPCHost = exports.NOT_RESOLVED = exports.RPC_CALL_ENVIROMENT = exports.RPCPARAM_OPTIONS_SYMBOL = void 0;
+exports.inputSingle = exports.castToType = exports.nativeTypes = exports.RPCParam = exports.RPCHost = exports.NOT_RESOLVED = exports.RPC_CALL_ENVIROMENT = exports.RPCPARAM_OPTIONS_SYMBOL = void 0;
 const tslib_1 = require("tslib");
 require("reflect-metadata");
 const lang_1 = require("../utils/lang");
@@ -37,9 +37,8 @@ class RPCParam {
     }
 }
 exports.RPCParam = RPCParam;
-const nativeTypes = new Set([
-    RegExp,
-    Buffer
+exports.nativeTypes = new Set([
+    RegExp
 ]);
 function castToType(ensureTypes, inputProp) {
     let val = exports.NOT_RESOLVED;
@@ -64,7 +63,7 @@ function castToType(ensureTypes, inputProp) {
             }
             continue;
         }
-        if (nativeTypes.has(typeShouldbe)) {
+        if (exports.nativeTypes.has(typeShouldbe)) {
             try {
                 val = new typeShouldbe(inputProp);
             }
@@ -78,8 +77,15 @@ function castToType(ensureTypes, inputProp) {
             continue;
         }
         switch (typeShouldbe) {
+            case Buffer: {
+                val = Buffer.from(inputProp);
+                break;
+            }
             case Number: {
                 val = Number(inputProp);
+                if (isNaN(val)) {
+                    continue;
+                }
                 break;
             }
             case String: {
