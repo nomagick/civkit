@@ -1,4 +1,4 @@
-import { RPCHost } from './base';
+import { RPCHost, PropOptions } from './base';
 import { AsyncService } from '../lib/async-service';
 import type { container as DIContainer } from 'tsyringe';
 export interface RPCOptions {
@@ -27,7 +27,7 @@ export declare abstract class AbstractRPCRegistry extends AsyncService {
     exec(name: string, input: object): any;
     decorators(): {
         RPCMethod: (options?: Partial<RPCOptions> | string) => (tgt: typeof RPCHost.prototype, methodName: string) => void;
-        Pick: (path?: string | symbol | ((ctx: object) => any) | undefined) => (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => void;
+        Pick: <T>(path?: string | symbol | PropOptions<T> | undefined) => (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => void;
     };
 }
 export interface PRCRegistryType<T extends typeof DIContainer> extends AbstractRPCRegistry {

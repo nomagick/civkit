@@ -1,4 +1,4 @@
-export { RPCHost, RPCParam, PropOptions, Enum, castToType, RPCPARAM_OPTIONS_SYMBOL, RPC_CALL_ENVIROMENT } from './base';
+export { RPCHost, RPCParam, PropOptions, Enum, castToType, inputSingle, RPCPARAM_OPTIONS_SYMBOL, RPC_CALL_ENVIROMENT } from './base';
 export { Prop } from './decorators';
 export { APPLICATION_ERROR, ApplicationError, ParamValidationError, ResourceIdConflictError, ResourceNotFoundError, OperationNotAllowedError, SSOSuperUserRequiredError } from './errors';
 export { RPC_RESULT_META_SYMBOL, assignMeta, extractMeta } from './meta';

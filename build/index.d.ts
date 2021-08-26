@@ -13,7 +13,8 @@ declare const _default: {
     civiRPC: typeof civiRPC;
     RPCHost: typeof civiRPC.RPCHost;
     RPCParam: typeof civiRPC.RPCParam;
-    castToType: (ensureTypes: any[], inputProp: any) => any;
+    castToType: typeof civiRPC.castToType;
+    inputSingle: typeof civiRPC.inputSingle;
     RPCPARAM_OPTIONS_SYMBOL: typeof civiRPC.RPCPARAM_OPTIONS_SYMBOL;
     RPC_CALL_ENVIROMENT: typeof civiRPC.RPC_CALL_ENVIROMENT;
     Prop: typeof civiRPC.Prop;
