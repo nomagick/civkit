@@ -27,7 +27,7 @@ export declare abstract class AbstractRPCRegistry extends AsyncService {
     exec(name: string, input: object): any;
     decorators(): {
         RPCMethod: (options?: Partial<RPCOptions> | string) => (tgt: typeof RPCHost.prototype, methodName: string) => void;
-        Pick: <T>(path?: string | symbol | PropOptions<T> | undefined) => (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => void;
+        Pick: <T>(path?: string | symbol | PropOptions<T> | undefined, conf?: PropOptions<T> | undefined) => (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => void;
     };
 }
 export interface PRCRegistryType<T extends typeof DIContainer> extends AbstractRPCRegistry {

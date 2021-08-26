@@ -100,9 +100,17 @@ class AbstractRPCRegistry extends async_service_1.AsyncService {
             };
             return RPCDecorator;
         };
-        const Pick = (path) => {
-            if (typeof path === 'string' || typeof path === 'symbol') {
-                path = { path: path };
+        const Pick = (path, conf) => {
+            if ((typeof path === 'string' || typeof path === 'symbol')) {
+                if (conf) {
+                    conf.path = path;
+                }
+                else {
+                    conf = { path: path };
+                }
+            }
+            else if (typeof path === 'object') {
+                conf = path;
             }
             const PickCtxParamDecorator = (tgt, methodName, paramIdx) => {
                 let paramConf = Reflect.getMetadata(exports.PICK_RPC_PARAM_DECORATION_META_KEY, tgt);
@@ -115,7 +123,7 @@ class AbstractRPCRegistry extends async_service_1.AsyncService {
                     methodConf = [];
                     paramConf[methodName] = methodConf;
                 }
-                methodConf[paramIdx] = path;
+                methodConf[paramIdx] = conf;
             };
             return PickCtxParamDecorator;
         };
