@@ -6,7 +6,7 @@ import type { container as DIContainer } from 'tsyringe';
 
 export interface RPCOptions {
     name: string | string[];
-    paramTypes?: Array<typeof RPCParam>;
+    paramTypes?: Array<any>;
     http?: {
         action?: string | string[];
         path?: string;
