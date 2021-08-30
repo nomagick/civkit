@@ -1,0 +1,34 @@
+stages:
+    - prepare
+    - build
+    - publish
+
+tskit-prepare:
+    stage: prepare
+    script:
+        - npm ci
+    artifacts:
+        expire_in: 30 days
+        paths:
+            - node_modules/
+            - package-lock.json
+            - yarn.lock
+
+tskit-build-pub:
+    stage: build
+    script:
+        - npm run build:pub
+        - npm run mangle-version
+    dependencies:
+        - tskit-prepare
+    artifacts:
+        expire_in: 30 days
+        paths:
+            - ./
+
+tskit-publish:
+    stage: publish
+    script:
+        - npm run publish:beta
+    dependencies:
+        - tskit-build-pub
