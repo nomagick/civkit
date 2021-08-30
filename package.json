@@ -1,6 +1,6 @@
 {
     "name": "@naiverlabs/tskit",
-    "version": "0.0.1-0ab7584",
+    "version": "0.0.1",
     "description": "Sets of tools, in typescript",
     "main": "index.js",
     "types": "index.d.ts",
