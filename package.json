@@ -1,19 +1,22 @@
 {
-    "name": "tskit",
+    "name": "@naiverlabs/tskit",
     "version": "1.0.0",
-    "description": "sets of tools, in typescript",
+    "description": "Sets of tools, in typescript",
     "main": "build/index.js",
     "types": "build/index.d.ts",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
-        "tsc": "tsc -p ."
+        "build": "tsc -p .",
+        "build:pub": "tsc -p ./tsconfig.pub.json",
+        "build:clean": "git clean -dfx -e node_modules -e .vscode",
+        "mangle-version": "mangle-version"
     },
     "repository": {
         "type": "git",
         "url": "ssh://git@git.naiver.org:6022/naiverlabs/typescript-toolkit.git"
     },
     "author": "yanlong.wang@naiver.org",
-    "license": "UNLICENSED",
+    "license": "AGPL",
     "dependencies": {
         "abort-controller": "^3.0.0",
         "axios-cookiejar-support": "^1.0.1",
@@ -31,7 +34,6 @@
         "reflect-metadata": "^0.1.13",
         "tough-cookie": "^4.0.0",
         "tslib": "^2.0.0",
-        "tsyringe": "^4.3.0",
         "uuid": "^8.3.2"
     },
     "peerDependencies": {
@@ -51,7 +53,9 @@
         "@typescript-eslint/parser": "^4.15.2",
         "eslint": "^7.21.0",
         "eslint-plugin-node": "^11.1.0",
+        "mangle-version": "^0.1.1",
         "pino-pretty": "^5.1.3",
+        "tsyringe": "^4.3.0",
         "typescript": "^4.2.2"
     },
     "engines": {

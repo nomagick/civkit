@@ -12,4 +12,3 @@ thumbs.db
 .env
 .test*
 .vscode/
-package-lock.json
