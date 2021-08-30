@@ -1,1 +1,0 @@
-{"version":3,"file":"sub-emitter.d.ts","sourceRoot":"","sources":["../../src/utils/sub-emitter.ts"],"names":[],"mappings":";AAAA,OAAO,EAAE,YAAY,EAAE,MAAM,QAAQ,CAAC;AAEtC,eAAO,MAAM,iBAAiB,eAAuB,CAAC;AAEtD,MAAM,WAAW,mBAAoB,SAAQ,YAAY;IACrD,CAAC,iBAAiB,CAAC,CAAC,EAAE,YAAY,CAAC;CACtC;AAED,wBAAgB,UAAU,CAAC,WAAW,EAAE,mBAAmB,4BAyB1D"}
