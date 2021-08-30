@@ -2,8 +2,8 @@
     "name": "@naiverlabs/tskit",
     "version": "1.0.0",
     "description": "Sets of tools, in typescript",
-    "main": "build/index.js",
-    "types": "build/index.d.ts",
+    "main": "index.js",
+    "types": "index.d.ts",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "build": "tsc -p .",
