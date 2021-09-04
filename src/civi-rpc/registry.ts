@@ -1,8 +1,8 @@
-import _ from 'lodash';
-import { RPCHost, PropOptions, inputSingle } from './base';
+import { RPCHost } from './base';
 import { AsyncService } from '../lib/async-service';
 import { RPCMethodNotFoundError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
+import { inputSingle, PropOptions } from '../lib/auto-castable';
 
 export interface RPCOptions {
     name: string | string[];

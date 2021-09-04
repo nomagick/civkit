@@ -61,3 +61,13 @@ export { CustomSpawnOptions, SubProcessRoutine } from './subprocess';
 export { PromiseThrottle } from './throttle';
 
 export { TemporaryFileManger } from './tmp-file';
+
+
+export {
+    AutoCastable, AutoCastingError,
+    Prop,
+    AUTOCASTABLE_OPTIONS_SYMBOL,
+    NOT_RESOLVED,
+    castToType,
+    inputSingle,
+} from './auto-castable';

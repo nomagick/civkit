@@ -1,11 +1,9 @@
 export {
-    nativeTypes,
+    Dto,
     RPCHost, RPCParam,
-    PropOptions, Enum, castToType, inputSingle,
-    RPCPARAM_OPTIONS_SYMBOL, RPC_CALL_ENVIROMENT
+    RPC_CALL_ENVIROMENT
 } from './base';
 
-export { Prop } from './decorators';
 export {
     APPLICATION_ERROR,
     ApplicationError,
@@ -24,3 +22,5 @@ export {
     makeRPCKit,
     PICK_RPC_PARAM_DECORATION_META_KEY
 } from './registry';
+
+export { Prop, PropOptions } from '../lib/auto-castable';
