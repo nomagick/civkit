@@ -33,10 +33,289 @@ export function timeout<T>(promise: Promise<T>, ttl: number): Promise<T> {
     return deferred.promise;
 }
 
-export type SimpleCookie = Cookie.Properties[] | { [key: string]: string } | string[];
 
 export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void };
 
+
+export interface HTTPServiceOptions extends RequestInit {
+    raw?: boolean;
+    responseType?: 'json' | 'stream' | 'text';
+}
+
+function getAgent(protocol: 'https'): HTTPSAgent;
+function getAgent(protocol: 'http'): HTTPAgent;
+function getAgent(protocol: 'http' | 'https') {
+    return protocol === 'http' ? new HTTPAgent({
+        keepAlive: true,
+
+        keepAliveMsecs: 20 * 1000,
+        maxSockets: 100,
+        maxFreeSockets: 5
+    }) : new HTTPSAgent({
+        keepAlive: true,
+        keepAliveMsecs: 20 * 1000,
+        maxSockets: 100,
+        maxFreeSockets: 5
+    });
+}
+
+export interface HTTPServiceConfig {
+
+    agent?: HTTPAgent | HTTPSAgent;
+    requestOptions?: HTTPServiceOptions;
+
+    protocol?: 'http' | 'https';
+    hostName?: string;
+    port?: number;
+    baseUri?: string;
+
+    baseParams?: { [k: string]: string | string[] };
+    baseHeaders?: { [k: string]: string | string[] };
+    initialCookies?: SimpleCookie;
+
+}
+
+export class HTTPServiceError extends Error {
+    err: any;
+    response?: Response;
+    constructor(err: any, response?: Response) {
+        super(err);
+        this.err = err;
+        this.response = response;
+    }
+}
+
+type FetchPatch<Tc> = {
+    serial: number;
+    config: Tc;
+};
+
+export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConfig, To extends HTTPServiceOptions = HTTPServiceOptions> extends EventEmitter {
+    config: Tc;
+
+    protected baseUrl: string;
+    baseURL: URL;
+    baseOptions: To;
+
+    httpAgent: HTTPAgent;
+    httpsAgent: HTTPSAgent;
+
+    baseParams: { [k: string]: string | string[] };
+    baseHeaders: { [k: string]: string | string[] };
+
+
+    counter: number = 0;
+
+    // tslint:disable-next-line:variable-name
+    Error = HTTPServiceError;
+
+    constructor(baseUrl: string, config: Tc = {} as any) {
+        super();
+        this.httpAgent = getAgent('http');
+        this.httpsAgent = getAgent('https');
+        this.config = _.defaults(config, {
+            requestOptions: {},
+            baseParams: {},
+            baseHeaders: {},
+            initialCookies: {}
+        });
+
+        this.baseUrl = baseUrl;
+        this.baseURL = new URL(baseUrl);
+
+        this.baseOptions = _.defaultsDeep(config.requestOptions, {
+            maxRedirects: 0, timeout: 5000
+        });
+
+        this.baseParams = this.config.baseParams!;
+        this.baseHeaders = this.config.baseHeaders!;
+    }
+
+    get poolSize() {
+        return (this.baseUrl.startsWith('https') ? this.httpsAgent : this.httpAgent).maxSockets;
+    }
+
+    set poolSize(size: number) {
+        (this.baseUrl.startsWith('https') ? this.httpsAgent : this.httpAgent).maxSockets = size;
+    }
+
+    urlOf(pathName: string, queryParams: any = {}) {
+        const params = new URLSearchParams(this.baseParams as any);
+        for (const [k, v] of Object.entries<any>(queryParams || {})) {
+            if (Array.isArray(v)) {
+                if (v.length) {
+                    for (const y of v) {
+                        params.append(k, y);
+                    }
+                } else {
+                    params.append(k, '');
+                }
+            } else {
+                params.set(k, (v === undefined || v === null || (typeof v === 'number' && isNaN(v))) ? '' : v);
+            }
+        }
+
+        const pString = params.toString();
+        const url = new URL(pString ? `${pathName}?${pString}` : pathName, this.baseUrl);
+
+        url.pathname = `${this.baseURL.pathname}${url.pathname}`.replace(/^\/+/, '/');
+
+        return url.toString();
+    }
+
+    __composeOption(...options: Array<To | undefined>): To {
+        const finalOptons: any = _.merge({}, this.baseOptions, ...options);
+
+        return finalOptons;
+    }
+
+    __request<T = any>(
+        method: string, uri: string, queryParams?: any,
+        _options?: To, ..._moreOptions: Array<To | undefined>): PromiseWithCancel<Response & { data: T }> {
+
+        const abortCtrl = new AbortController();
+        const url = this.urlOf(uri, queryParams);
+        const options = this.__composeOption(
+            {
+                method: method as any, signal: abortCtrl.signal
+            } as any,
+            _options, ..._moreOptions
+        );
+
+        const deferred = Defer();
+        (deferred.promise as any).cancel = abortCtrl.abort;
+        const serial = this.counter++;
+        fetch(url, options)
+            .then(
+                async (r) => {
+                    this.emit('response', r, serial);
+                    Object.defineProperties(r, {
+                        serial: { value: serial },
+                        config: { value: { ...options, url } }
+                    });
+                    try {
+                        const parsed = await this.__processResponse(options, r);
+                        Object.defineProperties(r, {
+                            data: { value: parsed },
+                        });
+                        deferred.resolve(r);
+                        this.emit('parsed', parsed, r, serial);
+
+                        return;
+                    } catch (err: any) {
+                        Object.defineProperties(err, {
+                            serial: { value: serial },
+                            config: { value: { ...options, url } },
+                            status: { value: err.code || err.errno }
+                        });
+
+                        deferred.reject(r);
+                        this.emit('exception', err, r, serial);
+                    }
+
+                },
+                (err: FetchError) => {
+                    Object.defineProperties(err, {
+                        serial: { value: serial },
+                        config: { value: { ...options, url } },
+                        status: { value: err.code || err.errno }
+                    });
+
+                    deferred.reject(err);
+
+                    this.emit('exception', err, undefined, serial);
+                }
+            );
+
+        return deferred.promise as any;
+    }
+
+    async __processResponse(options: HTTPServiceOptions, r: Response) {
+        const contentType = r.headers.get('Content-Type');
+        let bodyParsed: any = null;
+        do {
+            if (options.raw) {
+                break;
+            }
+            if (options.responseType === 'json') {
+                bodyParsed = await r.json();
+                break;
+            } else if (options.responseType === 'stream') {
+                bodyParsed = r.body;
+                break;
+            } else if (options.responseType === 'text') {
+                bodyParsed = await r.textConverted();
+                break;
+            }
+            if (contentType?.startsWith('application/json')) {
+                bodyParsed = await r.json();
+            } else if (contentType?.startsWith('text/')) {
+                bodyParsed = await r.textConverted();
+            }
+            break;
+            // eslint-disable-next-line no-constant-condition
+        } while (false);
+
+        if (r.ok) {
+            return bodyParsed === null ? r : bodyParsed;
+        }
+
+        throw bodyParsed === null ? r : bodyParsed;
+    }
+
+    get<T = any>(uri: string, queryParams?: any, options?: To) {
+        return this.__request<T>('GET', uri, queryParams, options);
+    }
+
+    postForm<T = any>(uri: string, queryParams: any = {}, data: any = {}, options?: To) {
+        return this.__request<T>(
+            'POST', uri, queryParams,
+            {
+                body: formDataStringify(data),
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            } as any,
+            options
+        );
+    }
+
+    postMultipart<T = any>(
+        uri: string, queryParams: any = {},
+        multipart: Array<[string, any, FormData.AppendOptions?]> = [],
+        options?: To
+    ) {
+        const form = new FormData();
+
+        for (const [k, v, o] of multipart) {
+            form.append(k, v, o);
+        }
+
+        return this.__request<T>(
+            'POST', uri, queryParams,
+            { body: form, headers: { ...form.getHeaders() } } as any,
+            options
+        );
+    }
+
+    postJson<T = any>(uri: string, queryParams?: any, data?: any, options?: To) {
+        return this.__request<T>('POST', uri, queryParams, { body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } } as any, options);
+    }
+
+    delete<T = any>(uri: string, queryParams?: any, options?: To) {
+        return this.__request<T>('DELETE', uri, queryParams, options);
+    }
+
+}
+
+export interface HTTPService {
+
+    on(name: 'response', listener: (response: Response & FetchPatch<HTTPServiceConfig>, serial: number) => void): this;
+    on(name: 'exception', listener: (error: Error & FetchPatch<HTTPServiceConfig> & { status: string }, response: Response & FetchPatch<HTTPServiceConfig> | undefined, serial: number) => void): this;
+    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<HTTPServiceConfig> & { data: any }, serial: number) => void): this;
+    on(event: string | symbol, listener: (...args: any[]) => void): this;
+
+}
+
+export type SimpleCookie = Cookie.Properties[] | { [key: string]: string } | string[];
 export class InertMemoryCookieStore extends MemoryCookieStore {
     protected _muted: boolean = false;
     protected _locked: boolean = false;
@@ -107,6 +386,12 @@ export class InertMemoryCookieStore extends MemoryCookieStore {
     }
 }
 
+
+function patchCookieJar(jar: CookieJar, store: InertMemoryCookieStore) {
+    (jar as any).lock = store.lock.bind(store);
+    (jar as any).unlock = store.unlock.bind(store);
+}
+
 export function parseSimpleCookie(sc: SimpleCookie): Cookie[] {
     const cookies: Cookie[] = [];
     if (Array.isArray(sc)) {
@@ -132,97 +417,23 @@ export function parseSimpleCookie(sc: SimpleCookie): Cookie[] {
     return cookies;
 }
 
-export type HTTPServiceOptions = RequestInit & {
+export interface CookieAwareHTTPServiceOptions extends HTTPServiceOptions {
     cookie?: SimpleCookie;
     jar?: CookieJar;
-    raw?: boolean;
-    responseType?: 'json' | 'stream' | 'text';
-};
-
-
-function getAgent(protocol: 'https'): HTTPSAgent;
-function getAgent(protocol: 'http'): HTTPAgent;
-function getAgent(protocol: 'http' | 'https') {
-    return protocol === 'http' ? new HTTPAgent({
-        keepAlive: true,
-
-        keepAliveMsecs: 20 * 1000,
-        maxSockets: 100,
-        maxFreeSockets: 5
-    }) : new HTTPSAgent({
-        keepAlive: true,
-        keepAliveMsecs: 20 * 1000,
-        maxSockets: 100,
-        maxFreeSockets: 5
-    });
 }
 
-export interface HTTPServiceConfig {
-
-    agent?: HTTPAgent | HTTPSAgent;
-    requestOptions?: HTTPServiceOptions;
-
-    protocol?: 'http' | 'https';
-    hostName?: string;
-    port?: number;
-    baseUri?: string;
-
-    baseParams?: { [k: string]: string | string[] };
-    baseHeaders?: { [k: string]: string | string[] };
+export interface CookieAwareHTTPServiceConfig extends HTTPServiceConfig {
     initialCookies?: SimpleCookie;
-
+    lockCookiesAfterInit?: boolean;
 }
 
-export class HTTPServiceError extends Error {
-    err: any;
-    response?: Response;
-    constructor(err: any, response?: Response) {
-        super(err);
-        this.err = err;
-        this.response = response;
-    }
-}
-
-function patchCookieJar(jar: CookieJar, store: InertMemoryCookieStore) {
-    (jar as any).lock = store.lock.bind(store);
-    (jar as any).unlock = store.unlock.bind(store);
-}
-
-export abstract class HTTPService extends EventEmitter {
-    config: HTTPServiceConfig;
-
-    protected baseUrl: string;
-    baseURL: URL;
-    baseOptions: HTTPServiceOptions;
-
-    httpAgent: HTTPAgent;
-    httpsAgent: HTTPSAgent;
-
-    baseParams: { [k: string]: string | string[] };
-    baseHeaders: { [k: string]: string | string[] };
-
+export abstract class CookieAwareHTTPService extends HTTPService<CookieAwareHTTPServiceConfig, CookieAwareHTTPServiceOptions> {
     cookieJar: CookieJar & {
         unlock: () => InertMemoryCookieStore; lock: () => InertMemoryCookieStore;
     };
 
-    counter: number = 0;
-
-    // tslint:disable-next-line:variable-name
-    Error = HTTPServiceError;
-
-    constructor(baseUrl: string, config: HTTPServiceConfig = {}) {
-        super();
-        this.httpAgent = getAgent('http');
-        this.httpsAgent = getAgent('https');
-        this.config = _.defaults(config, {
-            requestOptions: {},
-            baseParams: {},
-            baseHeaders: {},
-            initialCookies: {}
-        });
-
-        this.baseUrl = baseUrl;
-        this.baseURL = new URL(baseUrl);
+    constructor(baseUrl: string, config: CookieAwareHTTPServiceConfig = {}) {
+        super(baseUrl, config);
 
         const inertStore = new InertMemoryCookieStore();
         const newJar = new CookieJar(inertStore);
@@ -234,26 +445,20 @@ export abstract class HTTPService extends EventEmitter {
             this.cookieJar.setCookie(x, this.baseUrl).catch();
         }
 
-        this.cookieJar.lock();
-
-        this.baseOptions = _.defaultsDeep(config.requestOptions, {
-            maxRedirects: 0, timeout: 5000
-        });
-
-        this.baseParams = this.config.baseParams!;
-        this.baseHeaders = this.config.baseHeaders!;
+        if (this.config.lockCookiesAfterInit) {
+            this.cookieJar.lock();
+        }
 
         this.baseOptions.jar = this.cookieJar;
 
-        this.on('response', (resp: Response) => {
-            const setCookieHeader = resp.headers.get('Set-Cookie');
-            const serial = arguments[arguments.length - 1];
+        this.on('response', (resp, serial) => {
+            const setCookieHeader = resp.headers.raw()['set-cookie'];
             if (Array.isArray(setCookieHeader)) {
                 for (const x of setCookieHeader) {
-                    this.emit('set-cookie', x, serial);
+                    this.emit('set-cookie', x, resp, serial);
                 }
             } else if (setCookieHeader) {
-                this.emit('set-cookie', setCookieHeader, serial);
+                this.emit('set-cookie', setCookieHeader, resp, serial);
             }
         });
     }
@@ -268,171 +473,16 @@ export abstract class HTTPService extends EventEmitter {
         patchCookieJar(newJar, inertStore);
         this.cookieJar = newJar as any;
     }
+}
 
-    get poolSize() {
-        return (this.baseUrl.startsWith('https') ? this.httpsAgent : this.httpAgent).maxSockets;
-    }
+export interface CookieAwareHTTPService {
 
-    set poolSize(size: number) {
-        (this.baseUrl.startsWith('https') ? this.httpsAgent : this.httpAgent).maxSockets = size;
-    }
+    on(name: 'response', listener: (response: Response & FetchPatch<CookieAwareHTTPServiceConfig>, serial: number) => void): this;
+    on(name: 'exception', listener: (error: Error & FetchPatch<CookieAwareHTTPServiceConfig> & { status: string }, response: Response & FetchPatch<CookieAwareHTTPServiceConfig> | undefined, serial: number) => void): this;
+    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<CookieAwareHTTPServiceConfig> & { data: any }, serial: number) => void): this;
 
-    urlOf(pathName: string, queryParams: any = {}) {
-        const params = new URLSearchParams(this.baseParams as any);
-        for (const [k, v] of Object.entries<any>(queryParams || {})) {
-            if (Array.isArray(v)) {
-                if (v.length) {
-                    for (const y of v) {
-                        params.append(k, y);
-                    }
-                } else {
-                    params.append(k, '');
-                }
-            } else {
-                params.set(k, (v === undefined || v === null || (typeof v === 'number' && isNaN(v))) ? '' : v);
-            }
-        }
-
-        const pString = params.toString();
-        const url = new URL(pString ? `${pathName}?${pString}` : pathName, this.baseUrl);
-
-        url.pathname = `${this.baseURL.pathname}${url.pathname}`.replace(/^\/+/, '/');
-
-        return url.toString();
-    }
-
-    __composeOption(...options: Array<HTTPServiceOptions | undefined>): HTTPServiceOptions {
-        const finalOptons: any = _.merge({}, this.baseOptions, ...options);
-
-        return finalOptons;
-    }
-
-    __request<T = any>(
-        method: string, uri: string, queryParams?: any,
-        _options?: HTTPServiceOptions, ..._moreOptions: Array<HTTPServiceOptions | undefined>): PromiseWithCancel<Response & { data: T }> {
-
-        const abortCtrl = new AbortController();
-        const url = this.urlOf(uri, queryParams);
-        const options = this.__composeOption(
-            {
-                method: method as any, signal: abortCtrl.signal
-            },
-            _options, ..._moreOptions
-        );
-
-
-        const deferred = Defer();
-        (deferred.promise as any).cancel = abortCtrl.abort;
-        fetch(url, options)
-            .then(
-                async (r) => {
-                    try {
-                        const parsed = await this.__processResponse(options, r);
-                        Object.defineProperties(r, {
-                            data: { value: parsed },
-                            config: { value: { ...options, url } }
-                        });
-
-                        deferred.resolve(r);
-
-                        return;
-                    } catch (err) {
-                        Object.defineProperties(r, {
-                            config: { value: { ...options, url } },
-                            data: { value: err }
-                        });
-
-                        deferred.reject(r);
-                    }
-
-                },
-                (err: FetchError) => {
-                    Object.defineProperties(err, {
-                        config: { value: { ...options, url } },
-                        status: { value: err.code || err.errno }
-                    });
-
-                    deferred.reject(err);
-                }
-            ).catch(deferred.reject);
-
-
-        return deferred.promise as any;
-    }
-
-    async __processResponse(options: HTTPServiceOptions, r: Response) {
-        const contentType = r.headers.get('Content-Type');
-        let bodyParsed: any = null;
-        do {
-            if (options.raw) {
-                break;
-            }
-            if (options.responseType === 'json') {
-                bodyParsed = await r.json();
-                break;
-            } else if (options.responseType === 'stream') {
-                bodyParsed = r.body;
-                break;
-            } else if (options.responseType === 'text') {
-                bodyParsed = await r.textConverted();
-                break;
-            }
-            if (contentType?.startsWith('application/json')) {
-                bodyParsed = await r.json();
-            } else if (contentType?.startsWith('text/')) {
-                bodyParsed = await r.textConverted();
-            }
-            break;
-            // eslint-disable-next-line no-constant-condition
-        } while (false);
-
-        if (r.ok) {
-            return bodyParsed === null ? r : bodyParsed;
-        }
-
-        throw bodyParsed === null ? r : bodyParsed;
-    }
-
-    get<T = any>(uri: string, queryParams?: any, options?: HTTPServiceOptions) {
-        return this.__request<T>('GET', uri, queryParams, options);
-    }
-
-    postForm<T = any>(uri: string, queryParams: any = {}, data: any = {}, options?: HTTPServiceOptions) {
-        return this.__request<T>(
-            'POST', uri, queryParams,
-            {
-                body: formDataStringify(data),
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            },
-            options
-        );
-    }
-
-    postMultipart<T = any>(
-        uri: string, queryParams: any = {},
-        multipart: Array<[string, any, FormData.AppendOptions?]> = [],
-        options?: HTTPServiceOptions
-    ) {
-        const form = new FormData();
-
-        for (const [k, v, o] of multipart) {
-            form.append(k, v, o);
-        }
-
-        return this.__request<T>(
-            'POST', uri, queryParams,
-            { body: form, headers: { ...form.getHeaders() } },
-            options
-        );
-    }
-
-    postJson<T = any>(uri: string, queryParams?: any, data?: any, options?: HTTPServiceOptions) {
-        return this.__request<T>('POST', uri, queryParams, { body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }, options);
-    }
-
-    delete<T = any>(uri: string, queryParams?: any, options?: HTTPServiceOptions) {
-        return this.__request<T>('DELETE', uri, queryParams, options);
-    }
+    on(name: 'set-cookie', listener: (headerContent: string, response: Response & FetchPatch<CookieAwareHTTPServiceConfig>, serial: number) => void): this;
+    on(event: string | symbol, listener: (...args: any[]) => void): this;
 
 }
 

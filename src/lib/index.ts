@@ -34,6 +34,10 @@ export {
     SimpleCookie, InertMemoryCookieStore,
     parseSimpleCookie,
 
+    CookieAwareHTTPServiceOptions,
+    CookieAwareHTTPServiceConfig,
+    CookieAwareHTTPService
+
 } from './httpService';
 
 
