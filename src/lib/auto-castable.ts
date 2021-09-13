@@ -201,7 +201,6 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
     let isArray = false;
     const access = config.path || prop;
     const mappedPath = (host?.name && prop) ? `${host.name}.${prop.toString()}` : `input[${access.toString()}]`;
-
     if (config.arrayOf) {
         isArray = true;
         types = Array.isArray(config.arrayOf) ? config.arrayOf : [config.arrayOf];
@@ -379,6 +378,56 @@ function enumToSet(enumObj: any, designType?: any) {
     return result;
 }
 
+export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, designType: any) {
+    if (Array.isArray(options.type)) {
+        options.type = options.type.map((x) => {
+            if (_.isPlainObject(x)) {
+                return enumToSet(x);
+            } else if (x instanceof Set) {
+                x.toString = function () {
+                    return `ENUM(${Array.from(this.values()).join('|')})`;
+                };
+            }
+
+            return x;
+        });
+    }
+
+    if (Array.isArray(options.arrayOf)) {
+        options.arrayOf = options.arrayOf.map((x) => {
+            if (_.isPlainObject(x)) {
+                return enumToSet(x);
+            } else if (x instanceof Set) {
+                x.toString = function () {
+                    return `ENUM(${Array.from(this.values()).join('|')})`;
+                };
+            }
+
+            return x;
+        });
+    }
+
+    if (_.isPlainObject(options.type)) {
+        // Its enum.
+        options.type = enumToSet(options.type, designType);
+    } else if (options.type instanceof Set) {
+        options.type.toString = function () {
+            return `ENUM(${Array.from(this.values()).join('|')})`;
+        };
+    }
+
+    if (_.isPlainObject(options.arrayOf)) {
+        // Its enum.
+        options.arrayOf = enumToSet(options.arrayOf, designType);
+    } else if (options.arrayOf instanceof Set) {
+        options.arrayOf.toString = function () {
+            return `ENUM(${Array.from(this.values()).join('|')})`;
+        };
+    }
+
+    return options;
+}
+
 export function Prop<T = any>(options: PropOptions<T> | string = {}) {
     const _options = typeof options === 'string' ? { path: options } : options;
 
@@ -393,59 +442,13 @@ export function Prop<T = any>(options: PropOptions<T> | string = {}) {
 
         _options.path = _options.path || propName;
 
+        // design:type come from TypeScript compile time decorator-metadata.
+        const designType = Reflect.getMetadata('design:type', tgt, propName);
+
         if (!_options.type && !_options.arrayOf) {
-            // design:type come from TypeScript compile time decorator-metadata.
-            _options.type = Reflect.getMetadata('design:type', tgt, propName);
+            _options.type = designType;
         }
 
-        if (Array.isArray(_options.type)) {
-            _options.type = _options.type.map((x) => {
-                if (_.isPlainObject(x)) {
-                    return enumToSet(x);
-                } else if (x instanceof Set) {
-                    x.toString = function () {
-                        return `ENUM(${Array.from(this.values()).join('|')})`;
-                    };
-                }
-
-                return x;
-            });
-        }
-
-        if (Array.isArray(_options.arrayOf)) {
-            _options.arrayOf = _options.arrayOf.map((x) => {
-                if (_.isPlainObject(x)) {
-                    return enumToSet(x);
-                } else if (x instanceof Set) {
-                    x.toString = function () {
-                        return `ENUM(${Array.from(this.values()).join('|')})`;
-                    };
-                }
-
-                return x;
-            });
-        }
-
-        if (_.isPlainObject(_options.type)) {
-            // Its enum.
-            const designType = Reflect.getMetadata('design:type', tgt, propName);
-            _options.type = enumToSet(_options.type, designType);
-        } else if (_options.type instanceof Set) {
-            _options.type.toString = function () {
-                return `ENUM(${Array.from(this.values()).join('|')})`;
-            };
-        }
-
-        if (_.isPlainObject(_options.arrayOf)) {
-            // Its enum.
-            const designType = Reflect.getMetadata('design:type', tgt, propName);
-            _options.arrayOf = enumToSet(_options.arrayOf, designType);
-        } else if (_options.arrayOf instanceof Set) {
-            _options.arrayOf.toString = function () {
-                return `ENUM(${Array.from(this.values()).join('|')})`;
-            };
-        }
-
-        hostConfig[propName] = _options;
+        hostConfig[propName] = __patchPropOptionsEnumToSet(_options, designType);
     };
 }

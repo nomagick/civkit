@@ -2,7 +2,7 @@ import { RPCHost } from './base';
 import { AsyncService } from '../lib/async-service';
 import { RPCMethodNotFoundError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
-import { inputSingle, PropOptions } from '../lib/auto-castable';
+import { inputSingle, PropOptions, __patchPropOptionsEnumToSet } from '../lib/auto-castable';
 
 export interface RPCOptions {
     name: string | string[];
@@ -164,6 +164,8 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 conf = path;
             }
             const PickCtxParamDecorator = (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => {
+                // design:type come from TypeScript compile time decorator-metadata.
+                const designType = Reflect.getMetadata('design:paramtypes', tgt, methodName)[paramIdx];
                 let paramConf = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, tgt);
                 if (!paramConf) {
                     paramConf = {};
@@ -176,7 +178,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                     paramConf[methodName] = methodConf;
                 }
 
-                methodConf[paramIdx] = conf;
+                methodConf[paramIdx] = conf ? __patchPropOptionsEnumToSet(conf, designType) : conf;
             };
 
             return PickCtxParamDecorator;
