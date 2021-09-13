@@ -279,6 +279,22 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
             values.push(elem);
         }
 
+        if (config.validateArray) {
+            const validators = Array.isArray(config.validateArray) ? config.validateArray : [config.validateArray];
+
+            for (const validator of validators) {
+
+                const result = validator(values, arrayInput);
+
+                if (!result) {
+                    throw new AutoCastingError({
+                        message: `Casting failed for ${mappedPath}: ${access.toString()} rejected by array validator ${config.validateArray.name}.`,
+                        path: `${access.toString()}`, value: arrayInput, validator: config.validateArray.name
+                    });
+                }
+            }
+        }
+
         return values;
     }
 
@@ -346,6 +362,7 @@ export interface PropOptions<T> {
     type?: any | any[];
     arrayOf?: any | any[];
     validate?: (val: T, obj?: any) => boolean | Array<(val: T, obj?: any) => boolean>;
+    validateArray?: (val: T, obj?: any) => boolean | Array<(val: T, obj?: any) => boolean>;
     required?: boolean;
     default?: T;
 }
