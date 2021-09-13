@@ -111,6 +111,8 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 if (err instanceof AutoCastingError) {
                     throw new ParamValidationError({ ...err });
                 }
+
+                throw err;
             }
 
             return func.apply(host, params);
