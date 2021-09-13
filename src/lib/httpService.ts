@@ -12,10 +12,10 @@ import _ from 'lodash';
 import { EventEmitter } from 'events';
 import { stringify as formDataStringify } from 'querystring';
 import { Defer, TimeoutError } from './defer';
-import fetch, { RequestInit, Response, FetchError } from 'node-fetch';
+import fetch, { RequestInit, Response, FetchError, AbortError } from 'node-fetch';
 import AbortController from "abort-controller";
 
-export { FetchError } from 'node-fetch';
+export { FetchError, AbortError } from 'node-fetch';
 
 export function timeout<T>(promise: Promise<T>, ttl: number): Promise<T> {
 
@@ -38,6 +38,7 @@ export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void };
 
 
 export interface HTTPServiceOptions extends RequestInit {
+    url?: string;
     raw?: boolean;
     responseType?: 'json' | 'stream' | 'text';
 }
@@ -75,19 +76,22 @@ export interface HTTPServiceConfig {
 
 }
 
-export class HTTPServiceError extends Error {
-    err: any;
+export class HTTPServiceError<T extends HTTPServiceOptions = HTTPServiceOptions> extends Error {
+    err: Error | FetchError | AbortError;
+    serial: number;
+    status?: string | number;
+    config?: T;
     response?: Response;
-    constructor(err: any, response?: Response) {
-        super(err);
+    constructor(serial: number, err: Error | FetchError | AbortError) {
+        super(`Req(${serial}): ${err}`);
+        this.serial = serial;
         this.err = err;
-        this.response = response;
     }
 }
 
-type FetchPatch<Tc> = {
+type FetchPatch<To> = {
     serial: number;
-    config: Tc;
+    config: To;
 };
 
 export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConfig, To extends HTTPServiceOptions = HTTPServiceOptions> extends EventEmitter {
@@ -107,7 +111,7 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
     counter: number = 0;
 
     // tslint:disable-next-line:variable-name
-    Error = HTTPServiceError;
+    Error: typeof HTTPServiceError = HTTPServiceError;
 
     constructor(baseUrl: string, config: Tc = {} as any) {
         super();
@@ -171,7 +175,7 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
 
     __request<T = any>(
         method: string, uri: string, queryParams?: any,
-        _options?: To, ..._moreOptions: Array<To | undefined>): PromiseWithCancel<Response & { data: T }> {
+        _options?: To, ..._moreOptions: Array<To | undefined>): PromiseWithCancel<Response & { data: T } & FetchPatch<To>> {
 
         const abortCtrl = new AbortController();
         const url = this.urlOf(uri, queryParams);
@@ -185,13 +189,14 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
         const deferred = Defer();
         (deferred.promise as any).cancel = abortCtrl.abort;
         const serial = this.counter++;
+        const config = { ...options, url };
         fetch(url, options)
             .then(
                 async (r) => {
                     this.emit('response', r, serial);
                     Object.defineProperties(r, {
                         serial: { value: serial },
-                        config: { value: { ...options, url } }
+                        config: { value: config }
                     });
                     try {
                         const parsed = await this.__processResponse(options, r);
@@ -203,27 +208,24 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
 
                         return;
                     } catch (err: any) {
-                        Object.defineProperties(err, {
-                            serial: { value: serial },
-                            config: { value: { ...options, url } },
-                            status: { value: err.code || err.errno }
-                        });
+                        const newErr = new this.Error(serial, err);
+                        newErr.config = config;
+                        newErr.response = r;
+                        newErr.status = r.status || err.code || err.errno;
 
-                        deferred.reject(r);
-                        this.emit('exception', err, r, serial);
+                        deferred.reject(newErr);
+                        this.emit('exception', newErr, r, serial);
                     }
 
                 },
-                (err: FetchError) => {
-                    Object.defineProperties(err, {
-                        serial: { value: serial },
-                        config: { value: { ...options, url } },
-                        status: { value: err.code || err.errno }
-                    });
+                (err: any) => {
+                    const newErr = new this.Error(serial, err);
+                    newErr.config = config;
+                    newErr.status = err.code || err.errno;
 
-                    deferred.reject(err);
+                    deferred.reject(newErr);
 
-                    this.emit('exception', err, undefined, serial);
+                    this.emit('exception', newErr, undefined, serial);
                 }
             );
 
@@ -244,13 +246,13 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
                 bodyParsed = r.body;
                 break;
             } else if (options.responseType === 'text') {
-                bodyParsed = await r.textConverted();
+                bodyParsed = await r.text();
                 break;
             }
             if (contentType?.startsWith('application/json')) {
                 bodyParsed = await r.json();
             } else if (contentType?.startsWith('text/')) {
-                bodyParsed = await r.textConverted();
+                bodyParsed = await r.text();
             }
             break;
             // eslint-disable-next-line no-constant-condition
@@ -308,9 +310,9 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
 
 export interface HTTPService {
 
-    on(name: 'response', listener: (response: Response & FetchPatch<HTTPServiceConfig>, serial: number) => void): this;
-    on(name: 'exception', listener: (error: Error & FetchPatch<HTTPServiceConfig> & { status: string }, response: Response & FetchPatch<HTTPServiceConfig> | undefined, serial: number) => void): this;
-    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<HTTPServiceConfig> & { data: any }, serial: number) => void): this;
+    on(name: 'response', listener: (response: Response & FetchPatch<HTTPServiceOptions>, serial: number) => void): this;
+    on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<HTTPServiceOptions> | undefined, serial: number) => void): this;
+    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<HTTPServiceOptions> & { data: any }, serial: number) => void): this;
     on(event: string | symbol, listener: (...args: any[]) => void): this;
 
 }
@@ -477,11 +479,11 @@ export abstract class CookieAwareHTTPService extends HTTPService<CookieAwareHTTP
 
 export interface CookieAwareHTTPService {
 
-    on(name: 'response', listener: (response: Response & FetchPatch<CookieAwareHTTPServiceConfig>, serial: number) => void): this;
-    on(name: 'exception', listener: (error: Error & FetchPatch<CookieAwareHTTPServiceConfig> & { status: string }, response: Response & FetchPatch<CookieAwareHTTPServiceConfig> | undefined, serial: number) => void): this;
-    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<CookieAwareHTTPServiceConfig> & { data: any }, serial: number) => void): this;
+    on(name: 'response', listener: (response: Response & FetchPatch<HTTPServiceOptions>, serial: number) => void): this;
+    on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<HTTPServiceOptions> | undefined, serial: number) => void): this;
+    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<HTTPServiceOptions> & { data: any }, serial: number) => void): this;
 
-    on(name: 'set-cookie', listener: (headerContent: string, response: Response & FetchPatch<CookieAwareHTTPServiceConfig>, serial: number) => void): this;
+    on(name: 'set-cookie', listener: (headerContent: string, response: Response & FetchPatch<CookieAwareHTTPServiceOptions>, serial: number) => void): this;
     on(event: string | symbol, listener: (...args: any[]) => void): this;
 
 }
