@@ -12,10 +12,10 @@ import _ from 'lodash';
 import { EventEmitter } from 'events';
 import { stringify as formDataStringify } from 'querystring';
 import { Defer, TimeoutError } from './defer';
-import fetch, { RequestInit, Response, FetchError, AbortError } from 'node-fetch';
+import fetch, { RequestInit, Response, FetchError } from 'node-fetch';
 import AbortController from "abort-controller";
 
-export { FetchError, AbortError } from 'node-fetch';
+export { FetchError } from 'node-fetch';
 
 export function timeout<T>(promise: Promise<T>, ttl: number): Promise<T> {
 
@@ -77,12 +77,12 @@ export interface HTTPServiceConfig {
 }
 
 export class HTTPServiceError<T extends HTTPServiceRequestOptions = HTTPServiceRequestOptions> extends Error {
-    err: Error | FetchError | AbortError;
+    err: Error | FetchError ;
     serial: number;
     status?: string | number;
     config?: T;
     response?: Response;
-    constructor(serial: number, err: Error | FetchError | AbortError) {
+    constructor(serial: number, err: Error | FetchError) {
         super(`Req(${serial}): ${err}`);
         this.serial = serial;
         this.err = err;
