@@ -9,7 +9,7 @@ export async function downloadFile(uri: string, dest: string) {
 
     const resp = await fetch(uri);
 
-    if (!resp.ok) {
+    if (!(resp.ok && resp.body)) {
         throw new Error(`Unexpected response ${resp.statusText}`);
     }
 
