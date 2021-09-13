@@ -18,10 +18,10 @@ export enum APPLICATION_ERROR {
 
 const keyExcept = new Set(['status', 'stack', 'message', 'name', 'readableMessage']);
 export class ApplicationError extends Error {
-    status: APPLICATION_ERROR;
+    status: number;
     [k: string]: any;
 
-    constructor(status: APPLICATION_ERROR, detail?: any) {
+    constructor(status: number, detail?: any) {
         super(`ApplicationError: ${status}`);
         this.name = Object.getPrototypeOf(this).constructor.name;
         this.message = `${status}`;
