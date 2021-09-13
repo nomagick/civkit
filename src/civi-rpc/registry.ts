@@ -1,6 +1,6 @@
 import { RPCHost } from './base';
 import { AsyncService } from '../lib/async-service';
-import { RPCMethodNotFoundError, ParamValidationError } from './errors';
+import { RPCMethodNotFoundError, ParamValidationError, ApplicationError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
 import { AutoCastingError, inputSingle, PropOptions, __patchPropOptionsEnumToSet } from '../lib/auto-castable';
 
@@ -108,6 +108,9 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                     return inputSingle(undefined, input, propOps.path, { type: t, ...propOps });
                 });
             } catch (err) {
+                if (err instanceof ApplicationError) {
+                    throw err;
+                }
                 if (err instanceof AutoCastingError) {
                     throw new ParamValidationError({ ...err });
                 }

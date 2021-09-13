@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ParamValidationError } from './errors';
+import { ParamValidationError, ApplicationError } from './errors';
 import { AsyncService } from '../lib/async-service';
 import { assignMeta, extractMeta } from './meta';
 import { AutoCastable, AutoCastingError } from '../lib/auto-castable';
@@ -33,6 +33,9 @@ export class Dto<T = any> extends AutoCastable {
 
             return r;
         } catch (err) {
+            if (err instanceof ApplicationError) {
+                throw err;
+            }
             if (err instanceof AutoCastingError) {
                 throw new ParamValidationError({ ...err });
             }
