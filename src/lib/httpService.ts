@@ -190,6 +190,7 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
         (deferred.promise as any).cancel = abortCtrl.abort;
         const serial = this.counter++;
         const config = { ...options, url };
+        this.emit('request', config, serial);
         fetch(url, options)
             .then(
                 async (r) => {
@@ -310,6 +311,7 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
 
 export interface HTTPService {
 
+    on(name: 'request', listener: (config: HTTPServiceRequestOptions, serial: number) => void): this;
     on(name: 'response', listener: (response: Response & FetchPatch<HTTPServiceRequestOptions>, serial: number) => void): this;
     on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<HTTPServiceRequestOptions> | undefined, serial: number) => void): this;
     on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<HTTPServiceRequestOptions> & { data: any }, serial: number) => void): this;
@@ -479,6 +481,7 @@ export abstract class CookieAwareHTTPService extends HTTPService<CookieAwareHTTP
 
 export interface CookieAwareHTTPService {
 
+    on(name: 'request', listener: (config: CookieAwareHTTPServiceRequestOptions, serial: number) => void): this;
     on(name: 'response', listener: (response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions>, serial: number) => void): this;
     on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions> | undefined, serial: number) => void): this;
     on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions> & { data: any }, serial: number) => void): this;
