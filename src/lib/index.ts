@@ -27,14 +27,14 @@ export {
 export {
     FetchError, PromiseWithCancel,
 
-    HTTPServiceOptions, HTTPServiceConfig,
+    HTTPServiceRequestOptions, HTTPServiceConfig,
     HTTPServiceError, HTTPService,
     HTTPServiceResponse,
 
     SimpleCookie, InertMemoryCookieStore,
     parseSimpleCookie,
 
-    CookieAwareHTTPServiceOptions,
+    CookieAwareHTTPServiceRequestOptions,
     CookieAwareHTTPServiceConfig,
     CookieAwareHTTPService
 

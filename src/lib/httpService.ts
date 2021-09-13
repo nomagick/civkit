@@ -37,7 +37,7 @@ export function timeout<T>(promise: Promise<T>, ttl: number): Promise<T> {
 export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void };
 
 
-export interface HTTPServiceOptions extends RequestInit {
+export interface HTTPServiceRequestOptions extends RequestInit {
     url?: string;
     raw?: boolean;
     responseType?: 'json' | 'stream' | 'text';
@@ -63,7 +63,7 @@ function getAgent(protocol: 'http' | 'https') {
 export interface HTTPServiceConfig {
 
     agent?: HTTPAgent | HTTPSAgent;
-    requestOptions?: HTTPServiceOptions;
+    requestOptions?: HTTPServiceRequestOptions;
 
     protocol?: 'http' | 'https';
     hostName?: string;
@@ -76,7 +76,7 @@ export interface HTTPServiceConfig {
 
 }
 
-export class HTTPServiceError<T extends HTTPServiceOptions = HTTPServiceOptions> extends Error {
+export class HTTPServiceError<T extends HTTPServiceRequestOptions = HTTPServiceRequestOptions> extends Error {
     err: Error | FetchError | AbortError;
     serial: number;
     status?: string | number;
@@ -94,7 +94,7 @@ type FetchPatch<To> = {
     config: To;
 };
 
-export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConfig, To extends HTTPServiceOptions = HTTPServiceOptions> extends EventEmitter {
+export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConfig, To extends HTTPServiceRequestOptions = HTTPServiceRequestOptions> extends EventEmitter {
     config: Tc;
 
     protected baseUrl: string;
@@ -232,7 +232,7 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
         return deferred.promise as any;
     }
 
-    async __processResponse(options: HTTPServiceOptions, r: Response) {
+    async __processResponse(options: HTTPServiceRequestOptions, r: Response) {
         const contentType = r.headers.get('Content-Type');
         let bodyParsed: any = null;
         do {
@@ -310,9 +310,9 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
 
 export interface HTTPService {
 
-    on(name: 'response', listener: (response: Response & FetchPatch<HTTPServiceOptions>, serial: number) => void): this;
-    on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<HTTPServiceOptions> | undefined, serial: number) => void): this;
-    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<HTTPServiceOptions> & { data: any }, serial: number) => void): this;
+    on(name: 'response', listener: (response: Response & FetchPatch<HTTPServiceRequestOptions>, serial: number) => void): this;
+    on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<HTTPServiceRequestOptions> | undefined, serial: number) => void): this;
+    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<HTTPServiceRequestOptions> & { data: any }, serial: number) => void): this;
     on(event: string | symbol, listener: (...args: any[]) => void): this;
 
 }
@@ -419,7 +419,7 @@ export function parseSimpleCookie(sc: SimpleCookie): Cookie[] {
     return cookies;
 }
 
-export interface CookieAwareHTTPServiceOptions extends HTTPServiceOptions {
+export interface CookieAwareHTTPServiceRequestOptions extends HTTPServiceRequestOptions {
     cookie?: SimpleCookie;
     jar?: CookieJar;
 }
@@ -429,7 +429,7 @@ export interface CookieAwareHTTPServiceConfig extends HTTPServiceConfig {
     lockCookiesAfterInit?: boolean;
 }
 
-export abstract class CookieAwareHTTPService extends HTTPService<CookieAwareHTTPServiceConfig, CookieAwareHTTPServiceOptions> {
+export abstract class CookieAwareHTTPService extends HTTPService<CookieAwareHTTPServiceConfig, CookieAwareHTTPServiceRequestOptions> {
     cookieJar: CookieJar & {
         unlock: () => InertMemoryCookieStore; lock: () => InertMemoryCookieStore;
     };
@@ -479,11 +479,11 @@ export abstract class CookieAwareHTTPService extends HTTPService<CookieAwareHTTP
 
 export interface CookieAwareHTTPService {
 
-    on(name: 'response', listener: (response: Response & FetchPatch<HTTPServiceOptions>, serial: number) => void): this;
-    on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<HTTPServiceOptions> | undefined, serial: number) => void): this;
-    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<HTTPServiceOptions> & { data: any }, serial: number) => void): this;
+    on(name: 'response', listener: (response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions>, serial: number) => void): this;
+    on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions> | undefined, serial: number) => void): this;
+    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions> & { data: any }, serial: number) => void): this;
 
-    on(name: 'set-cookie', listener: (headerContent: string, response: Response & FetchPatch<CookieAwareHTTPServiceOptions>, serial: number) => void): this;
+    on(name: 'set-cookie', listener: (headerContent: string, response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions>, serial: number) => void): this;
     on(event: string | symbol, listener: (...args: any[]) => void): this;
 
 }
