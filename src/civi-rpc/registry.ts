@@ -1,9 +1,8 @@
 import { RPCHost } from './base';
 import { AsyncService } from '../lib/async-service';
-import { RPCMethodNotFoundError } from './errors';
+import { RPCMethodNotFoundError, ParamValidationError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
 import { AutoCastingError, inputSingle, PropOptions, __patchPropOptionsEnumToSet } from '../lib/auto-castable';
-import { ParamValidationError } from 'civi-rpc';
 
 export interface RPCOptions {
     name: string | string[];
