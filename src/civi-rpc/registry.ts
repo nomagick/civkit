@@ -2,7 +2,8 @@ import { RPCHost } from './base';
 import { AsyncService } from '../lib/async-service';
 import { RPCMethodNotFoundError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
-import { inputSingle, PropOptions, __patchPropOptionsEnumToSet } from '../lib/auto-castable';
+import { AutoCastingError, inputSingle, PropOptions, __patchPropOptionsEnumToSet } from '../lib/auto-castable';
+import { ParamValidationError } from 'civi-rpc';
 
 export interface RPCOptions {
     name: string | string[];
@@ -96,15 +97,22 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         const host = this.container.resolve(conf!.hostProto.constructor);
 
         function patchedRPCMethod<T extends object = any>(this: RPCHost, input: T) {
-            const params = paramTypes.map((t, i) => {
-                const propOps = paramPickerConf?.[i];
+            let params;
+            try {
+                params = paramTypes.map((t, i) => {
+                    const propOps = paramPickerConf?.[i];
 
-                if (!propOps) {
-                    return inputSingle(undefined, { [ITSELF]: input }, ITSELF, { path: ITSELF, type: t });
+                    if (!propOps) {
+                        return inputSingle(undefined, { [ITSELF]: input }, ITSELF, { path: ITSELF, type: t });
+                    }
+
+                    return inputSingle(undefined, input, propOps.path, { type: t, ...propOps });
+                });
+            } catch (err) {
+                if (err instanceof AutoCastingError) {
+                    throw new ParamValidationError({ ...err });
                 }
-
-                return inputSingle(undefined, input, propOps.path, { type: t, ...propOps });
-            });
+            }
 
             return func.apply(host, params);
         }
