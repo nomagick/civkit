@@ -30,6 +30,7 @@ const nativeTypes = new Set<new (p: any) => any>([
 
 export class AutoCastingError extends Error {
     path: string;
+    desc?: string;
     value: any;
     types: string[];
     error?: Error;
@@ -41,6 +42,7 @@ export class AutoCastingError extends Error {
         this.value = detail.value;
         this.types = detail.types;
         this.error = detail.error;
+        this.desc = detail.desc;
     }
 }
 
@@ -200,7 +202,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
     let types: any;
     let isArray = false;
     const access = config.path || prop;
-    const mappedPath = (host?.name && prop) ? `${host.name}.${prop.toString()}` : `input[${access.toString()}]`;
+    const mappedPath = (host?.name && prop) ? `${host.name}.${prop.toString()}` : `input.${access.toString()}`;
     if (config.arrayOf) {
         isArray = true;
         types = Array.isArray(config.arrayOf) ? config.arrayOf : [config.arrayOf];
@@ -219,7 +221,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
     if (inputProp === undefined && config.required) {
         throw new AutoCastingError({
             message: `Casting failed for ${mappedPath}: ${access.toString()} is required but not provided.`,
-            path: config.path, value: inputProp
+            path: config.path, value: inputProp, desc: config.desc
         });
     }
 
@@ -244,7 +246,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
                 const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
                 throw new AutoCastingError({
                     message: `Casting failed for ${mappedPath}: ${access.toString()}[${i}] not within type [${typeNames.join('|')}].`,
-                    path: `${access.toString()}[${i}]`, value: x, types: typeNames, error: err.toString()
+                    path: `${access.toString()}[${i}]`, value: x, types: typeNames, error: err.toString(), desc: config.desc
                 });
             }
 
@@ -252,7 +254,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
                 const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
                 throw new AutoCastingError({
                     message: `Casting failed for ${mappedPath}: ${access.toString()}[${i}] not within type [${typeNames.join('|')}].`,
-                    path: `${access.toString()}[${i}]`, value: x, types: typeNames
+                    path: `${access.toString()}[${i}]`, value: x, types: typeNames, desc: config.desc
                 });
             }
 
@@ -266,7 +268,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
                     if (!result) {
                         throw new AutoCastingError({
                             message: `Casting failed for ${mappedPath}: ${access.toString()} rejected by validator ${config.validate.name}.`,
-                            path: `${access.toString()}`, value: inputProp, validator: config.validate.name
+                            path: `${access.toString()}`, value: inputProp, validator: config.validate.name, desc: config.desc
                         });
                     }
                 }
@@ -289,7 +291,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
                 if (!result) {
                     throw new AutoCastingError({
                         message: `Casting failed for ${mappedPath}: ${access.toString()} rejected by array validator ${config.validateArray.name}.`,
-                        path: `${access.toString()}`, value: arrayInput, validator: config.validateArray.name
+                        path: `${access.toString()}`, value: arrayInput, validator: config.validateArray.name, desc: config.desc
                     });
                 }
             }
@@ -311,7 +313,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new AutoCastingError({
                 message: `Casting failed for ${mappedPath}: ${access.toString()} not within type [${typeNames.join('|')}].`,
-                path: `${access.toString()}`, value: inputProp, types: typeNames, error: err.toString()
+                path: `${access.toString()}`, value: inputProp, types: typeNames, error: err.toString(), desc: config.desc
             });
         }
 
@@ -327,7 +329,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new AutoCastingError({
                 message: `Casting failed for ${mappedPath}: ${access.toString()} not within type [${typeNames.join('|')}].`,
-                path: `${access.toString()}`, value: inputProp, types: typeNames
+                path: `${access.toString()}`, value: inputProp, types: typeNames, desc: config.desc
             });
         }
 
@@ -345,7 +347,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
             if (!result) {
                 throw new AutoCastingError({
                     message: `Casting failed for ${mappedPath}: ${access.toString()} rejected by validator ${config.validate.name}.`,
-                    path: `${access.toString()}`, value: inputProp, validator: config.validate.name
+                    path: `${access.toString()}`, value: inputProp, validator: config.validate.name, desc: config.desc
                 });
             }
         }
@@ -365,6 +367,7 @@ export interface PropOptions<T> {
     validateArray?: (val: T, obj?: any) => boolean | Array<(val: T, obj?: any) => boolean>;
     required?: boolean;
     default?: T;
+    desc?: string;
 }
 
 

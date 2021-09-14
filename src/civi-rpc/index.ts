@@ -8,6 +8,7 @@ export {
     APPLICATION_ERROR,
     ApplicationError,
     ParamValidationError, ResourceIdConflictError,
+    DataCorruptionError,
     ResourceNotFoundError, OperationNotAllowedError, SSOSuperUserRequiredError
 } from './errors';
 

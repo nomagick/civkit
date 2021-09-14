@@ -14,6 +14,8 @@ export enum APPLICATION_ERROR {
     RPC_METHOD_NOT_FOUND = 40402,
 
     INTERNAL_RESOURCE_ID_CONFLICT = 40901,
+
+    INTERNAL_DATA_CORRUPTION = 42201,
 }
 
 const keyExcept = new Set(['status', 'stack', 'message', 'name', 'readableMessage']);
@@ -107,6 +109,13 @@ export class ResourceIdConflictError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.INTERNAL_RESOURCE_ID_CONFLICT, detail);
         this.readableMessage = `资源ID冲突: ${this.message} ${JSON.stringify(this.detail)}`;
+    }
+}
+
+export class DataCorruptionError extends ApplicationError {
+    constructor(detail?: any) {
+        super(APPLICATION_ERROR.INTERNAL_DATA_CORRUPTION, detail);
+        this.readableMessage = `资源数据损毁: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 

@@ -1,6 +1,7 @@
 import { RPCHost } from './base';
 import { AsyncService } from '../lib/async-service';
-import { RPCMethodNotFoundError, ParamValidationError, ApplicationError } from './errors';
+import { Defer } from '../lib/defer';
+import { RPCMethodNotFoundError, ParamValidationError, ApplicationError, DataCorruptionError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
 import { AutoCastingError, inputSingle, PropOptions, __patchPropOptionsEnumToSet } from '../lib/auto-castable';
 
@@ -15,11 +16,15 @@ export interface RPCOptions {
     hostProto?: any;
     nameOnProto?: any;
     method?: Function;
+    returnType?: Function | Function[];
+    returnArrayOf?: Function | Function[];
+    desc?: string;
 }
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
 
-const ITSELF = Symbol('itself');
+const ROOT_INPUT = Symbol('RootInput');
+const ROOT_RETURN = Symbol('RootReturn');
 
 export abstract class AbstractRPCRegistry extends AsyncService {
     private __tick: number = 0;
@@ -87,13 +92,14 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             return this.wrapped.get(name);
         }
 
+
+        const host = this.container.resolve(conf!.hostProto.constructor);
+
         const func: Function = conf.method || conf.hostProto[conf.nameOnProto]!;
-        const paramTypes = conf?.paramTypes || [];
+        const paramTypes = conf.paramTypes || [];
 
         const paramPickerMeta = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, conf.hostProto);
         const paramPickerConf = paramPickerMeta ? paramPickerMeta[conf.nameOnProto] : undefined;
-
-        const host = this.container.resolve(conf!.hostProto.constructor);
 
         function patchedRPCMethod<T extends object = any>(this: RPCHost, input: T) {
             let params;
@@ -102,7 +108,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                     const propOps = paramPickerConf?.[i];
 
                     if (!propOps) {
-                        return inputSingle(undefined, { [ITSELF]: input }, ITSELF, { path: ITSELF, type: t });
+                        return inputSingle(func, { [ROOT_INPUT]: input }, ROOT_INPUT, { path: ROOT_INPUT, type: t });
                     }
 
                     return inputSingle(undefined, input, propOps.path, { type: t, ...propOps });
@@ -118,7 +124,48 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 throw err;
             }
 
-            return func.apply(host, params);
+            const r = func.apply(host, params);
+
+            if (!(conf!.returnType || conf!.returnArrayOf)) {
+                return r;
+            }
+
+            if (r instanceof Promise || (typeof r.then === 'function')) {
+
+                const deferred = Defer<T>();
+
+                r.then((resolved: any) => {
+                    try {
+                        const transformed = inputSingle(
+                            func,
+                            { [ROOT_RETURN]: resolved },
+                            ROOT_RETURN,
+                            {
+                                path: ROOT_RETURN,
+                                type: conf!.returnType,
+                                arrayOf: conf!.returnArrayOf,
+                                desc: conf!.desc
+                            });
+
+                        deferred.resolve(transformed);
+                    } catch (err) {
+                        if (err instanceof ApplicationError) {
+                            return deferred.reject(err);
+                        }
+                        if (err instanceof AutoCastingError) {
+                            return deferred.reject(new DataCorruptionError({ ...err }));
+                        }
+
+                        return deferred.reject(err);
+                    }
+                }, (rejected: any) => {
+                    deferred.reject(rejected);
+                });
+
+                return deferred.promise;
+            }
+
+            return r;
         }
 
         this.wrapped.set(name, patchedRPCMethod);
