@@ -82,14 +82,14 @@ export function parseJSONText(text?: string) {
 export function deepCreate(source: object): any {
 
     if (Array.isArray(source)) {
-        return source.map((x) => typeof x === 'object' ? deepCreate(x) : x);
+        return source.map((x) => _.isPlainObject(x) ? deepCreate(x) : x);
     }
 
     const result = Object.create(source);
 
     for (const [k, v] of Object.entries(source)) {
 
-        if (typeof v === 'object') {
+        if (_.isPlainObject(v)) {
             result[k] = deepCreate(v);
         }
 
