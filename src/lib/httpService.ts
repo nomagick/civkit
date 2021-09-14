@@ -40,7 +40,7 @@ export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void };
 export interface HTTPServiceRequestOptions extends RequestInit {
     url?: string;
     raw?: boolean;
-    responseType?: 'json' | 'stream' | 'text';
+    responseType?: 'json' | 'stream' | 'text' | 'buffer';
 }
 
 function getAgent(protocol: 'https'): HTTPSAgent;
@@ -77,7 +77,7 @@ export interface HTTPServiceConfig {
 }
 
 export class HTTPServiceError<T extends HTTPServiceRequestOptions = HTTPServiceRequestOptions> extends Error {
-    err: Error | FetchError ;
+    err: Error | FetchError;
     serial: number;
     status?: string | number;
     config?: T;
@@ -243,11 +243,14 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
             if (options.responseType === 'json') {
                 bodyParsed = await r.json();
                 break;
-            } else if (options.responseType === 'stream') {
-                bodyParsed = r.body;
-                break;
             } else if (options.responseType === 'text') {
                 bodyParsed = await r.text();
+                break;
+            } else if (options.responseType === 'buffer') {
+                bodyParsed = r.buffer();
+                break;
+            } else if (options.responseType === 'stream') {
+                bodyParsed = r.body;
                 break;
             }
             if (contentType?.startsWith('application/json')) {
