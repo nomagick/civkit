@@ -218,18 +218,20 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
         fetch(url, options)
             .then(
                 async (r) => {
-                    this.emit('response', r, serial);
                     Object.defineProperties(r, {
                         serial: { value: serial },
                         config: { value: config }
                     });
+                    this.emit('response', r, serial);
                     try {
                         const parsed = await this.__processResponse(options, r);
                         Object.defineProperties(r, {
                             data: { value: parsed },
                         });
-                        deferred.resolve(r);
+
                         this.emit('parsed', parsed, r, serial);
+
+                        deferred.resolve(r);
 
                         return;
                     } catch (err: any) {
@@ -238,8 +240,9 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
                         newErr.response = r;
                         newErr.status = r.status || err.code || err.errno;
 
-                        deferred.reject(newErr);
                         this.emit('exception', newErr, r, serial);
+
+                        deferred.reject(newErr);
                     }
 
                 },
@@ -248,9 +251,8 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
                     newErr.config = config;
                     newErr.status = err.code || err.errno;
 
-                    deferred.reject(newErr);
-
                     this.emit('exception', newErr, undefined, serial);
+                    deferred.reject(newErr);
                 }
             );
 
