@@ -26,6 +26,7 @@ export {
 
 export {
     FetchError, PromiseWithCancel,
+    Request, Response, RequestInit, Headers,
 
     HTTPServiceRequestOptions, HTTPServiceConfig,
     HTTPServiceError, HTTPService,

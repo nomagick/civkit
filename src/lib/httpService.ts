@@ -12,10 +12,10 @@ import _ from 'lodash';
 import { EventEmitter } from 'events';
 import { stringify as formDataStringify } from 'querystring';
 import { Defer, TimeoutError } from './defer';
-import fetch, { RequestInit, Response, FetchError } from 'node-fetch';
+import fetch, { RequestInit, Response, FetchError, Headers } from 'node-fetch';
 import AbortController from "abort-controller";
 
-export { FetchError } from 'node-fetch';
+export { FetchError, Request, Response, Headers, RequestInit } from 'node-fetch';
 
 export function timeout<T>(promise: Promise<T>, ttl: number): Promise<T> {
 
@@ -185,6 +185,30 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
             } as any,
             _options, ..._moreOptions
         );
+
+        if (options.responseType) {
+
+            const headers = new Headers(options.headers);
+            options.headers = headers;
+
+            if (!headers.has('Accept')) {
+                switch (options.responseType) {
+
+                    case 'json': {
+                        headers.set('Accept', 'application/json');
+                        break;
+                    }
+
+                    case 'text':
+                    case 'stream':
+                    case 'buffer':
+                    default: {
+                        headers.set('Accept', '*/*');
+                        break;
+                    }
+                }
+            }
+        }
 
         const deferred = Defer();
         (deferred.promise as any).cancel = abortCtrl.abort;
