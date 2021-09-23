@@ -27,23 +27,34 @@ export class AutoCastable {
 const nativeTypes = new Set<new (p: any) => any>([
     RegExp
 ]);
-
 export class AutoCastingError extends Error {
     path: string;
     desc?: string;
     value: any;
     types: string[];
     error?: Error;
+    hostName?: string;
+    propName: string;
+    reason: string;
 
     constructor(detail: { [k: string]: any }) {
-        super(detail.message);
+        super('AutocastError');
 
         this.path = detail.path;
+        this.reason = detail.reason;
         this.value = detail.value;
         this.types = detail.types;
         this.error = detail.error;
         this.desc = detail.desc;
+        this.hostName = detail.hostName;
+        this.propName = detail.propName;
+
+        this.message = makeAutoCastingErrorMessage(this);
     }
+}
+
+function makeAutoCastingErrorMessage(err: AutoCastingError) {
+    return `Casting failed for ${err.hostName || 'input'}.${err.propName}: ${err.path} ${err.reason[0]?.toLowerCase()}${err.reason.substring(1)}`;
 }
 
 
@@ -202,7 +213,9 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
     let types: any;
     let isArray = false;
     const access = config.path || prop;
-    const mappedPath = (host?.name && prop) ? `${host.name}.${prop.toString()}` : `input.${access.toString()}`;
+    const hostName = host?.name;
+    const propName = prop.toString();
+
     if (config.arrayOf) {
         isArray = true;
         types = Array.isArray(config.arrayOf) ? config.arrayOf : [config.arrayOf];
@@ -220,8 +233,8 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
 
     if (inputProp === undefined && config.required) {
         throw new AutoCastingError({
-            message: `Casting failed for ${mappedPath}: ${access.toString()} is required but not provided.`,
-            path: config.path, value: inputProp, desc: config.desc
+            reason: `Required but not provided.`,
+            path: access.toString(), hostName, propName, value: inputProp, desc: config.desc
         });
     }
 
@@ -243,18 +256,27 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
                 elem = castToType(types, x);
 
             } catch (err: any) {
+                if (err.propName) {
+
+                    err.hostName = hostName;
+                    err.propName = `${propName}[${i}].${err.propName}`;
+                    err.path = `${access.toString()}[${i}].${err.path}`;
+                    err.message = makeAutoCastingErrorMessage(err);
+
+                    throw err;
+                }
                 const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
                 throw new AutoCastingError({
-                    message: `Casting failed for ${mappedPath}: ${access.toString()}[${i}] not within type [${typeNames.join('|')}].`,
-                    path: `${access.toString()}[${i}]`, value: x, types: typeNames, error: err.toString(), desc: config.desc
+                    reason: `Not within type [${typeNames.join('|')}].`,
+                    path: `${access.toString()}[${i}]`, hostName, propName: `${propName}[${i}]`, value: x, types: typeNames, error: err.toString(), desc: config.desc
                 });
             }
 
             if (elem === NOT_RESOLVED) {
                 const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
                 throw new AutoCastingError({
-                    message: `Casting failed for ${mappedPath}: ${access.toString()}[${i}] not within type [${typeNames.join('|')}].`,
-                    path: `${access.toString()}[${i}]`, value: x, types: typeNames, desc: config.desc
+                    reason: `Not within type [${typeNames.join('|')}].`,
+                    path: `${access.toString()}[${i}]`, hostName, propName: `${propName}[${i}]`, value: x, types: typeNames, desc: config.desc
                 });
             }
 
@@ -267,8 +289,8 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
 
                     if (!result) {
                         throw new AutoCastingError({
-                            message: `Casting failed for ${mappedPath}: ${access.toString()} rejected by validator ${config.validate.name}.`,
-                            path: `${access.toString()}`, value: inputProp, validator: config.validate.name, desc: config.desc
+                            reason: `Rejected by validator ${config.validate.name}.`,
+                            path: `${access.toString()}`, hostName, propName: `${propName}[${i}]`, value: inputProp, validator: config.validate.name, desc: config.desc
                         });
                     }
                 }
@@ -290,8 +312,8 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
 
                 if (!result) {
                     throw new AutoCastingError({
-                        message: `Casting failed for ${mappedPath}: ${access.toString()} rejected by array validator ${config.validateArray.name}.`,
-                        path: `${access.toString()}`, value: arrayInput, validator: config.validateArray.name, desc: config.desc
+                        reason: `Rejected by array validator ${config.validateArray.name}.`,
+                        path: `${access.toString()}`, hostName, propName, value: arrayInput, validator: config.validateArray.name, desc: config.desc
                     });
                 }
             }
@@ -309,11 +331,20 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
     try {
         item = castToType(types, inputProp);
     } catch (err: any) {
+        if (err.propName) {
+
+            err.hostName = hostName;
+            err.propName = `${propName}.${err.propName}`;
+            err.path = `${access.toString()}.${err.path}`;
+            err.message = makeAutoCastingErrorMessage(err);
+
+            throw err;
+        }
         if (inputProp !== undefined) {
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new AutoCastingError({
-                message: `Casting failed for ${mappedPath}: ${access.toString()} not within type [${typeNames.join('|')}].`,
-                path: `${access.toString()}`, value: inputProp, types: typeNames, error: err.toString(), desc: config.desc
+                reason: `Not within type [${typeNames.join('|')}].`,
+                path: `${access.toString()}`, hostName, propName, value: inputProp, types: typeNames, error: err.toString(), desc: config.desc
             });
         }
 
@@ -328,8 +359,8 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
         if (config.required || inputProp !== undefined) {
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new AutoCastingError({
-                message: `Casting failed for ${mappedPath}: ${access.toString()} not within type [${typeNames.join('|')}].`,
-                path: `${access.toString()}`, value: inputProp, types: typeNames, desc: config.desc
+                reason: `Not within type [${typeNames.join('|')}].`,
+                path: `${access.toString()}`, hostName, propName, value: inputProp, types: typeNames, desc: config.desc
             });
         }
 
@@ -346,8 +377,8 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
 
             if (!result) {
                 throw new AutoCastingError({
-                    message: `Casting failed for ${mappedPath}: ${access.toString()} rejected by validator ${config.validate.name}.`,
-                    path: `${access.toString()}`, value: inputProp, validator: config.validate.name, desc: config.desc
+                    reason: `Rejected by validator ${config.validate.name}.`,
+                    path: `${access.toString()}`, hostName, propName, value: inputProp, validator: config.validate.name, desc: config.desc
                 });
             }
         }
@@ -398,15 +429,19 @@ function enumToSet(enumObj: any, designType?: any) {
     return result;
 }
 
+function enumToString(this: Set<any>) {
+    const str = Array.from(this.values()).join('|');
+
+    return `ENUM(${str.length > 128 ? str.substring(0, 128) + '...' : str})`;
+};
+
 export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, designType: any) {
     if (Array.isArray(options.type)) {
         options.type = options.type.map((x) => {
             if (_.isPlainObject(x)) {
                 return enumToSet(x);
             } else if (x instanceof Set) {
-                x.toString = function () {
-                    return `ENUM(${Array.from(this.values()).join('|')})`;
-                };
+                x.toString = enumToString;
             }
 
             return x;
@@ -418,9 +453,7 @@ export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, de
             if (_.isPlainObject(x)) {
                 return enumToSet(x);
             } else if (x instanceof Set) {
-                x.toString = function () {
-                    return `ENUM(${Array.from(this.values()).join('|')})`;
-                };
+                x.toString = enumToString;
             }
 
             return x;
@@ -431,18 +464,14 @@ export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, de
         // Its enum.
         options.type = enumToSet(options.type, designType);
     } else if (options.type instanceof Set) {
-        options.type.toString = function () {
-            return `ENUM(${Array.from(this.values()).join('|')})`;
-        };
+        options.type.toString = enumToString;
     }
 
     if (_.isPlainObject(options.arrayOf)) {
         // Its enum.
         options.arrayOf = enumToSet(options.arrayOf, designType);
     } else if (options.arrayOf instanceof Set) {
-        options.arrayOf.toString = function () {
-            return `ENUM(${Array.from(this.values()).join('|')})`;
-        };
+        options.arrayOf.toString = enumToString;
     }
 
     return options;
