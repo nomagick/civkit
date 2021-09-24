@@ -22,16 +22,16 @@ export class RPCHost extends AsyncService {
 export class Dto<T = any> extends AutoCastable {
     [RPC_CALL_ENVIROMENT]?: T;
 
-    static from(input: any) {
+    static from<P extends Dto = Dto>(input: any): P {
         try {
 
-            const r = super.from(input) as Dto;
+            const r = super.from<Dto>(input);
 
             if (input.hasOwnProperty(RPC_CALL_ENVIROMENT)) {
                 r[RPC_CALL_ENVIROMENT] = (input as any)[RPC_CALL_ENVIROMENT];
             }
 
-            return r;
+            return r as P;
         } catch (err) {
             if (err instanceof ApplicationError) {
                 throw err;
