@@ -22,7 +22,7 @@ export class RPCHost extends AsyncService {
 export class Dto<T = any> extends AutoCastable {
     [RPC_CALL_ENVIROMENT]?: T;
 
-    static from<P extends Dto = Dto>(input: any): P {
+    static from(input: any) {
         try {
 
             const r = super.from<Dto>(input);
@@ -31,7 +31,7 @@ export class Dto<T = any> extends AutoCastable {
                 r[RPC_CALL_ENVIROMENT] = (input as any)[RPC_CALL_ENVIROMENT];
             }
 
-            return r as P;
+            return r as any;
         } catch (err) {
             if (err instanceof ApplicationError) {
                 throw err;
