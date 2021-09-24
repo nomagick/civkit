@@ -10,8 +10,8 @@ export const NOT_RESOLVED = Symbol('Not-Resolved');
 export class AutoCastable {
     [AUTOCASTABLE_OPTIONS_SYMBOL]: { [k: string]: PropOptions<any> };
 
-    static from(input: any) {
-        const instance = new this();
+    static from<T extends AutoCastable = AutoCastable>(input: any): T {
+        const instance = new this() as T;
 
         for (const [prop, config] of chainEntries(this.prototype[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
 
