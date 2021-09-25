@@ -23,10 +23,6 @@ export class AutoCastable {
     }
 
 }
-
-const nativeTypes = new Set<new (p: any) => any>([
-    RegExp
-]);
 export class AutoCastingError extends Error {
     path: string;
     desc?: string;
@@ -70,6 +66,13 @@ export function castToType(ensureTypes: any[], inputProp: any) {
     }
 
     for (const typeShouldbe of ensureTypes) {
+
+        if (inputProp instanceof typeShouldbe) {
+            val = inputProp;
+
+            break;
+        }
+
         // AutoCastable types
         if (typeShouldbe.prototype instanceof AutoCastable) {
 
@@ -86,26 +89,11 @@ export function castToType(ensureTypes: any[], inputProp: any) {
             continue;
         }
 
-        // Native types like Date, RegExp, etc..
-        if (nativeTypes.has(typeShouldbe)) {
-            try {
-                val = new typeShouldbe(inputProp);
-            } catch (err) {
-                lastErr = err;
-                continue;
-            }
-
-            if (val instanceof typeShouldbe) {
-                break;
-            }
-            continue;
-        }
-
         // Primitive types like Number, String, etc...
         switch (typeShouldbe) {
 
-            case Buffer: {
-                val = Buffer.from(inputProp);
+            case String: {
+                val = String(inputProp);
                 break;
             }
 
@@ -117,13 +105,24 @@ export function castToType(ensureTypes: any[], inputProp: any) {
                 break;
             }
 
-            case String: {
-                val = String(inputProp);
+            case Boolean: {
+                val = Boolean(inputProp);
                 break;
             }
 
-            case Boolean: {
-                val = Boolean(inputProp);
+            // Object/Array is the type of all mixed/any/T[] types.
+            case Array: {
+                if (Array.isArray(inputProp)) {
+                    val = inputProp;
+                } else {
+                    val = [inputProp];
+                }
+
+                break;
+            }
+            case Object: {
+                val = inputProp;
+
                 break;
             }
 
@@ -150,6 +149,11 @@ export function castToType(ensureTypes: any[], inputProp: any) {
                 break;
             }
 
+            case Buffer: {
+                val = Buffer.from(inputProp);
+                break;
+            }
+
             case null: {
                 val = null;
 
@@ -162,38 +166,31 @@ export function castToType(ensureTypes: any[], inputProp: any) {
                 break;
             }
 
-            // Object/Array is the type of all mixed/any/T[] types.
-            case Array:
-            case Object: {
-                val = inputProp;
-
+            default: {
                 break;
             }
-            default: {
-                if ((typeof typeShouldbe === 'function') && (inputProp instanceof typeShouldbe)) {
-                    val = inputProp;
-                } else if (isConstructor(typeShouldbe)) {
-                    try {
-                        val = new typeShouldbe(inputProp);
-                    } catch (err) {
-                        lastErr = err;
-                        continue;
-                    }
-                } else if (typeof typeShouldbe === 'function') {
-                    try {
-                        val = typeShouldbe(inputProp);
-                    } catch (err) {
-                        lastErr = err;
-                        continue;
-                    }
-                } else if (typeShouldbe instanceof Set) {
-                    // Enums would end up here
-                    if (!typeShouldbe.has(inputProp)) {
-                        continue;
-                    }
+        }
 
-                    val = inputProp;
-                }
+        if (typeShouldbe instanceof Set) {
+            // Enums would end up here
+            if (!typeShouldbe.has(inputProp)) {
+                continue;
+            }
+
+            val = inputProp;
+        } else if (isConstructor(typeShouldbe)) {
+            try {
+                val = new typeShouldbe(inputProp);
+            } catch (err) {
+                lastErr = err;
+                continue;
+            }
+        } else if (typeof typeShouldbe === 'function') {
+            try {
+                val = typeShouldbe(inputProp);
+            } catch (err) {
+                lastErr = err;
+                continue;
             }
         }
 
@@ -225,25 +222,29 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
         throw new Error(`Type info not provided: ${access.toString()}`);
     }
 
+    const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
+
     const inputProp = _.get(input, access);
 
-    if (inputProp === undefined && config.default !== undefined) {
-        return config.default;
-    }
-
-    if (inputProp === undefined && config.required) {
-        throw new AutoCastingError({
-            reason: `Required but not provided.`,
-            path: access.toString(), hostName, propName, value: inputProp, desc: config.desc
-        });
+    if (inputProp === undefined) {
+        if (config.default !== undefined) {
+            return config.default;
+        }
+        if (config.required) {
+            throw new AutoCastingError({
+                reason: `Required but not provided.`,
+                path: access.toString(), hostName, propName, value: inputProp, desc: config.desc
+            });
+        }
     }
 
     if (isArray) {
-        if (inputProp === null) {
-            return [];
-        }
         if (inputProp === undefined) {
             return undefined;
+        }
+
+        if (inputProp === null) {
+            return [];
         }
 
         const arrayInput = Array.isArray(inputProp) ? inputProp : [inputProp];
@@ -265,7 +266,7 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
 
                     throw err;
                 }
-                const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
+
                 throw new AutoCastingError({
                     reason: `Not within type [${typeNames.join('|')}].`,
                     path: `${access.toString()}[${i}]`, hostName, propName: `${propName}[${i}]`, value: x, types: typeNames, error: err.toString(), desc: config.desc
@@ -273,7 +274,6 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
             }
 
             if (elem === NOT_RESOLVED) {
-                const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
                 throw new AutoCastingError({
                     reason: `Not within type [${typeNames.join('|')}].`,
                     path: `${access.toString()}[${i}]`, hostName, propName: `${propName}[${i}]`, value: x, types: typeNames, desc: config.desc
@@ -284,8 +284,17 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
                 const validators = Array.isArray(config.validate) ? config.validate : [config.validate];
 
                 for (const validator of validators) {
+                    let result;
+                    try {
+                        result = validator(elem, input);
+                    } catch (err: any) {
+                        throw new AutoCastingError({
+                            reason: `Validator ${config.validate.name} has thrown an error: ${err.toString()}.`,
+                            path: `${access.toString()}`, hostName, propName: `${propName}[${i}]`, value: inputProp, validator: config.validate.name, desc: config.desc,
+                            error: err
+                        });
+                    }
 
-                    const result = validator(elem, input);
 
                     if (!result) {
                         throw new AutoCastingError({
@@ -341,7 +350,6 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
             throw err;
         }
         if (inputProp !== undefined) {
-            const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new AutoCastingError({
                 reason: `Not within type [${typeNames.join('|')}].`,
                 path: `${access.toString()}`, hostName, propName, value: inputProp, types: typeNames, error: err.toString(), desc: config.desc
@@ -372,8 +380,16 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
         const validators = Array.isArray(config.validate) ? config.validate : [config.validate];
 
         for (const validator of validators) {
-
-            const result = validator(item, input);
+            let result;
+            try {
+                result = validator(item, input);
+            } catch (err: any) {
+                throw new AutoCastingError({
+                    reason: `Validator ${config.validate.name} has thrown an error: ${err.toString()}.`,
+                    path: `${access.toString()}`, hostName, propName, value: inputProp, validator: config.validate.name, desc: config.desc,
+                    error: err
+                });
+            }
 
             if (!result) {
                 throw new AutoCastingError({
@@ -433,7 +449,7 @@ function enumToString(this: Set<any>) {
     const str = Array.from(this.values()).join('|');
 
     return `ENUM(${str.length > 128 ? str.substring(0, 128) + '...' : str})`;
-};
+}
 
 export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, designType: any) {
     if (Array.isArray(options.type)) {
