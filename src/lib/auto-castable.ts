@@ -65,6 +65,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
         return NOT_RESOLVED;
     }
 
+    theLoop:
     for (const typeShouldbe of ensureTypes) {
 
         if (inputProp instanceof typeShouldbe) {
@@ -90,24 +91,25 @@ export function castToType(ensureTypes: any[], inputProp: any) {
         }
 
         // Primitive types like Number, String, etc...
+        theSwitch:
         switch (typeShouldbe) {
 
             case String: {
                 val = String(inputProp);
-                break;
+                break theLoop;
             }
 
             case Number: {
                 val = Number(inputProp);
                 if (isNaN(val)) {
-                    continue;
+                    continue theLoop;
                 }
-                break;
+                break theLoop;
             }
 
             case Boolean: {
                 val = Boolean(inputProp);
-                break;
+                break theLoop;
             }
 
             // Object/Array is the type of all mixed/any/T[] types.
@@ -118,12 +120,12 @@ export function castToType(ensureTypes: any[], inputProp: any) {
                     val = [inputProp];
                 }
 
-                break;
+                break theLoop;
             }
             case Object: {
                 val = inputProp;
 
-                break;
+                break theLoop;
             }
 
             case Date: {
@@ -135,14 +137,14 @@ export function castToType(ensureTypes: any[], inputProp: any) {
                     if (intVal >= Math.pow(10, 10)) {
                         val = new Date(intVal);
 
-                        break;
+                        break theLoop;
                     } else if (intVal < Math.pow(10, 10)) {
                         val = new Date(intVal * 1000);
 
-                        break;
+                        break theLoop;
                     }
 
-                    continue;
+                    continue theLoop;
                 }
                 val = tmpDate;
 
@@ -151,23 +153,24 @@ export function castToType(ensureTypes: any[], inputProp: any) {
 
             case Buffer: {
                 val = Buffer.from(inputProp);
-                break;
+
+                break theLoop;
             }
 
             case null: {
                 val = null;
 
-                break;
+                break theLoop;
             }
 
             case undefined: {
                 val = undefined;
 
-                break;
+                break theLoop;
             }
 
             default: {
-                break;
+                break theSwitch;
             }
         }
 
