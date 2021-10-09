@@ -1,24 +1,20 @@
-// tslint:disable:max-file-line-count
-// tslint:disable:no-floating-promises
-
 import { Readable } from 'stream';
-import { open, write, stat, Stats, close, unlink, createReadStream, createWriteStream } from 'fs';
-import { basename, extname } from 'path';
+import fs, { promises as fsp } from 'fs';
+import { basename } from 'path';
 
 import { Defer, Deferred } from './defer';
 import { HashManager } from './hash';
 import { mimeOf, MIMEVec, parseContentType } from './mime';
 
-// tslint:disable-next-line:no-magic-numbers
 const PEEK_BUFFER_SIZE = 32 * 1024;
 
-const sha256Hasher = new HashManager('sha256', 'hex');
+const md5Hasher = new HashManager('md5', 'hex');
 
 export interface PartialFile {
     filePath?: string;
     fileStream?: string;
     fileBuffer?: Buffer | ArrayBuffer;
-    sha256Sum?: string;
+    md5Sum?: string;
     mimeType?: string;
     mimeVec?: MIMEVec;
     size?: number;
@@ -30,32 +26,24 @@ export class ResolvedFile {
     mimeVec!: MIMEVec;
     fileName!: string;
     size!: number;
-    sha256Sum?: string;
+    md5Sum?: string;
     filePath!: string;
 
     createReadStream() {
         const fpath = this.filePath;
 
-        return createReadStream(fpath);
+        return fs.createReadStream(fpath);
     }
 
     async unlink() {
         const fpath = this.filePath;
 
-        return new Promise<unknown>((resolve, reject) => {
-            unlink(fpath, (err) => {
-                if (err) {
-                    return reject(err);
-                }
-
-                return resolve(err);
-            });
-        });
+        return fsp.unlink(fpath);
     }
 }
 
 export interface HashedFile extends ResolvedFile {
-    sha256Sum: string;
+    md5Sum: string;
 }
 
 // const fileUnlinkedPromise = new Promise((resolve, reject) => {
@@ -64,24 +52,24 @@ export interface HashedFile extends ResolvedFile {
 // fileUnlinkedPromise.catch(() => undefined);
 
 export class FancyFile {
-    protected static _keys = ['mimeType', 'mimeVec', 'fileName', 'filePath', 'sha256Sum', 'size'];
+    protected static _keys = ['mimeType', 'mimeVec', 'fileName', 'filePath', 'md5Sum', 'size'];
     protected static _fromLocalFile(filePath: string, partialFile: PartialFile = {}) {
         if (!(filePath && typeof filePath === 'string')) {
             throw new Error('Auto fancy file requires a file path string.');
         }
         const fileInstance = new this();
         fileInstance._notSupposedToUnlink = true;
-        stat(filePath, (err, fstat) => {
+        fs.stat(filePath, (err, fstat) => {
             if (err) {
                 return fileInstance._rejectAll(err);
             }
             fileInstance.fstat = fstat;
             fileInstance.size = partialFile.size || fstat.size;
-            fileInstance.fileName = partialFile.fileName || (basename(filePath) + extname(filePath));
+            fileInstance.fileName = partialFile.fileName || basename(filePath);
             fileInstance.filePath = filePath;
         });
-        if (partialFile.sha256Sum) {
-            fileInstance.sha256Sum = partialFile.sha256Sum;
+        if (partialFile.md5Sum) {
+            fileInstance.md5Sum = partialFile.md5Sum;
         }
         if (partialFile.mimeVec) {
             fileInstance.mimeVec = partialFile.mimeVec;
@@ -96,23 +84,25 @@ export class FancyFile {
         if (!(readable && typeof readable.pipe === 'function' && typeof readable.on === 'function')) {
             throw new Error('Auto fancy file from stream requires a file stream.');
         }
-        const tmpTargetStream = createWriteStream(tmpFilePath);
+        const tmpTargetStream = fs.createWriteStream(tmpFilePath);
         const fileInstance = new this();
         const peekBuffers: Buffer[] = [];
         let sizeAcc = 0;
         readable.pause();
-        fileInstance.fileName = partialFile.fileName || (basename(tmpFilePath) + extname(tmpFilePath));
+        fileInstance.fileName = partialFile.fileName || basename(tmpFilePath);
         if (partialFile.mimeVec) {
             fileInstance.mimeVec = partialFile.mimeVec;
         } else if (partialFile.mimeType) {
             fileInstance.mimeVec = parseContentType(partialFile.mimeType);
         } else {
             readable.once('__peek', () => {
-                mimeOf(Buffer.concat(peekBuffers)).then((mimeVec) => {
-                    fileInstance.mimeVec = mimeVec;
-                }).catch((err) => {
-                    fileInstance._rejectAll(err, ['mimeType', 'mimeVec']);
-                });
+                mimeOf(Buffer.concat(peekBuffers))
+                    .then((mimeVec) => {
+                        fileInstance.mimeVec = mimeVec;
+                    })
+                    .catch((err) => {
+                        fileInstance._rejectAll(err, ['mimeType', 'mimeVec']);
+                    });
             });
             const peekDataListener = (data: Buffer) => {
                 peekBuffers.push(data);
@@ -135,7 +125,7 @@ export class FancyFile {
         if (partialFile.size) {
             fileInstance.size = partialFile.size;
         }
-        fileInstance.sha256Sum = partialFile.sha256Sum || sha256Hasher.hashStream(readable) as Promise<string>;
+        fileInstance.md5Sum = partialFile.md5Sum || (md5Hasher.hashStream(readable) as Promise<string>);
         readable.on('error', (err: any) => fileInstance._rejectAll(err));
         tmpTargetStream.on('error', (err: any) => fileInstance._rejectAll(err));
         readable.pipe(tmpTargetStream);
@@ -148,7 +138,7 @@ export class FancyFile {
     }
 
     protected static _fromBuffer(buff: Buffer, tmpFilePath: string, partialFile: PartialFile = {}) {
-        if (!buff || !((buff instanceof Buffer))) {
+        if (!buff || !(buff instanceof Buffer)) {
             throw new Error('Memory fancy file requires a buffer.');
         }
         const fileInstance = new this();
@@ -157,27 +147,29 @@ export class FancyFile {
         } else if (partialFile.mimeType) {
             fileInstance.mimeVec = parseContentType(partialFile.mimeType);
         } else {
-            mimeOf(buff.slice(0, PEEK_BUFFER_SIZE)).then((mimeVec) => {
-                fileInstance.mimeVec = mimeVec;
-            }).catch((err) => {
-                fileInstance._rejectAll(err, ['mimeType', 'mimeVec']);
-            });
+            mimeOf(buff.slice(0, PEEK_BUFFER_SIZE))
+                .then((mimeVec) => {
+                    fileInstance.mimeVec = mimeVec;
+                })
+                .catch((err) => {
+                    fileInstance._rejectAll(err, ['mimeType', 'mimeVec']);
+                });
         }
         fileInstance.size = partialFile.size || buff.byteLength;
-        fileInstance.fileName = partialFile.fileName || (basename(tmpFilePath) + extname(tmpFilePath));
-        fileInstance.sha256Sum = partialFile.sha256Sum || sha256Hasher.hash(buff) as string;
+        fileInstance.fileName = partialFile.fileName || basename(tmpFilePath);
+        fileInstance.md5Sum = partialFile.md5Sum || (md5Hasher.hash(buff) as string);
         fileInstance.filePath = new Promise((resolve, reject) => {
-            open(tmpFilePath, 'w', (err, fd) => {
+            fs.open(tmpFilePath, 'w', (err, fd) => {
                 if (err) {
                     return reject(err);
                 }
-                write(fd, buff, (err2, _writen) => {
+                fs.write(fd, buff, (err2, _writen) => {
                     if (err2) {
-                        return reject(err);
+                        return reject(err2);
                     }
-                    close(fd, (err3) => {
+                    fs.close(fd, (err3) => {
                         if (err3) {
-                            return reject(err);
+                            return reject(err3);
                         }
                         resolve(tmpFilePath);
                     });
@@ -212,7 +204,7 @@ export class FancyFile {
         throw new Error('Unreconized Input. No Idea What To Do.');
     }
 
-    fstat?: Stats;
+    fstat?: fs.Stats;
 
     protected _notSupposedToUnlink = false;
     protected _deferreds: Map<string, Deferred<any>> = new Map();
@@ -254,11 +246,14 @@ export class FancyFile {
     get mimeType() {
         const deferred = this._ensureDeferred('mimeType');
         if (deferred.isNew) {
-            (this.filePath as any).then(mimeOf).then((mimeVec: any) => {
-                this.mimeVec = mimeVec;
-            }).catch((err: any) => {
-                this._rejectAll(err, ['mimeVec', 'mimeType']);
-            });
+            (this.filePath as any)
+                .then(mimeOf)
+                .then((mimeVec: any) => {
+                    this.mimeVec = mimeVec;
+                })
+                .catch((err: any) => {
+                    this._rejectAll(err, ['mimeVec', 'mimeType']);
+                });
         }
 
         return deferred.promise;
@@ -267,11 +262,14 @@ export class FancyFile {
     get mimeVec() {
         const deferred = this._ensureDeferred('mimeVec');
         if (deferred.isNew) {
-            (this.filePath as any).then(mimeOf).then((mimeVec: any) => {
-                this.mimeVec = mimeVec;
-            }).catch((err: any) => {
-                this._rejectAll(err, ['mimeVec', 'mimeType']);
-            });
+            (this.filePath as any)
+                .then(mimeOf)
+                .then((mimeVec: any) => {
+                    this.mimeVec = mimeVec;
+                })
+                .catch((err: any) => {
+                    this._rejectAll(err, ['mimeVec', 'mimeType']);
+                });
         }
 
         return deferred.promise;
@@ -283,18 +281,17 @@ export class FancyFile {
             mimeVec = parseContentType(_mimeVec);
         }
         const r = this._resolveDeferred('mimeVec', mimeVec);
-        // tslint:disable-next-line:no-shadowed-variable
         r.then((mimeVec: MIMEVec) => {
             if (mimeVec) {
                 this._resolveDeferred(
                     'mimeType',
-                    `${mimeVec.mediaType || 'application'}/${mimeVec.subType || 'octet-stream'}${mimeVec.suffix ? '+' + mimeVec.suffix : ''}`
+                    `${mimeVec.mediaType || 'application'}/${mimeVec.subType || 'octet-stream'}${mimeVec.suffix ? '+' + mimeVec.suffix : ''
+                    }`
                 );
             } else {
                 this._resolveDeferred('mimeType', 'application/octet-stream');
             }
         });
-
     }
 
     get fileName() {
@@ -313,23 +310,23 @@ export class FancyFile {
         this._resolveDeferred('size', sizeNumber);
     }
 
-    get sha256Sum() {
-        const deferred = this._ensureDeferred('sha256Sum');
+    get md5Sum() {
+        const deferred = this._ensureDeferred('md5Sum');
         if (deferred.isNew) {
             (this.filePath as any)
-                .then(createReadStream)
-                .then((x: Readable) => sha256Hasher.hashStream(x))
-                .then((x: string) => this.sha256Sum = x)
+                .then(fs.createReadStream)
+                .then((x: Readable) => md5Hasher.hashStream(x))
+                .then((x: string) => (this.md5Sum = x))
                 .catch((err: any) => {
-                    this._rejectDeferred('sha256Sum', err);
+                    this._rejectDeferred('md5Sum', err);
                 });
         }
 
         return deferred.promise;
     }
 
-    set sha256Sum(sha256SumText: string | Promise<string>) {
-        this._resolveDeferred('sha256Sum', sha256SumText);
+    set md5Sum(md5SumText: string | Promise<string>) {
+        this._resolveDeferred('md5Sum', md5SumText);
     }
 
     get filePath() {
@@ -351,25 +348,28 @@ export class FancyFile {
     resolve() {
         if (!this._all) {
             this._all = Promise.all([
-                this.mimeType, this.mimeVec,
-                this.fileName, this.size, this.sha256Sum, this.filePath])
-                .then((vec: any) => {
-                    const [mimeType, mimeVec, fileName, size, sha256Sum, filePath] = vec;
-                    const resolvedFile = new ResolvedFile();
-                    Object.assign(resolvedFile, { mimeType, mimeVec, fileName, size, sha256Sum, filePath });
+                this.mimeType,
+                this.mimeVec,
+                this.fileName,
+                this.size,
+                this.md5Sum,
+                this.filePath,
+            ]).then((vec: any) => {
+                const [mimeType, mimeVec, fileName, size, md5Sum, filePath] = vec;
+                const resolvedFile = new ResolvedFile();
+                Object.assign(resolvedFile, { mimeType, mimeVec, fileName, size, md5Sum, filePath });
 
-                    return resolvedFile;
-                }) as Promise<ResolvedFile>;
+                return resolvedFile;
+            }) as Promise<ResolvedFile>;
         }
 
         return this._all;
     }
 
-    // TODO: Conflict method name of fs.
     async createReadStream(options?: any) {
         const fpath = await this.filePath;
 
-        return createReadStream(fpath, options);
+        return fs.createReadStream(fpath, options);
     }
 
     async unlink(forced = false) {
@@ -378,16 +378,6 @@ export class FancyFile {
         }
         const fpath = await this.filePath;
 
-        return new Promise<void>((resolve, reject) => {
-            unlink(fpath, (err) => {
-                if (err) {
-                    return reject(err);
-                }
-                // this._deferreds.get('filePath')!.promise = fileUnlinkedPromise;
-
-                return resolve();
-            });
-        });
+        return fsp.unlink(fpath);
     }
-
 }
