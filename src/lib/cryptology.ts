@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv } from 'crypto';
 import { HashManager } from './hash';
 
-const SHA256BINHASHER = new HashManager('sha256', 'buffer');
+const SHA256BINHASHER = new HashManager<Buffer>('sha256', 'buffer');
 
 export function simpleAES256Encrypt(data: Buffer, password: string | Buffer) {
     const key = SHA256BINHASHER.hash(password);

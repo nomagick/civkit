@@ -1,11 +1,15 @@
-import _, { isPlainObject, isArray, isArguments } from 'lodash';
+import _ from 'lodash';
 
 function _vectorize(obj: object, stack: string[] = []) {
     const vectors: Array<[string, any]> = [];
     for (const x in obj) {
         if (obj.hasOwnProperty(x)) {
             const val = (obj as any)[x];
-            if (val !== null && typeof val === 'object' && (Object.getPrototypeOf(val) === Object.prototype || Object.getPrototypeOf(val) === null)) {
+            if (
+                val !== null &&
+                typeof val === 'object' &&
+                (Object.getPrototypeOf(val) === Object.prototype || Object.getPrototypeOf(val) === null)
+            ) {
                 vectors.push(..._vectorize(val, stack.concat(x)));
             } else {
                 vectors.push([stack.concat(x).join('.'), val]);
@@ -19,7 +23,6 @@ function _vectorize(obj: object, stack: string[] = []) {
 export function vectorize(obj: object) {
     return _.fromPairs(_vectorize(obj)) as { [k: string]: any };
 }
-
 
 export function specialDeepVectorize(obj: object, stack: string[] = [], refStack: Set<any> = new Set()) {
     const vectors: Array<[string, any]> = [];
@@ -53,8 +56,7 @@ export function specialDeepVectorize(obj: object, stack: string[] = [], refStack
         }
         refStack.add(val);
         if (val !== null && (typeof val === 'object' || typeof val === 'function')) {
-
-            if (!isPlainObject(val) && !isArray(val) && !isArguments(val)) {
+            if (!_.isPlainObject(val) && !_.isArray(val) && !_.isArguments(val)) {
                 vectors.push([stack.concat(x).join('.'), val]);
             }
 
@@ -80,19 +82,16 @@ export function parseJSONText(text?: string) {
 }
 
 export function deepCreate(source: object): any {
-
     if (Array.isArray(source)) {
-        return source.map((x) => _.isPlainObject(x) ? deepCreate(x) : x);
+        return source.map((x) => (_.isPlainObject(x) ? deepCreate(x) : x));
     }
 
     const result = Object.create(source);
 
     for (const [k, v] of Object.entries(source)) {
-
         if (_.isPlainObject(v)) {
             result[k] = deepCreate(v);
         }
-
     }
 
     return result;

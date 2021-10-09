@@ -65,7 +65,7 @@ export { CustomSpawnOptions, SubProcessRoutine } from './subprocess';
 
 export { PromiseThrottle } from './throttle';
 
-export { TemporaryFileManger } from './tmp-file';
+export { AbstractTempFileManger } from './tmp-file';
 
 
 export {

@@ -1,94 +1,80 @@
 import { v1 as UUIDv1 } from 'uuid';
-import fs from 'fs';
+import fs, { promises as fsp } from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
-import fse from 'fs-extra';
 import { FancyFile } from './fancy-file';
+import { AsyncService } from './async-service';
 
-export class TemporaryFileManger {
-    protected rootDir: string;
+export abstract class AbstractTempFileManger extends AsyncService {
+    abstract rootDir: string;
 
-    constructor(rootDir?: string) {
-        if (rootDir) {
+    override async init() {
+        if (this.rootDir) {
             try {
-                const fstat = fs.statSync(rootDir);
-                if (!fstat.isDirectory) {
-                    throw new Error('TmpFile targert dir was not a dir: ' + rootDir);
+                const fstat = await fsp.stat(this.rootDir);
+                if (!fstat.isDirectory()) {
+                    throw new Error('TmpFile targert dir was not a dir: ' + this.rootDir);
                 }
             } catch (err: any) {
                 if (err.code === 'ENOENT') {
-                    fs.mkdirSync(rootDir);
-                    this.rootDir = rootDir;
-
-                    return;
+                    await fsp.mkdir(this.rootDir, { recursive: true });
+                } else {
+                    throw new Error('Error stating tmpfile target dir: ' + this.rootDir);
                 }
-                throw new Error('Error stating tmpfile target dir: ' + rootDir);
             }
-            this.rootDir = rootDir;
+
         } else {
-            this.rootDir = fs.mkdtempSync('nodejs-application-');
+            this.rootDir = await fsp.mkdtemp('nodejs-application-');
         }
     }
 
-    fullPath(fileName?: string) {
-        return path.join(this.rootDir, fileName || this.newName());
+    fullPath(relativePath?: string) {
+        return path.resolve(this.rootDir, relativePath || this.newName());
     }
 
     newName() {
         return UUIDv1();
     }
 
-    touch(): [string, Promise<number>] {
-        const newFileName = this.newName();
+    async touch(relativePath?: string, options: { flags?: string | number, mode?: fs.Mode, close?: boolean } = {}) {
+        const absPath = this.fullPath(relativePath);
 
-        return [newFileName, this.touchWithFileName(newFileName)];
-    }
+        const fileHandle = await fsp.open(absPath, options.flags || 'wx+', options.mode);
 
-    touchWithFileName(fileName: string): Promise<number> {
-        return new Promise((resolve, reject) => {
-            fs.open(path.join(this.rootDir, fileName), 'w+', (err, fd) => {
-                if (err) {
-                    return reject(err);
-                }
-                resolve(fd);
-            });
-        });
+        if (options.close) {
+            await fileHandle.close();
+
+            return {
+                absPath: absPath,
+                relativePath: path.relative(this.rootDir, absPath),
+                fileName: path.basename(absPath)
+            };
+        }
+
+        return {
+            absPath: absPath,
+            relativePath: path.relative(this.rootDir, absPath),
+            fileName: path.basename(absPath),
+            fileHandle
+        };
     }
 
     alloc() {
         return this.fullPath();
     }
 
-    async newWritableStream(fileName?: string): Promise<[string, fs.WriteStream, string]> {
-        let fd: number;
-        let _fileName: string | undefined = fileName;
+    async newWriteStream(relativePath?: string, options: { flags?: string | number, mode?: fs.Mode } = {}) {
+        const r = await this.touch(relativePath, { ...options, close: true });
 
-        if (_fileName) {
-            fd = await this.touchWithFileName(_fileName);
-        } else {
-            let fdPromise: Promise<number>;
-            [_fileName, fdPromise] = this.touch();
-            fd = await fdPromise;
-        }
-        const fpath = path.join(this.rootDir, _fileName);
-
-        return [_fileName, fs.createWriteStream(fpath, { fd, flags: 'w' }), fpath];
+        return fs.createWriteStream(r.absPath);
     }
 
-    getReadableStream(fileName: string) {
-        return fs.createReadStream(path.join(this.rootDir, fileName));
+    getReadStream(relativePath: string, ...args: any[]) {
+        return fs.createReadStream(this.fullPath(relativePath), ...args);
     }
 
-    remove(fileName: string) {
-        return new Promise<void>((resolve, reject) => {
-            fs.unlink(path.join(this.rootDir, fileName), (err) => {
-                if (err) {
-                    return reject(err);
-                }
-
-                return resolve();
-            });
-        });
+    remove(relativePath: string) {
+        return fsp.rm(this.fullPath(relativePath), { recursive: true, force: true, maxRetries: 5 });
     }
 
     cacheReadable(readable: Readable, fileName?: string) {
@@ -112,31 +98,23 @@ export class TemporaryFileManger {
     }
 
     mkdir(dirName: string) {
-        const fullPath = path.join(this.rootDir, dirName);
+        const fullPath = this.fullPath(dirName);
 
-        return new Promise<string>((resolve, reject) => {
-            fs.mkdir(fullPath, (err) => {
-                if (err) {
-                    return reject(err);
-                }
-                resolve(fullPath);
-            });
-        });
+        return fsp.mkdir(fullPath, { recursive: true });
     }
 
-    touchDir(): [string, Promise<string>] {
-        const newName = this.newName();
+    async touchDir(dirName?: string) {
+        const newName = dirName || this.newName();
 
-        return [newName, this.mkdir(newName)];
+        const absPath = this.fullPath(newName);
+
+        await this.mkdir(newName);
+
+        return {
+            absPath,
+            relativePath: path.relative(this.rootDir, absPath),
+            dirName: path.basename(absPath),
+        };
     }
-
-    rmdir(dirName: string) {
-        if (path.isAbsolute(dirName)) {
-            return fse.remove(dirName);
-        } else {
-            return fse.remove(path.join(this.rootDir, dirName));
-        }
-    }
-
 
 }
