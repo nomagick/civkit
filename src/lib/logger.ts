@@ -1,12 +1,10 @@
-import { AsyncService } from "./async-service";
+import { AsyncService } from './async-service';
 import pino from 'pino';
-
-
 
 
 export abstract class AbstractLogger extends AsyncService {
 
-    abstract logger: { [k: string]: Function };
+    abstract logger: pino.Logger;
 
     constructor(...whatever: any[]) {
         super(...whatever);
@@ -16,34 +14,37 @@ export abstract class AbstractLogger extends AsyncService {
         this.dependencyReady().then(() => this.emit('ready'));
     }
 
-    error(obj?: object, message?: string): void;
-    error(message?: string): void;
+    error(message: string, ...args: any[]): void;
+    error(obj: object, message?: string, ...args: any[]): void;
     error(...whatever: any[]) {
-        return this.logger.error(...whatever);
+        return (this.logger.error as any)(...whatever);
     }
 
 
-    warn(obj?: object, message?: string): void;
-    warn(message?: string): void;
+    warn(message: string, ...args: any[]): void;
+    warn(obj: object, message?: string, ...args: any[]): void;
     warn(...whatever: any[]) {
-        return this.logger.warn(...whatever);
+        return (this.logger.warn as any)(...whatever);
     }
 
 
-    info(obj?: object, message?: string): void;
-    info(message?: string): void;
+    info(message: string, ...args: any[]): void;
+    info(obj: object, message?: string, ...args: any[]): void;
     info(...whatever: any[]) {
-        return this.logger.info(...whatever);
+        return (this.logger.info as any)(...whatever);
     }
 
 
-    debug(obj?: object, message?: string): void;
-    debug(message?: string): void;
+    debug(message: string, ...args: any[]): void;
+    debug(obj: object, message?: string, ...args: any[]): void;
     debug(...whatever: any[]) {
-        return this.logger.debug(...whatever);
+        return (this.logger.info as any)(...whatever);
+    }
+
+    child(bindings: pino.Bindings) {
+        return this.logger.child(bindings);
     }
 }
-
 
 export class DevLogger extends AbstractLogger {
 
