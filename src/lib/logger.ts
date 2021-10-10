@@ -8,6 +8,9 @@ export abstract class AbstractLogger extends AsyncService {
 
     constructor(...whatever: any[]) {
         super(...whatever);
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        this.logger = pino();
     }
 
     init() {
@@ -51,9 +54,11 @@ export class DevLogger extends AbstractLogger {
     logger!: pino.Logger;
 
     init() {
-        this.logger = pino({prettyPrint: {
-            colorize: true
-        }});
+        this.logger = pino({
+            prettyPrint: {
+                colorize: true
+            }
+        });
         this.dependencyReady().then(() => this.emit('ready'));
     }
 
