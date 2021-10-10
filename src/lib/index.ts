@@ -67,6 +67,8 @@ export { PromiseThrottle } from './throttle';
 
 export { AbstractTempFileManger } from './tmp-file';
 
+export { AbstractLogger } from './logger';
+
 
 export {
     AutoCastable, AutoCastingError,
