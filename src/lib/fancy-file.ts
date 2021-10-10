@@ -8,13 +8,13 @@ import { mimeOf, MIMEVec, parseContentType } from './mime';
 
 const PEEK_BUFFER_SIZE = 32 * 1024;
 
-const md5Hasher = new HashManager('md5', 'hex');
+const sha256Hasher = new HashManager('sha256', 'hex');
 
 export interface PartialFile {
     filePath?: string;
     fileStream?: string;
     fileBuffer?: Buffer | ArrayBuffer;
-    md5Sum?: string;
+    sha256Sum?: string;
     mimeType?: string;
     mimeVec?: MIMEVec;
     size?: number;
@@ -26,7 +26,7 @@ export class ResolvedFile {
     mimeVec!: MIMEVec;
     fileName!: string;
     size!: number;
-    md5Sum?: string;
+    sha256Sum?: string;
     filePath!: string;
 
     createReadStream() {
@@ -43,7 +43,7 @@ export class ResolvedFile {
 }
 
 export interface HashedFile extends ResolvedFile {
-    md5Sum: string;
+    sha256Sum: string;
 }
 
 // const fileUnlinkedPromise = new Promise((resolve, reject) => {
@@ -52,7 +52,7 @@ export interface HashedFile extends ResolvedFile {
 // fileUnlinkedPromise.catch(() => undefined);
 
 export class FancyFile {
-    protected static _keys = ['mimeType', 'mimeVec', 'fileName', 'filePath', 'md5Sum', 'size'];
+    protected static _keys = ['mimeType', 'mimeVec', 'fileName', 'filePath', 'sha256Sum', 'size'];
     protected static _fromLocalFile(filePath: string, partialFile: PartialFile = {}) {
         if (!(filePath && typeof filePath === 'string')) {
             throw new Error('Auto fancy file requires a file path string.');
@@ -68,8 +68,8 @@ export class FancyFile {
             fileInstance.fileName = partialFile.fileName || basename(filePath);
             fileInstance.filePath = filePath;
         });
-        if (partialFile.md5Sum) {
-            fileInstance.md5Sum = partialFile.md5Sum;
+        if (partialFile.sha256Sum) {
+            fileInstance.sha256Sum = partialFile.sha256Sum;
         }
         if (partialFile.mimeVec) {
             fileInstance.mimeVec = partialFile.mimeVec;
@@ -125,7 +125,7 @@ export class FancyFile {
         if (partialFile.size) {
             fileInstance.size = partialFile.size;
         }
-        fileInstance.md5Sum = partialFile.md5Sum || (md5Hasher.hashStream(readable) as Promise<string>);
+        fileInstance.sha256Sum = partialFile.sha256Sum || (sha256Hasher.hashStream(readable) as Promise<string>);
         readable.on('error', (err: any) => fileInstance._rejectAll(err));
         tmpTargetStream.on('error', (err: any) => fileInstance._rejectAll(err));
         readable.pipe(tmpTargetStream);
@@ -157,7 +157,7 @@ export class FancyFile {
         }
         fileInstance.size = partialFile.size || buff.byteLength;
         fileInstance.fileName = partialFile.fileName || basename(tmpFilePath);
-        fileInstance.md5Sum = partialFile.md5Sum || (md5Hasher.hash(buff) as string);
+        fileInstance.sha256Sum = partialFile.sha256Sum || (sha256Hasher.hash(buff) as string);
         fileInstance.filePath = new Promise((resolve, reject) => {
             fs.open(tmpFilePath, 'w', (err, fd) => {
                 if (err) {
@@ -310,23 +310,23 @@ export class FancyFile {
         this._resolveDeferred('size', sizeNumber);
     }
 
-    get md5Sum() {
-        const deferred = this._ensureDeferred('md5Sum');
+    get sha256Sum() {
+        const deferred = this._ensureDeferred('sha256Sum');
         if (deferred.isNew) {
             (this.filePath as any)
                 .then(fs.createReadStream)
-                .then((x: Readable) => md5Hasher.hashStream(x))
-                .then((x: string) => (this.md5Sum = x))
+                .then((x: Readable) => sha256Hasher.hashStream(x))
+                .then((x: string) => (this.sha256Sum = x))
                 .catch((err: any) => {
-                    this._rejectDeferred('md5Sum', err);
+                    this._rejectDeferred('sha256Sum', err);
                 });
         }
 
         return deferred.promise;
     }
 
-    set md5Sum(md5SumText: string | Promise<string>) {
-        this._resolveDeferred('md5Sum', md5SumText);
+    set sha256Sum(sha256SumText: string | Promise<string>) {
+        this._resolveDeferred('sha256Sum', sha256SumText);
     }
 
     get filePath() {
@@ -352,12 +352,12 @@ export class FancyFile {
                 this.mimeVec,
                 this.fileName,
                 this.size,
-                this.md5Sum,
+                this.sha256Sum,
                 this.filePath,
             ]).then((vec: any) => {
-                const [mimeType, mimeVec, fileName, size, md5Sum, filePath] = vec;
+                const [mimeType, mimeVec, fileName, size, sha256Sum, filePath] = vec;
                 const resolvedFile = new ResolvedFile();
-                Object.assign(resolvedFile, { mimeType, mimeVec, fileName, size, md5Sum, filePath });
+                Object.assign(resolvedFile, { mimeType, mimeVec, fileName, size, sha256Sum, filePath });
 
                 return resolvedFile;
             }) as Promise<ResolvedFile>;
