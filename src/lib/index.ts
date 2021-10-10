@@ -69,6 +69,8 @@ export { AbstractTempFileManger } from './tmp-file';
 
 export { AbstractLogger, AbstractDevLogger, LoggerOptions, LoggerInterface } from './logger';
 
+export { AbstractStorageManager } from './file-storage';
+
 
 export {
     AutoCastable, AutoCastingError,
