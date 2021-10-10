@@ -67,7 +67,7 @@ export { PromiseThrottle } from './throttle';
 
 export { AbstractTempFileManger } from './tmp-file';
 
-export { AbstractLogger } from './logger';
+export { AbstractLogger, AbstractDevLogger, LoggerOptions, LoggerInterface } from './logger';
 
 
 export {

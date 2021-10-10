@@ -1,10 +1,13 @@
 import { AsyncService } from './async-service';
 import pino from 'pino';
 
+export type LoggerOptions = pino.LoggerOptions;
+export type LoggerInterface = pino.Logger;
 
 export abstract class AbstractLogger extends AsyncService {
 
-    abstract logger: pino.Logger;
+    logger!: LoggerInterface;
+    abstract loggerOptions: LoggerOptions;
 
     constructor(...whatever: any[]) {
         super(...whatever);
@@ -13,8 +16,8 @@ export abstract class AbstractLogger extends AsyncService {
         this.logger = pino();
     }
 
-    init() {
-        this.dependencyReady().then(() => this.emit('ready'));
+    override init(stream?: pino.DestinationStream) {
+        this.logger = pino(this.loggerOptions, stream as any);
     }
 
     error(message: string, ...args: any[]): void;
@@ -49,17 +52,12 @@ export abstract class AbstractLogger extends AsyncService {
     }
 }
 
-export class DevLogger extends AbstractLogger {
+export abstract class AbstractDevLogger extends AbstractLogger {
 
-    logger!: pino.Logger;
-
-    init() {
-        this.logger = pino({
-            prettyPrint: {
-                colorize: true
-            }
-        });
-        this.dependencyReady().then(() => this.emit('ready'));
-    }
+    loggerOptions = {
+        prettyPrint: {
+            colorize: true
+        }
+    };
 
 }
