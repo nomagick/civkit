@@ -8,12 +8,42 @@ import { AsyncService } from './async-service';
 export abstract class AbstractTempFileManger extends AsyncService {
     abstract rootDir: string;
 
+    protected finalizationRegistry: FinalizationRegistry<string>;
+    protected trackedPaths: Set<string> = new Set();
+
+    constructor(..._args: any[]) {
+        super(...arguments);
+
+        this.finalizationRegistry = new FinalizationRegistry((x: string) => {
+            this.remove(x).catch(() => 'swallow');
+        });
+
+        let exitTimer: NodeJS.Timer | undefined;
+        const cleanupFunc = (code: any) => {
+            for (const x of this.trackedPaths) {
+                try {
+                    fs.rmSync(x);
+                } catch (_err) {
+                    void 0;
+                }
+            }
+            this.trackedPaths.clear();
+            if (!exitTimer) {
+                exitTimer = setTimeout(() => process.exit(code), 100);
+            }
+        };
+        process.on('exit', cleanupFunc);
+        process.on('SIGINT', cleanupFunc);
+        process.on('SIGTERM', cleanupFunc);
+        // process.on('SIGKILL', cleanupFunc);
+    }
+
     override async init() {
         if (this.rootDir) {
             try {
                 const fstat = await fsp.stat(this.rootDir);
                 if (!fstat.isDirectory()) {
-                    throw new Error('TmpFile targert dir was not a dir: ' + this.rootDir);
+                    throw new Error('TmpFile target dir was not a dir: ' + this.rootDir);
                 }
             } catch (err: any) {
                 if (err.code === 'ENOENT') {
@@ -29,6 +59,12 @@ export abstract class AbstractTempFileManger extends AsyncService {
     }
 
     fullPath(relativePath?: string) {
+        const result = path.resolve(this.rootDir, relativePath || this.newName());
+
+        if (path.relative(this.rootDir, result).startsWith('..')) {
+            throw new Error(`Security Violation: ${this.constructor.name} must not operate outside its rootDir !`);
+        }
+
         return path.resolve(this.rootDir, relativePath || this.newName());
     }
 
@@ -36,8 +72,8 @@ export abstract class AbstractTempFileManger extends AsyncService {
         return UUIDv1();
     }
 
-    async touch(relativePath?: string, options: { flags?: string | number, mode?: fs.Mode, close?: boolean } = {}) {
-        const absPath = this.fullPath(relativePath);
+    async touch(relativePath?: string, options: { flags?: string | number, mode?: fs.Mode, close?: boolean; } = {}) {
+        const absPath = this.alloc(relativePath);
 
         const fileHandle = await fsp.open(absPath, options.flags || 'wx+', options.mode);
 
@@ -59,11 +95,15 @@ export abstract class AbstractTempFileManger extends AsyncService {
         };
     }
 
-    alloc() {
-        return this.fullPath();
+    alloc(relativePath?: string) {
+
+        const fullPath = this.fullPath(relativePath);
+        this.trackedPaths.add(fullPath);
+
+        return fullPath;
     }
 
-    async newWriteStream(relativePath?: string, options: { flags?: string | number, mode?: fs.Mode } = {}) {
+    async newWriteStream(relativePath?: string, options: { flags?: string | number, mode?: fs.Mode; } = {}) {
         const r = await this.touch(relativePath, { ...options, close: true });
 
         return fs.createWriteStream(r.absPath);
@@ -74,19 +114,28 @@ export abstract class AbstractTempFileManger extends AsyncService {
     }
 
     remove(relativePath: string) {
-        return fsp.rm(this.fullPath(relativePath), { recursive: true, force: true, maxRetries: 5 });
+        const pathToRemove = this.fullPath(relativePath);
+        this.trackedPaths.delete(pathToRemove);
+
+        return fsp.rm(pathToRemove, { recursive: true, force: true, maxRetries: 5 });
     }
 
     cacheReadable(readable: Readable, fileName?: string) {
-        const tmpFilePath = this.fullPath();
+        const tmpFilePath = this.alloc();
 
-        return FancyFile.auto(readable, tmpFilePath, { fileName });
+        const r = FancyFile.auto(readable, tmpFilePath, { fileName });
+        this.finalizationRegistry.register(r, tmpFilePath);
+
+        return r;
     }
 
     cacheBuffer(buff: Buffer, fileName?: string) {
-        const tmpFilePath = this.fullPath();
+        const tmpFilePath = this.alloc();
 
-        return FancyFile.auto(buff, tmpFilePath, { fileName });
+        const r = FancyFile.auto(buff, tmpFilePath, { fileName });
+        this.finalizationRegistry.register(r, tmpFilePath);
+
+        return r;
     }
 
     cacheText(str: string, fileName?: string) {
@@ -98,7 +147,7 @@ export abstract class AbstractTempFileManger extends AsyncService {
     }
 
     mkdir(dirName: string) {
-        const fullPath = this.fullPath(dirName);
+        const fullPath = this.alloc(dirName);
 
         return fsp.mkdir(fullPath, { recursive: true });
     }
@@ -106,7 +155,7 @@ export abstract class AbstractTempFileManger extends AsyncService {
     async touchDir(dirName?: string) {
         const newName = dirName || this.newName();
 
-        const absPath = this.fullPath(newName);
+        const absPath = this.alloc(newName);
 
         await this.mkdir(newName);
 

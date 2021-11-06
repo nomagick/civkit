@@ -94,7 +94,10 @@ type FetchPatch<To> = {
     config: To;
 };
 
-export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConfig, To extends HTTPServiceRequestOptions = HTTPServiceRequestOptions> extends EventEmitter {
+export abstract class HTTPService<
+    Tc extends HTTPServiceConfig = HTTPServiceConfig,
+    To extends HTTPServiceRequestOptions = HTTPServiceRequestOptions
+    > extends EventEmitter {
     config: Tc;
 
     protected baseUrl: string;
@@ -104,9 +107,8 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
     httpAgent: HTTPAgent;
     httpsAgent: HTTPSAgent;
 
-    baseParams: { [k: string]: string | string[] };
-    baseHeaders: { [k: string]: string | string[] };
-
+    baseParams: { [k: string]: string | string[]; };
+    baseHeaders: { [k: string]: string | string[]; };
 
     counter: number = 0;
 
@@ -121,14 +123,15 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
             requestOptions: {},
             baseParams: {},
             baseHeaders: {},
-            initialCookies: {}
+            initialCookies: {},
         });
 
         this.baseUrl = baseUrl;
         this.baseURL = new URL(baseUrl);
 
         this.baseOptions = _.defaultsDeep(config.requestOptions, {
-            maxRedirects: 0, timeout: 5000
+            maxRedirects: 0,
+            timeout: 1000 * 60 * 0.5,
         });
 
         this.baseParams = this.config.baseParams!;
@@ -155,7 +158,7 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
                     params.append(k, '');
                 }
             } else {
-                params.set(k, (v === undefined || v === null || (typeof v === 'number' && isNaN(v))) ? '' : v);
+                params.set(k, v === undefined || v === null || (typeof v === 'number' && isNaN(v)) ? '' : v);
             }
         }
 
@@ -168,32 +171,35 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
     }
 
     __composeOption(...options: Array<To | undefined>): To {
-        const finalOptons: any = _.merge({}, this.baseOptions, ...options);
+        const finalOptions: any = _.merge({}, this.baseOptions, ...options);
 
-        return finalOptons;
+        return finalOptions;
     }
 
     __request<T = any>(
-        method: string, uri: string, queryParams?: any,
-        _options?: To, ..._moreOptions: Array<To | undefined>): PromiseWithCancel<Response & { data: T } & FetchPatch<To>> {
-
+        method: string,
+        uri: string,
+        queryParams?: any,
+        _options?: To,
+        ..._moreOptions: Array<To | undefined>
+    ): PromiseWithCancel<Response & { data: T; } & FetchPatch<To>> {
         const abortCtrl = new AbortController();
         const url = this.urlOf(uri, queryParams);
         const options = this.__composeOption(
             {
-                method: method as any, signal: abortCtrl.signal
+                method: method as any,
+                signal: abortCtrl.signal,
             } as any,
-            _options, ..._moreOptions
+            _options,
+            ..._moreOptions
         );
 
         if (options.responseType) {
-
             const headers = new Headers(options.headers);
             options.headers = headers;
 
             if (!headers.has('Accept')) {
                 switch (options.responseType) {
-
                     case 'json': {
                         headers.set('Accept', 'application/json');
                         break;
@@ -215,46 +221,44 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
         const serial = this.counter++;
         const config = { ...options, url };
         this.emit('request', config, serial);
-        fetch(url, options)
-            .then(
-                async (r) => {
+        fetch(url, options).then(
+            async (r) => {
+                Object.defineProperties(r, {
+                    serial: { value: serial },
+                    config: { value: config },
+                });
+                this.emit('response', r, serial);
+                try {
+                    const parsed = await this.__processResponse(options, r);
                     Object.defineProperties(r, {
-                        serial: { value: serial },
-                        config: { value: config }
+                        data: { value: parsed },
                     });
-                    this.emit('response', r, serial);
-                    try {
-                        const parsed = await this.__processResponse(options, r);
-                        Object.defineProperties(r, {
-                            data: { value: parsed },
-                        });
 
-                        this.emit('parsed', parsed, r, serial);
+                    this.emit('parsed', parsed, r, serial);
 
-                        deferred.resolve(r);
+                    deferred.resolve(r);
 
-                        return;
-                    } catch (err: any) {
-                        const newErr = new this.Error(serial, err);
-                        newErr.config = config;
-                        newErr.response = r;
-                        newErr.status = r.status || err.code || err.errno;
-
-                        this.emit('exception', newErr, r, serial);
-
-                        deferred.reject(newErr);
-                    }
-
-                },
-                (err: any) => {
+                    return;
+                } catch (err: any) {
                     const newErr = new this.Error(serial, err);
                     newErr.config = config;
-                    newErr.status = err.code || err.errno;
+                    newErr.response = r;
+                    newErr.status = r.status || err.code || err.errno;
 
-                    this.emit('exception', newErr, undefined, serial);
+                    this.emit('exception', newErr, r, serial);
+
                     deferred.reject(newErr);
                 }
-            );
+            },
+            (err: any) => {
+                const newErr = new this.Error(serial, err);
+                newErr.config = config;
+                newErr.status = err.code || err.errno;
+
+                this.emit('exception', newErr, undefined, serial);
+                deferred.reject(newErr);
+            }
+        );
 
         return deferred.promise as any;
     }
@@ -295,23 +299,35 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
         throw bodyParsed === null ? r : bodyParsed;
     }
 
-    get<T = any>(uri: string, queryParams?: any, options?: To) {
-        return this.__request<T>('GET', uri, queryParams, options);
+    getWithSearchParams<T = any>(uri: string, searchParams?: any, options?: To) {
+        return this.__request<T>('GET', uri, searchParams, options);
+    }
+    get<T = any>(uri: string, options?: To) {
+        return this.getWithSearchParams<T>(uri, undefined, options);
     }
 
-    postForm<T = any>(uri: string, queryParams: any = {}, data: any = {}, options?: To) {
+    postFormWithSearchParams<T = any>(uri: string, searchParams: any = {}, data: any = {}, options?: To) {
         return this.__request<T>(
-            'POST', uri, queryParams,
+            'POST',
+            uri,
+            searchParams,
             {
                 body: formDataStringify(data),
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
             } as any,
             options
         );
     }
 
-    postMultipart<T = any>(
-        uri: string, queryParams: any = {},
+    postForm<T = any>(uri: string, data: any = {}, options?: To) {
+        return this.postFormWithSearchParams<T>(uri, undefined, data, options);
+    }
+
+    postMultipartWithSearchParams<T = any>(
+        uri: string,
+        searchParams: any = {},
         multipart: Array<[string, any, FormData.AppendOptions?]> = [],
         options?: To
     ) {
@@ -322,31 +338,46 @@ export abstract class HTTPService<Tc extends HTTPServiceConfig = HTTPServiceConf
         }
 
         return this.__request<T>(
-            'POST', uri, queryParams,
+            'POST',
+            uri,
+            searchParams,
             { body: form, headers: { ...form.getHeaders() } } as any,
             options
         );
     }
-
-    postJson<T = any>(uri: string, queryParams?: any, data?: any, options?: To) {
-        return this.__request<T>('POST', uri, queryParams, { body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } } as any, options);
+    postMultipart<T = any>(
+        uri: string,
+        multipart: Array<[string, any, FormData.AppendOptions?]> = [],
+        options?: To
+    ) {
+        return this.postMultipartWithSearchParams<T>(uri, undefined, multipart, options);
     }
 
-    delete<T = any>(uri: string, queryParams?: any, options?: To) {
-        return this.__request<T>('DELETE', uri, queryParams, options);
+    postJsonWithSearchParams<T = any>(uri: string, searchParams?: any, data?: any, options?: To) {
+        return this.__request<T>(
+            'POST',
+            uri,
+            searchParams,
+            {
+                body: JSON.stringify(data),
+                headers: { 'Content-Type': 'application/json' },
+            } as any,
+            options
+        );
     }
 
+    postJson<T = any>(uri: string, data?: any, options?: To) {
+        return this.postJsonWithSearchParams<T>(uri, undefined, data, options);
+    }
+
+    deleteWithSearchParams<T = any>(uri: string, searchParams?: any, options?: To) {
+        return this.__request<T>('DELETE', uri, searchParams, options);
+    }
+    delete<T = any>(uri: string, options?: To) {
+        return this.deleteWithSearchParams<T>(uri, undefined, options);
+    }
 }
-
-export interface HTTPService {
-
-    on(name: 'request', listener: (config: HTTPServiceRequestOptions, serial: number) => void): this;
-    on(name: 'response', listener: (response: Response & FetchPatch<HTTPServiceRequestOptions>, serial: number) => void): this;
-    on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<HTTPServiceRequestOptions> | undefined, serial: number) => void): this;
-    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<HTTPServiceRequestOptions> & { data: any }, serial: number) => void): this;
-    on(event: string | symbol, listener: (...args: any[]) => void): this;
-
-}
+// eslint-disable max-len
 
 export type SimpleCookie = Cookie.Properties[] | { [key: string]: string } | string[];
 export class InertMemoryCookieStore extends MemoryCookieStore {

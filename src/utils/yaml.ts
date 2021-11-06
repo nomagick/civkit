@@ -1,23 +1,19 @@
-import { readFile } from 'fs';
-import { promisify } from 'util';
+import { promises as fsp } from 'fs';
 import yaml from 'js-yaml';
 
-const pReadfile = promisify(readFile);
 
-export async function loadYamlFile(path: string) {
+export async function loadYamlFile<T = any>(path: string) {
+    const fContent = await fsp.readFile(path, { encoding: 'utf-8' });
 
-    const fContent = await pReadfile(path, { encoding: 'utf-8' });
-
-
-    return yaml.safeLoad(fContent);
+    return yaml.load(fContent) as any as T;
 }
 
 export function loadYamlText(text: string) {
 
-    return yaml.safeLoad(text);
+    return yaml.load(text);
 }
 
 export function loadYamlBase64Text(text: string) {
 
-    return yaml.safeLoad(Buffer.from(text, 'base64').toString('utf-8'));
+    return yaml.load(Buffer.from(text, 'base64').toString('utf-8'));
 }

@@ -8,6 +8,8 @@ export type CustomSpawnOptions = SpawnOptions & {
 };
 
 export class SubProcessRoutine extends EventEmitter {
+    static Error: { new(...args: any[]): Error; } = Error;
+
     cmd: string;
     args: string[];
     currentState: 'init' | 'pending' | 'error' | 'done' = 'init';
@@ -25,6 +27,8 @@ export class SubProcessRoutine extends EventEmitter {
         this.cmd = cmd;
         this.args = args || [];
         this.spawnOptions = spawnOptions;
+        // dont crash the parent process
+        this.on('error', () => 0);
         this.emit('init', { cmd, args, spawnOptions });
     }
 
@@ -71,58 +75,119 @@ export class SubProcessRoutine extends EventEmitter {
     start() {
         this.childProcess = spawn(this.cmd, this.args, this.spawnOptions as SpawnOptions);
         this.currentState = 'pending';
-        this.emit('start', { cmd: this.cmd, args: this.args, spawnOptions: this.spawnOptions, pid: this.pid, process: this.childProcess });
+        this.emit('start', {
+            cmd: this.cmd,
+            args: this.args,
+            spawnOptions: this.spawnOptions,
+            pid: this.pid
+        });
 
-        let timeOutHanele: any;
+        let timeOutHandle: any;
         const onExit = (code: number, signal: string) => {
             if (code === 0) {
                 this.currentState = 'done';
                 this.returnValue = 0;
                 this.deferred.resolve(0);
 
-                this.emit('done', { cmd: this.cmd, args: this.args, spawnOptions: this.spawnOptions, pid: this.pid, code, signal, process: this.childProcess });
+                this.emit('done', {
+                    cmd: this.cmd,
+                    args: this.args,
+                    spawnOptions: this.spawnOptions,
+                    pid: this.pid,
+                    code,
+                    signal
+                });
 
                 return;
             }
-            if (timeOutHanele) {
-                clearTimeout(timeOutHanele);
+            if (timeOutHandle) {
+                clearTimeout(timeOutHandle);
             }
             this.currentState = 'error';
             this.returnValue = code || new Error(signal);
-            this.deferred.reject(this.returnValue);
 
-            this.emit('error', { cmd: this.cmd, args: this.args, spawnOptions: this.spawnOptions, pid: this.pid, code, signal, process: this.childProcess });
+            const err = new (this.constructor as typeof SubProcessRoutine).Error(
+                code ? `Process(${this.cmd}) exited on non-zero code: ${code}` : `Process(${this.cmd}) exited on signal: ${signal}`
+            );
+
+            Object.assign(err, {
+                cmd: this.cmd,
+                args: this.args,
+                spawnOptions: this.spawnOptions,
+                pid: this.pid,
+                cpid: this.pid,
+                code,
+                signal
+            });
+
+            this.deferred.reject(err);
+            this.emit('error', err);
         };
         this.childProcess.once('exit', onExit);
         this.childProcess.once('error', (err) => {
             this.currentState = 'error';
             this.returnValue = err;
             this.childProcess!.removeListener('exit', onExit);
-            if (timeOutHanele) {
-                clearTimeout(timeOutHanele);
+            if (timeOutHandle) {
+                clearTimeout(timeOutHandle);
             }
             this.terminate();
 
             this.deferred.reject(err);
+            Object.assign(err, {
+                cmd: this.cmd,
+                args: this.args,
+                spawnOptions: this.spawnOptions,
+                pid: this.pid,
+                cpid: this.pid,
+            });
 
-            this.emit('error', { cmd: this.cmd, args: this.args, spawnOptions: this.spawnOptions, pid: this.pid, err, process: this.childProcess });
+            this.emit('error', err);
         });
         if (this.spawnOptions && this.spawnOptions.timeout) {
             this.timeout = this.spawnOptions.timeout;
-            timeOutHanele = setTimeout(() => {
+            timeOutHandle = setTimeout(() => {
                 if (this.currentState === 'pending') {
                     this.terminate(this.spawnOptions!.killSignal || 'SIGKILL');
                 }
-                timeOutHanele = null;
+                timeOutHandle = null;
             }, this.spawnOptions.timeout);
         }
         this.startedOn = Date.now();
     }
 
     terminate(sig?: string) {
-        if (this.childProcess) {
+        if (this.childProcess?.exitCode === null) {
             this.childProcess.kill(sig as 'SIGTERM');
         }
     }
+}
 
+
+export interface SubProcessRoutine {
+    on(event: 'start', cb: (info: {
+        cmd: string,
+        args: string[],
+        spawnOptions?: CustomSpawnOptions,
+        pid: number,
+    }) => void): this;
+    on(event: 'done', cb: (info: {
+        cmd: string,
+        args: string[],
+        spawnOptions?: CustomSpawnOptions,
+        pid: number,
+        code: number,
+        signal: string,
+    }) => void): this;
+    on(event: 'error', cb: (info: {
+        cmd: string,
+        args: string[],
+        spawnOptions?: CustomSpawnOptions,
+        pid?: number,
+        code?: number,
+        signal?: string,
+        err?: Error;
+    }) => void): this;
+
+    on(event: string | symbol, listener: (...args: any[]) => void): this;
 }

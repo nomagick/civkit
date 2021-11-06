@@ -4,60 +4,93 @@ import pino from 'pino';
 export type LoggerOptions = pino.LoggerOptions;
 export type LoggerInterface = pino.Logger;
 
-export abstract class AbstractLogger extends AsyncService {
+const logLevels = [
+    'fatal',
+    'error',
+    'warn',
+    'info',
+    'debug',
+    'trace'
+];
 
-    logger!: LoggerInterface;
+function wipeBehindPinoFunction(level: string, binding?: object) {
+
+    return function patchedLogger(this: AbstractLogger, ...args: any[]) {
+        const thePino = this.logger;
+        const logFunc = thePino[level];
+        const texts: string[] = [];
+        const objects: object[] = [];
+
+        let errCounter = 0;
+        for (const x of args) {
+            if (!x) {
+                continue;
+            }
+            if (typeof x === 'string') {
+                texts.push(x);
+            } else {
+                if (x instanceof Error) {
+                    objects.push({ [`err${errCounter || ''}`]: x });
+                    errCounter++;
+                }
+                objects.push(x);
+            }
+        }
+
+        return logFunc.call(thePino, Object.assign({}, binding, ...objects), texts.join(' '));
+    };
+
+}
+
+export abstract class AbstractLogger extends AsyncService {
+    abstract logger: LoggerInterface;
     abstract loggerOptions: LoggerOptions;
 
     constructor(...whatever: any[]) {
         super(...whatever);
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        this.logger = pino();
     }
 
     override init(stream?: pino.DestinationStream) {
         this.logger = pino(this.loggerOptions, stream as any);
     }
 
+    child(bindings: object) {
+        const childLogger: LoggerInterface = {} as any;
+
+        Object.defineProperty(childLogger, 'logger', {
+            get: () => this.logger
+        });
+
+        for (const level of logLevels) {
+            childLogger[level] = wipeBehindPinoFunction(level, bindings);
+        }
+
+        return childLogger;
+    }
+}
+
+for (const level of logLevels) {
+    (AbstractLogger.prototype as any)[level] = wipeBehindPinoFunction(level);
+}
+
+export interface AbstractLogger {
     error(message: string, ...args: any[]): void;
     error(obj: object, message?: string, ...args: any[]): void;
-    error(...whatever: any[]) {
-        return (this.logger.error as any)(...whatever);
-    }
-
 
     warn(message: string, ...args: any[]): void;
     warn(obj: object, message?: string, ...args: any[]): void;
-    warn(...whatever: any[]) {
-        return (this.logger.warn as any)(...whatever);
-    }
 
 
     info(message: string, ...args: any[]): void;
     info(obj: object, message?: string, ...args: any[]): void;
-    info(...whatever: any[]) {
-        return (this.logger.info as any)(...whatever);
-    }
-
 
     debug(message: string, ...args: any[]): void;
     debug(obj: object, message?: string, ...args: any[]): void;
-    debug(...whatever: any[]) {
-        return (this.logger.info as any)(...whatever);
-    }
 
-    child(bindings: pino.Bindings) {
-        return this.logger.child(bindings);
-    }
+    fatal(message: string, ...args: any[]): void;
+    fatal(obj: object, message?: string, ...args: any[]): void;
+
+    trace(message: string, ...args: any[]): void;
+    trace(obj: object, message?: string, ...args: any[]): void;
 }
 
-export abstract class AbstractDevLogger extends AbstractLogger {
-
-    loggerOptions = {
-        prettyPrint: {
-            colorize: true
-        }
-    };
-
-}

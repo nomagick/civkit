@@ -67,7 +67,7 @@ export { PromiseThrottle } from './throttle';
 
 export { AbstractTempFileManger } from './tmp-file';
 
-export { AbstractLogger, AbstractDevLogger, LoggerOptions, LoggerInterface } from './logger';
+export { AbstractLogger, LoggerOptions, LoggerInterface } from './logger';
 
 export { AbstractStorageManager } from './file-storage';
 
@@ -80,3 +80,12 @@ export {
     castToType,
     inputSingle,
 } from './auto-castable';
+
+export {
+    PROGRESS_TYPE, ProgressStream
+} from './progress-stream';
+
+export {
+    ScheduleRule,
+    AbstractScheduleService
+} from './schedule-service';

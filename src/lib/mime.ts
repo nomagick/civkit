@@ -3,9 +3,7 @@ import mime from 'mime';
 
 import _ from 'lodash';
 
-export const CUSTOM_MIME: { [key: string]: string[] } = {
-
-};
+export const CUSTOM_MIME: { [key: string]: string[] } = {};
 
 mime.define(CUSTOM_MIME);
 
@@ -38,7 +36,6 @@ export function extOfMime(mimeType: string) {
     return mime.getExtension(mimeType);
 }
 
-
 export function detectFile(path: string) {
     return magic.fromFile(path);
 }
@@ -69,8 +66,9 @@ export interface MIMEVec {
     attrs?: { [k: string]: string };
 }
 
-// tslint:disable-next-line:max-line-length
-const CONTENT_TYPE_RE = /^((?:[0-9A-Za-z]+)|\*)\/(\*|(?:\b[0-9A-Za-z\-_]+(?:\-?\b[0-9A-Za-z\-_]+\b)*(?:\.\b[0-9A-Za-z\-_]+\b(?:\-\b[0-9A-Za-z\-_]+\b)*)*))(?:\+?(\b[0-9A-Za-z\-_\.]+\b))?(?:;\s*(.*?))?$/;
+const CONTENT_TYPE_RE =
+    // eslint-disable-next-line no-useless-escape
+    /^((?:[0-9A-Za-z]+)|\*)\/(\*|(?:\b[0-9A-Za-z\-_]+(?:\-?\b[0-9A-Za-z\-_]+\b)*(?:\.\b[0-9A-Za-z\-_]+\b(?:\-\b[0-9A-Za-z\-_]+\b)*)*))(?:\+?(\b[0-9A-Za-z\-_\.]+\b))?(?:;\s*(.*?))?$/;
 
 export function restoreContentType(mimeVec: MIMEVec) {
     if (!mimeVec) {
@@ -83,9 +81,11 @@ export function restoreContentType(mimeVec: MIMEVec) {
         }
     }
 
-    return `${mimeVec.mediaType || 'application'}/${mimeVec.subType || 'octet-stream'}` +
+    return (
+        `${mimeVec.mediaType || 'application'}/${mimeVec.subType || 'octet-stream'}` +
         `${mimeVec.suffix ? '+' + mimeVec.suffix : ''}` +
-        `${attrsLiteral}`;
+        `${attrsLiteral}`
+    );
 }
 
 export function parseContentType(mimeStr: string): MIMEVec | null {
@@ -109,5 +109,10 @@ export function parseContentType(mimeStr: string): MIMEVec | null {
         }
     }
 
-    return { mediaType: mediaType.toLowerCase(), subType: subType.toLowerCase(), suffix: suffix ? suffix.toLowerCase() : suffix, attrs };
+    return {
+        mediaType: mediaType.toLowerCase(),
+        subType: subType.toLowerCase(),
+        suffix: suffix ? suffix.toLowerCase() : suffix,
+        attrs,
+    };
 }

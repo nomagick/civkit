@@ -8,16 +8,16 @@ export const AUTOCASTABLE_OPTIONS_SYMBOL = Symbol('AutoCastable options');
 export const NOT_RESOLVED = Symbol('Not-Resolved');
 
 export class AutoCastable {
-    [AUTOCASTABLE_OPTIONS_SYMBOL]: { [k: string]: PropOptions<any> };
+    protected [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string]: PropOptions<unknown>; };
 
-    static from<T extends AutoCastable = AutoCastable>(input: any): T {
-        const instance = new this() as T;
+    static from<T>(input: object): T {
+        const instance = new this() as InstanceType<typeof this>;
 
         for (const [prop, config] of chainEntries(this.prototype[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
             (instance as any)[prop] = inputSingle(this, input, prop, config);
         }
 
-        return instance;
+        return instance as any;
     }
 }
 export class AutoCastingError extends Error {
@@ -30,7 +30,7 @@ export class AutoCastingError extends Error {
     propName: string;
     reason: string;
 
-    constructor(detail: { [k: string]: any }) {
+    constructor(detail: { [k: string]: any; }) {
         super('AutocastingError');
 
         this.path = detail.path;
@@ -63,23 +63,23 @@ export function castToType(ensureTypes: any[], inputProp: any) {
     }
 
     theLoop:
-    for (const typeShouldbe of ensureTypes) {
+    for (const typeShouldBe of ensureTypes) {
         // AutoCastable types
-        if (typeShouldbe.prototype instanceof AutoCastable) {
+        if (typeShouldBe.prototype instanceof AutoCastable) {
             try {
-                val = (typeShouldbe as typeof AutoCastable).from(inputProp);
+                val = (typeShouldBe as typeof AutoCastable).from(inputProp);
             } catch (err) {
                 lastErr = err;
                 continue;
             }
 
-            if (val instanceof typeShouldbe) {
+            if (val instanceof typeShouldBe) {
                 break;
             }
             continue;
-        } else if (typeShouldbe instanceof Set) {
+        } else if (typeShouldBe instanceof Set) {
             // Enums would end up here
-            if (!typeShouldbe.has(inputProp)) {
+            if (!typeShouldBe.has(inputProp)) {
                 continue;
             }
 
@@ -89,7 +89,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
 
         // Primitive types like Number, String, etc...
         theSwitch:
-        switch (typeShouldbe) {
+        switch (typeShouldBe) {
             case String: {
                 val = String(inputProp);
                 break theLoop;
@@ -165,7 +165,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
             }
 
             default: {
-                if (inputProp instanceof typeShouldbe) {
+                if (inputProp instanceof typeShouldBe) {
                     val = inputProp;
 
                     break theLoop;
@@ -174,16 +174,16 @@ export function castToType(ensureTypes: any[], inputProp: any) {
             }
         }
 
-        if (isConstructor(typeShouldbe)) {
+        if (isConstructor(typeShouldBe)) {
             try {
-                val = new typeShouldbe(inputProp);
+                val = new typeShouldBe(inputProp);
             } catch (err) {
                 lastErr = err;
                 continue;
             }
-        } else if (typeof typeShouldbe === 'function') {
+        } else if (typeof typeShouldBe === 'function') {
             try {
-                val = typeShouldbe(inputProp);
+                val = typeShouldBe(inputProp);
             } catch (err) {
                 lastErr = err;
                 continue;
@@ -238,13 +238,13 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
         }
     }
 
+    if (inputProp === null) {
+        return null;
+    }
+
     if (isArray) {
         if (inputProp === undefined) {
             return undefined;
-        }
-
-        if (inputProp === null) {
-            return [];
         }
 
         const arrayInput = Array.isArray(inputProp) ? inputProp : [inputProp];
@@ -353,10 +353,6 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
         return values;
     }
 
-    if (inputProp === null) {
-        return null;
-    }
-
     let item: any = NOT_RESOLVED;
 
     try {
@@ -442,17 +438,25 @@ export function inputSingle<T>(host: Function | undefined, input: any, prop: str
     return item;
 }
 
-export type Enum = Set<number | string> | { [k: string]: number | string;[w: number]: number | string };
+export type Enum = Set<number | string> | { [k: string]: number | string;[w: number]: number | string; };
 
 export interface PropOptions<T> {
     path?: string | symbol;
     type?: any | any[];
     arrayOf?: any | any[];
-    validate?: (val: T, obj?: any) => boolean | Array<(val: T, obj?: any) => boolean>;
-    validateArray?: (val: T, obj?: any) => boolean | Array<(val: T, obj?: any) => boolean>;
+
+    validate?: T extends Array<infer P> ?
+    (val: P, obj?: any) => boolean | Array<(val: P, obj?: any) => boolean> :
+    (val: T, obj?: any) => boolean | Array<(val: T, obj?: any) => boolean>;
+
+    validateArray?: T extends Array<any> ?
+    (val: T, obj?: any) => boolean | Array<(val: T, obj?: any) => boolean> : void;
+
     required?: boolean;
-    default?: T;
+    default?: T extends Array<infer P> ? P[] : T;
     desc?: string;
+
+    ext?: { [k: string]: any; };
 }
 
 function enumToSet(enumObj: any, designType?: any) {
@@ -533,14 +537,16 @@ export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, de
 export function Prop<T = any>(options: PropOptions<T> | string = {}) {
     const _options = typeof options === 'string' ? { path: options } : options;
 
-    return function RPCParamPropDecorator(tgt: typeof AutoCastable.prototype, propName: string) {
+    return function RPCParamPropDecorator(
+        tgt: typeof AutoCastable.prototype, propName: string
+    ) {
         if (!tgt[AUTOCASTABLE_OPTIONS_SYMBOL]) {
             tgt[AUTOCASTABLE_OPTIONS_SYMBOL] = {};
         } else if (!tgt.hasOwnProperty(AUTOCASTABLE_OPTIONS_SYMBOL)) {
-            tgt[AUTOCASTABLE_OPTIONS_SYMBOL] = Object.create(tgt[AUTOCASTABLE_OPTIONS_SYMBOL]);
+            tgt[AUTOCASTABLE_OPTIONS_SYMBOL] = Object.create(tgt[AUTOCASTABLE_OPTIONS_SYMBOL]!);
         }
 
-        const hostConfig = tgt[AUTOCASTABLE_OPTIONS_SYMBOL];
+        const hostConfig = tgt[AUTOCASTABLE_OPTIONS_SYMBOL]!;
 
         _options.path = _options.path || propName;
 

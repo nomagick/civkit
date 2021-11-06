@@ -14,36 +14,34 @@ export class RPCHost extends AsyncService {
     }
 
     getResultMeta(target: object) {
-
         return extractMeta(target);
     }
 }
 
 export class Dto<T = any> extends AutoCastable {
-    [RPC_CALL_ENVIROMENT]?: T;
+    protected [RPC_CALL_ENVIROMENT]?: T;
 
-    static from(input: any) {
+    static override from<T = any>(input: object): T;
+    static override from(input: object): any {
         try {
-
-            const r = super.from<Dto>(input);
+            const r = super.from(input) as Dto<unknown>;
 
             if (input.hasOwnProperty(RPC_CALL_ENVIROMENT)) {
                 r[RPC_CALL_ENVIROMENT] = (input as any)[RPC_CALL_ENVIROMENT];
             }
 
-            return r as any;
+            return r;
         } catch (err) {
             if (err instanceof ApplicationError) {
                 throw err;
             }
             if (err instanceof AutoCastingError) {
-                throw new ParamValidationError({ ...err });
+                throw new ParamValidationError({ err });
             }
 
             throw err;
         }
     }
-
 }
 
 export const RPCParam = Dto;

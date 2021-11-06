@@ -20,6 +20,7 @@ export enum APPLICATION_ERROR {
 
 const keyExcept = new Set(['status', 'stack', 'message', 'name', 'readableMessage']);
 export class ApplicationError extends Error {
+    code: string | number;
     status: number;
     [k: string]: any;
 
@@ -29,12 +30,19 @@ export class ApplicationError extends Error {
         this.message = `${status}`;
         this.readableMessage = `应用异常: ${status}`;
         this.status = status;
+        this.code = status > 1000 ? parseInt(`${status}`.substring(0, 3), 10) : status;
+
         if (typeof detail === 'object') {
             Object.assign(this, detail || {});
         } else if (typeof detail === 'string') {
             this.message = detail;
         }
-
+        if (this.err?.stack && this.stack) {
+            const message_lines = (this.message.match(/\n/g) || []).length + 1;
+            this.stack = this.stack.split('\n').slice(0, message_lines + 1).join('\n') +
+                '\n\nWhich was derived from:\n\n' +
+                this.err.stack;
+        }
     }
 
     toString() {

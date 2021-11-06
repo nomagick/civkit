@@ -19,12 +19,11 @@ export class TimeoutError extends Error {
     code = 'ETIMEDOUT';
 }
 
+// eslint-disable-next-line no-magic-numbers
 export function TimedDefer<T = any>(timeout: number = 5000): Deferred<T> {
-
     const self: any = {};
 
     self.promise = new Promise<T>((resolve, reject) => {
-
         let timeoutHandle: NodeJS.Timer | null = setTimeout(() => {
             self.reject(new TimeoutError(`Timed out after ${timeout}ms.`));
         }, timeout);
@@ -45,14 +44,12 @@ export function TimedDefer<T = any>(timeout: number = 5000): Deferred<T> {
 
             return reject(...argv);
         };
-
     });
 
     Object.freeze(self);
 
     return self;
 }
-
 
 export interface GCProofDeferred<T> extends Promise<T> {
     __resolve: (v: any) => void;

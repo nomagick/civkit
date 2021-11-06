@@ -6,7 +6,6 @@ export function defuse<T>(promise: Promise<T>) {
     });
 }
 
-
 export type Defuse<T> = {
     [P in keyof T]: T[P] extends Promise<infer L> ? Promise<L | null> : T[P];
 };
@@ -22,7 +21,7 @@ export function defuseObj<T extends object>(obj: T): Defuse<T> {
 }
 
 export type SafeAwait<T> = {
-    [P in keyof T]: T[P] extends Promise<infer L> ? L : T[P];
+    [P in keyof T]: T[P] extends Promise<infer L | null> ? L : T[P];
 };
 
 export async function safeAwaitObj<T extends object>(obj: T): Promise<SafeAwait<T>> {
@@ -31,6 +30,10 @@ export async function safeAwaitObj<T extends object>(obj: T): Promise<SafeAwait<
     return fromPairs(await Promise.all(toPairs(defused).map(async ([k, v]) => [k, await v]))) as any;
 }
 
-export async function awaitObj<T extends object>(obj: T): Promise<SafeAwait<T>> {
+export type ObjectAwait<T> = {
+    [P in keyof T]: T[P] extends Promise<infer L> ? L : T[P];
+};
+
+export async function awaitObj<T extends object>(obj: T): Promise<ObjectAwait<T>> {
     return fromPairs(await Promise.all(toPairs(obj).map(async ([k, v]) => [k, await v]))) as any;
 }

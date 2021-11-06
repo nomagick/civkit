@@ -7,7 +7,6 @@ export function isConstructor(f: Function) {
     return true;
 }
 
-
 export function chainKeys(o: object) {
     const keySet = new Set<string>();
 
@@ -29,5 +28,8 @@ export function chainEntries(o: object) {
 }
 
 export function formatDateUTC(date: Date) {
-    return `${date.getUTCFullYear()}${(date.getUTCMonth() + 1).toString().padStart(2, '0')}${date.getUTCDate().toString().padStart(2, '0')}`;
+    return `${date.getUTCFullYear()}${(date.getUTCMonth() + 1).toString().padStart(2, '0')}${date
+        .getUTCDate()
+        .toString()
+        .padStart(2, '0')}`;
 }

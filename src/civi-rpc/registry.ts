@@ -1,4 +1,4 @@
-import { RPCHost } from './base';
+import { RPCHost, RPC_CALL_ENVIROMENT } from './base';
 import { AsyncService } from '../lib/async-service';
 import { Defer } from '../lib/defer';
 import { RPCMethodNotFoundError, ParamValidationError, ApplicationError, DataCorruptionError } from './errors';
@@ -8,10 +8,6 @@ import { AutoCastingError, inputSingle, PropOptions, __patchPropOptionsEnumToSet
 export interface RPCOptions {
     name: string | string[];
     paramTypes?: Array<any>;
-    http?: {
-        action?: string | string[];
-        path?: string;
-    }
     host?: any;
     hostProto?: any;
     nameOnProto?: any;
@@ -19,6 +15,7 @@ export interface RPCOptions {
     returnType?: Function | Function[];
     returnArrayOf?: Function | Function[];
     desc?: string;
+    ext?: { [k: string]: any; };
 }
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
@@ -31,7 +28,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
     abstract container: typeof DIContainer;
 
-    conf: Map<string, RPCOptions> = new Map();
+    conf: Map<string, RPCOptions & { paramOptions: PropOptions<unknown>[]; }> = new Map();
 
     wrapped: Map<string, Function> = new Map();
 
@@ -42,11 +39,15 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         this.init();
     }
 
-    init() {
+    override init() {
         setImmediate(() => {
             this.__tick++;
-            this.dump();
-            this.emit('ready');
+            try {
+                this.dump();
+                this.emit('ready');
+            } catch (err) {
+                this.emit('error', err);
+            }
         });
     }
 
@@ -69,9 +70,14 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             throw new Error(`Unable to resolve RPC ${options.name}: found non-function entity, function required.`);
         }
 
-        this.conf.set(name, options);
+        (options as any).paramOptions = [];
+
+        this.conf.set(name, options as RPCOptions & { paramOptions: PropOptions<unknown>[]; });
 
         if (this.__tick === 1) {
+            // Dont do the wrapping in tick 1.
+            // Postpone it to tick 2.
+            // Stuff could be not ready yet.
             setImmediate(() => {
                 this.wrapRPCMethod(name);
             });
@@ -92,7 +98,6 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             return this.wrapped.get(name);
         }
 
-
         const host = this.container.resolve(conf!.hostProto.constructor);
 
         const func: Function = conf.method || conf.hostProto[conf.nameOnProto]!;
@@ -108,8 +113,15 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                     const propOps = paramPickerConf?.[i];
 
                     if (!propOps) {
-                        return inputSingle(func, { [ROOT_INPUT]: input }, ROOT_INPUT, { path: ROOT_INPUT, type: t });
+
+                        const paramOptions = { path: ROOT_INPUT, type: t };
+
+                        conf!.paramOptions[i] = paramOptions;
+
+                        return inputSingle(func, { [ROOT_INPUT]: input }, ROOT_INPUT, paramOptions);
                     }
+
+                    conf!.paramOptions[i] = { type: t, ...propOps };
 
                     return inputSingle(undefined, input, propOps.path, { type: t, ...propOps });
                 });
@@ -118,7 +130,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                     throw err;
                 }
                 if (err instanceof AutoCastingError) {
-                    throw new ParamValidationError({ ...err });
+                    throw new ParamValidationError({ err });
                 }
 
                 throw err;
@@ -130,37 +142,35 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 return r;
             }
 
-            if (r instanceof Promise || (typeof r.then === 'function')) {
-
+            if (r instanceof Promise || typeof r.then === 'function') {
                 const deferred = Defer<T>();
 
-                r.then((resolved: any) => {
-                    try {
-                        const transformed = inputSingle(
-                            func,
-                            { [ROOT_RETURN]: resolved },
-                            ROOT_RETURN,
-                            {
+                r.then(
+                    (resolved: any) => {
+                        try {
+                            const transformed = inputSingle(func, { [ROOT_RETURN]: resolved }, ROOT_RETURN, {
                                 path: ROOT_RETURN,
                                 type: conf!.returnType,
                                 arrayOf: conf!.returnArrayOf,
-                                desc: conf!.desc
+                                desc: conf!.desc,
                             });
 
-                        deferred.resolve(transformed);
-                    } catch (err) {
-                        if (err instanceof ApplicationError) {
+                            deferred.resolve(transformed);
+                        } catch (err) {
+                            if (err instanceof ApplicationError) {
+                                return deferred.reject(err);
+                            }
+                            if (err instanceof AutoCastingError) {
+                                return deferred.reject(new DataCorruptionError({ err }));
+                            }
+
                             return deferred.reject(err);
                         }
-                        if (err instanceof AutoCastingError) {
-                            return deferred.reject(new DataCorruptionError({ ...err }));
-                        }
-
-                        return deferred.reject(err);
+                    },
+                    (rejected: any) => {
+                        deferred.reject(rejected);
                     }
-                }, (rejected: any) => {
-                    deferred.reject(rejected);
-                });
+                );
 
                 return deferred.promise;
             }
@@ -175,8 +185,8 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
     dump() {
         return Array.from(this.conf.keys()).map((x) => {
-            return [x.split('.'), this.wrapRPCMethod(x), this.conf.get(x)];
-        }) as [string[], Function, RPCOptions][];
+            return [x, this.wrapRPCMethod(x), this.conf.get(x)];
+        }) as [string, Function, RPCOptions][];
     }
 
     exec(name: string, input: object) {
@@ -190,75 +200,84 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         return func.call(conf.host, input);
     }
 
+    host(name: string) {
+        const conf = this.conf.get(name);
 
-    decorators() {
-        const RPCMethod = (options: Partial<RPCOptions> | string = {}) => {
+        if (!conf) {
+            throw new RPCMethodNotFoundError({ message: `Could not found method of name: ${name}.`, method: name });
+        }
 
-            const _options = typeof options === 'string' ? { name: options } : options;
-
-            const RPCDecorator = (tgt: typeof RPCHost.prototype, methodName: string) => {
-
-                const finalOps: RPCOptions = {
-                    ..._options,
-                    name: _options.name || methodName,
-                    paramTypes: _options.paramTypes || Reflect.getMetadata('design:paramtypes', tgt, methodName),
-                    hostProto: tgt,
-                    nameOnProto: methodName
-                };
-
-                this.register(finalOps);
-            };
-
-            return RPCDecorator;
-        };
-
-        const Pick = <T>(path?: string | symbol | PropOptions<T>, conf?: PropOptions<T>) => {
-            if ((typeof path === 'string' || typeof path === 'symbol')) {
-                if (conf) {
-                    conf.path = path;
-                } else {
-                    conf = { path: path };
-                }
-            } else if (typeof path === 'object') {
-                conf = path;
-            }
-            const PickCtxParamDecorator = (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => {
-                // design:type come from TypeScript compile time decorator-metadata.
-                const designType = Reflect.getMetadata('design:paramtypes', tgt, methodName)[paramIdx];
-                let paramConf = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, tgt);
-                if (!paramConf) {
-                    paramConf = {};
-                    Reflect.defineMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, paramConf, tgt);
-                }
-                let methodConf = paramConf[methodName];
-
-                if (!methodConf) {
-                    methodConf = [];
-                    paramConf[methodName] = methodConf;
-                }
-
-                methodConf[paramIdx] = conf ? __patchPropOptionsEnumToSet(conf, designType) : conf;
-            };
-
-            return PickCtxParamDecorator;
-        };
-
-        return { RPCMethod, Pick };
+        return conf.host;
     }
 
+    RPCMethod(options: Partial<RPCOptions> | string = {}) {
+        const _options = typeof options === 'string' ? { name: options } : options;
+
+        const RPCDecorator = (tgt: typeof RPCHost.prototype, methodName: string) => {
+            const finalOps: RPCOptions = {
+                ..._options,
+                name: _options.name || methodName,
+                paramTypes: _options.paramTypes || Reflect.getMetadata('design:paramtypes', tgt, methodName),
+                hostProto: tgt,
+                nameOnProto: methodName,
+            };
+
+            this.register(finalOps);
+        };
+
+        return RPCDecorator;
+    }
+
+    Pick<T>(path?: string | symbol | PropOptions<T>, conf?: PropOptions<T>) {
+        if (typeof path === 'string' || typeof path === 'symbol') {
+            if (conf) {
+                conf.path = path;
+            } else {
+                conf = { path: path };
+            }
+        } else if (typeof path === 'object') {
+            conf = path;
+        }
+        const PickCtxParamDecorator = (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => {
+            // design:type come from TypeScript compile time decorator-metadata.
+            const designType = Reflect.getMetadata('design:paramtypes', tgt, methodName)[paramIdx];
+            let paramConf = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, tgt);
+            if (!paramConf) {
+                paramConf = {};
+                Reflect.defineMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, paramConf, tgt);
+            }
+            let methodConf = paramConf[methodName];
+
+            if (!methodConf) {
+                methodConf = [];
+                paramConf[methodName] = methodConf;
+            }
+
+            methodConf[paramIdx] = conf ? __patchPropOptionsEnumToSet(conf, designType) : conf;
+        };
+
+        return PickCtxParamDecorator;
+    }
+
+    decorators() {
+        const RPCMethod = this.RPCMethod.bind(this);
+
+        const Pick = this.Pick.bind(this);
+
+        const Ctx = (...args: any[]) => Pick(RPC_CALL_ENVIROMENT, ...args);
+
+        return { RPCMethod, Pick, Ctx };
+    }
 }
 
 export interface PRCRegistryType<T extends typeof DIContainer> extends AbstractRPCRegistry {
     container: T;
 }
 
-export function makeRPCKit<T extends typeof DIContainer>(container: T): { new(): PRCRegistryType<T> } {
-
+export function makeRPCKit<T extends typeof DIContainer>(container: T): { new(...args: any[]): PRCRegistryType<T>; } {
     class RPCRegistry extends AbstractRPCRegistry {
         container = container;
     }
 
     return RPCRegistry;
 }
-
-

@@ -18,8 +18,8 @@ export class PromiseThrottle extends EventEmitter {
 
     routine() {
         this._nextTickRoutine = false;
-        const leftovers = (this.serial - this.finished) - this.throttle;
-        while (this.deferreds.length && (this.deferreds.length > leftovers)) {
+        const leftovers = this.serial - this.finished - this.throttle;
+        while (this.deferreds.length && this.deferreds.length > leftovers) {
             const handle = this.deferreds.shift();
             if (handle) {
                 handle.resolve(this);
@@ -66,5 +66,4 @@ export class PromiseThrottle extends EventEmitter {
             this.once('drain', resolve);
         });
     }
-
 }

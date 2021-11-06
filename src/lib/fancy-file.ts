@@ -163,7 +163,7 @@ export class FancyFile {
                 if (err) {
                     return reject(err);
                 }
-                fs.write(fd, buff, (err2, _writen) => {
+                fs.write(fd, buff, (err2, _written) => {
                     if (err2) {
                         return reject(err2);
                     }
@@ -185,7 +185,7 @@ export class FancyFile {
     static auto(partialFile: PartialFile, tmpFilePath?: string): FancyFile;
     static auto(a: any, b?: any, c?: any) {
         if (!a) {
-            throw new Error('Unreconized Input. No Idea What To Do.');
+            throw new Error('Unrecognized Input. No Idea What To Do.');
         }
         if (typeof a === 'string') {
             return this._fromLocalFile(a, b);
@@ -201,7 +201,7 @@ export class FancyFile {
             return this._fromStream(a.fileStream, b, a);
         }
 
-        throw new Error('Unreconized Input. No Idea What To Do.');
+        throw new Error('Unrecognized Input. No Idea What To Do.');
     }
 
     fstat?: fs.Stats;
@@ -372,7 +372,7 @@ export class FancyFile {
         return fs.createReadStream(fpath, options);
     }
 
-    async unlink(forced = false) {
+    async unlink(forced: any = false) {
         if (this._notSupposedToUnlink && !forced) {
             return Promise.resolve();
         }

@@ -7,7 +7,6 @@ export class HashManager<T extends string | Buffer = string> {
     protected outputFormat: BinaryToTextEncoding | 'buffer' = 'hex';
 
     constructor(algorithm?: string, outputFormat?: BinaryToTextEncoding | 'buffer') {
-
         if (algorithm) {
             this.algorithm = algorithm;
         }
@@ -31,7 +30,13 @@ export class HashManager<T extends string | Buffer = string> {
 
         return new Promise((resolve, reject) => {
             target.on('data', (chunk) => hashObj.update(chunk));
-            target.on('end', () => resolve(outputFormat && outputFormat !== 'buffer' ? hashObj.digest(outputFormat) as P : hashObj.digest() as P));
+            target.on('end', () =>
+                resolve(
+                    outputFormat && outputFormat !== 'buffer'
+                        ? (hashObj.digest(outputFormat) as P)
+                        : (hashObj.digest() as P)
+                )
+            );
             target.on('error', reject);
         });
     }
@@ -72,11 +77,18 @@ export class HMacManager<T extends string | Buffer = string> {
 
         return new Promise((resolve, reject) => {
             target.on('data', (chunk) => hashObj.update(chunk));
-            target.on('end', () => resolve(outputFormat && outputFormat !== 'buffer' ? hashObj.digest(outputFormat) as P : hashObj.digest() as P));
+            target.on('end', () =>
+                resolve(
+                    outputFormat && outputFormat !== 'buffer'
+                        ? (hashObj.digest(outputFormat) as P)
+                        : (hashObj.digest() as P)
+                )
+            );
             target.on('error', reject);
         });
     }
 }
+
 
 const COLUMN_INSERTION_FACTOR = 2;
 

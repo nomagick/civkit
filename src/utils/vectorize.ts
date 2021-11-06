@@ -21,7 +21,7 @@ function _vectorize(obj: object, stack: string[] = []) {
 }
 
 export function vectorize(obj: object) {
-    return _.fromPairs(_vectorize(obj)) as { [k: string]: any };
+    return _.fromPairs(_vectorize(obj)) as { [k: string]: any; };
 }
 
 export function specialDeepVectorize(obj: object, stack: string[] = [], refStack: Set<any> = new Set()) {
@@ -35,7 +35,7 @@ export function specialDeepVectorize(obj: object, stack: string[] = [], refStack
             message: { enumerable: true },
         });
     }
-    // tslint:disable-next-line: forin
+
     for (const x in obj) {
         // if (!obj.hasOwnProperty(x)) {
         //     continue;

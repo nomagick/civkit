@@ -1,8 +1,8 @@
-import _ from "lodash";
+import _ from 'lodash';
 
 export const RPC_RESULT_META_SYMBOL = Symbol('RPC result metas');
 
-export function assignMeta(target: object, meta: object) {
+export function assignMeta<T extends object, P extends object>(target: T, meta: P): T {
     const curMeta = (target as any)[RPC_RESULT_META_SYMBOL];
     if (!curMeta) {
         (target as any)[RPC_RESULT_META_SYMBOL] = meta;
