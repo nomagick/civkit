@@ -217,7 +217,7 @@ export abstract class HTTPService<
         }
 
         const deferred = Defer();
-        (deferred.promise as any).cancel = abortCtrl.abort;
+        (deferred.promise as any).cancel = abortCtrl.abort.bind(abortCtrl);
         const serial = this.counter++;
         const config = { ...options, url };
         this.emit('request', config, serial);
