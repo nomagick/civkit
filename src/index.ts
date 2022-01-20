@@ -26,5 +26,6 @@ export default {
     lib,
     utils,
 
-    civiRPC
+    civiRPC,
+    civiMongo,
 };
