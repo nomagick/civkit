@@ -1,9 +1,7 @@
 const NOT_RUN = Symbol('NOT RUN');
 
 export function runOnce() {
-
     return function runOnceDecorator(_target: any, _propName: string | symbol, propDesc: PropertyDescriptor) {
-
         const func: Function = propDesc.value;
 
         if (typeof func !== 'function') {

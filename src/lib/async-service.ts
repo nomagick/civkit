@@ -1,24 +1,22 @@
 import { EventEmitter } from 'events';
+import type { InjectionToken } from 'tsyringe';
 import { Defer, TimeoutError } from './defer';
 
 const nextTickFunc = process?.nextTick || setImmediate || setTimeout;
 export abstract class AsyncService extends EventEmitter {
     protected __serviceReady: Promise<this>;
 
-    protected __dependencies: AsyncService[];
+    protected __dependencies: Set<AsyncService>;
 
-    protected __status: 'ready' | 'revoked' | 'pending';
+    protected __status: 'ready' | 'crippled' | 'pending';
 
-    constructor(...argv: AsyncService[]) {
+    constructor(...argv: (AsyncService | InjectionToken)[]) {
         super();
         this.__status = 'pending';
 
-        this.__dependencies = [];
-        for (const x of argv) {
-            if (x instanceof AsyncService) {
-                this.__dependencies.push(x);
-            }
-        }
+        this.__dependencies = new Set();
+
+        this.dependsOn(...argv);
 
         const readyDeferred = Defer();
 
@@ -35,26 +33,36 @@ export abstract class AsyncService extends EventEmitter {
             this.dependencyReady().catch((err) => this.emit('error', err));
         });
 
-        this.on('revoked', () => {
-            this.__status = 'revoked';
+        this.on('crippled', () => {
+            this.__status = 'crippled';
         });
 
         this.on('ready', () => {
             this.__status = 'ready';
         });
 
-        // this.dependencyReady.then(() => this.__init(), (err) => this.emit('error', err))
-        //     .then(() => this.emit('ready', this), (err) => this.emit('error', err));
+    }
+
+    get serviceStatus() {
+        return this.__status;
     }
 
     init(): any {
-        // init is mainly for re-ready after revoked.
-        // it's ok to omit if service never gets revoked.
+        // init is mainly for automatic re-ready after crippled.
+        // it's ok to omit if service never gets crippled.
         throw new Error('Not implemented');
     }
 
+    dependsOn(...argv: any[]) {
+        for (const x of argv) {
+            if (x instanceof AsyncService) {
+                this.__dependencies.add(x);
+            }
+        }
+    }
+
     serviceReady(): Promise<this> {
-        if (this.__status === 'revoked') {
+        if (this.__status === 'crippled') {
             this.__status = 'pending';
 
             this.__serviceReady = new Promise((_resolve, _reject) => {
@@ -80,34 +88,33 @@ export abstract class AsyncService extends EventEmitter {
         return this.__serviceReady;
     }
 
-    dependencyReady(timeoutMiliSecounds: number = 5000): Promise<AsyncService[]> {
+    dependencyReady(timeoutMilliseconds: number = 30000): Promise<AsyncService[]> {
         return new Promise((_resolve, _reject) => {
-            setTimeout(() => {
-                _reject(new TimeoutError('Timeout waiting for dependencies to be ready.'));
-            }, timeoutMiliSecounds);
+            const timer = setTimeout(() => {
+                _reject(new TimeoutError(`Timeout waiting for dependencies(${[...this.__dependencies].filter((x) => x.__status !== 'ready').map((x) => `${x.constructor.name}`).join(', ')}) to be ready for ${this.constructor.name}.`));
+            }, timeoutMilliseconds);
 
-            _resolve(
-                Promise.all(this.__dependencies.map((x) => x.serviceReady())).then((r) => {
-                    for (const x of r) {
-                        if (x.__status !== 'ready') {
-                            // Someone revoked, try activation again
 
-                            return this.dependencyReady();
-                        }
+            Promise.all([...this.__dependencies].map((x) => x.serviceReady())).then((r) => {
+                for (const x of r) {
+                    if (x.__status !== 'ready') {
+                        // Someone crippled, try activation again
+
+                        return this.dependencyReady();
                     }
+                }
 
-                    return r;
-                })
-            );
+                clearTimeout(timer);
+
+                return r;
+            }).then(_resolve, _reject);
         });
     }
-
-    // abstract async __init(): Promise<void>;
 }
 
 export interface AsyncService {
-    on(event: 'readable', listener: () => void): this;
-    on(event: 'resume', listener: () => void): this;
+    on(event: 'ready', listener: () => void): this;
+    on(event: 'crippled', listener: (err?: Error | any) => void): this;
     on(event: 'error', listener: (err: Error) => void): this;
     on(event: string | symbol, listener: (...args: any[]) => void): this;
 }

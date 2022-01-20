@@ -73,6 +73,9 @@ export class SubProcessRoutine extends EventEmitter {
     }
 
     start() {
+        if (this.currentState === 'pending') {
+            throw new Error('Overlapping process start');
+        }
         this.childProcess = spawn(this.cmd, this.args, this.spawnOptions as SpawnOptions);
         this.currentState = 'pending';
         this.emit('start', {
@@ -83,7 +86,12 @@ export class SubProcessRoutine extends EventEmitter {
         });
 
         let timeOutHandle: any;
-        const onExit = (code: number, signal: string) => {
+        const onExit = () => {
+            if (timeOutHandle) {
+                clearTimeout(timeOutHandle);
+            }
+        };
+        const onClose = (code: number, signal: string) => {
             if (code === 0) {
                 this.currentState = 'done';
                 this.returnValue = 0;
@@ -99,9 +107,6 @@ export class SubProcessRoutine extends EventEmitter {
                 });
 
                 return;
-            }
-            if (timeOutHandle) {
-                clearTimeout(timeOutHandle);
             }
             this.currentState = 'error';
             this.returnValue = code || new Error(signal);
@@ -121,13 +126,15 @@ export class SubProcessRoutine extends EventEmitter {
             });
 
             this.deferred.reject(err);
-            this.emit('error', err);
+            this.emit('error', err, 'exit');
         };
+        this.childProcess.once('close', onClose);
         this.childProcess.once('exit', onExit);
         this.childProcess.once('error', (err) => {
             this.currentState = 'error';
             this.returnValue = err;
             this.childProcess!.removeListener('exit', onExit);
+            this.childProcess!.removeListener('close', onClose);
             if (timeOutHandle) {
                 clearTimeout(timeOutHandle);
             }

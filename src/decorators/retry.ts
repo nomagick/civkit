@@ -3,7 +3,6 @@ import { Defer } from '../lib/defer';
 export const TRIES_SYMBOL = Symbol('Historical tries');
 
 export function patchRetry<T extends Function>(func: T, maxTries: number, delayInMs: number = 0) {
-
     function newContextAndRun(thisArg: any, args: any[]) {
         const deferred = Defer<any>();
         let triesLeft = Math.abs(maxTries);
@@ -11,7 +10,7 @@ export function patchRetry<T extends Function>(func: T, maxTries: number, delayI
         async function retryWorker(tgt: any, argv: any[]) {
             if (triesLeft <= 0) {
                 const lastError = errors.pop();
-                if (errors.length && (typeof lastError === 'object')) {
+                if (errors.length && typeof lastError === 'object') {
                     lastError[TRIES_SYMBOL] = errors;
                 }
 
@@ -27,7 +26,7 @@ export function patchRetry<T extends Function>(func: T, maxTries: number, delayI
                     setTimeout(retryWorker, delayInMs, tgt, argv);
                 } else {
                     const lastError = errors.pop();
-                    if (errors.length && (typeof lastError === 'object')) {
+                    if (errors.length && typeof lastError === 'object') {
                         lastError[TRIES_SYMBOL] = errors;
                     }
 
@@ -45,16 +44,15 @@ export function patchRetry<T extends Function>(func: T, maxTries: number, delayI
         return deferred.promise;
     }
 
-    function pathedFunc(this: any, ...argv: any[]) {
+    function patchedFunc(this: any, ...argv: any[]) {
         return newContextAndRun(this, argv);
     }
 
-    return pathedFunc as any as T;
+    return patchedFunc as any as T;
 }
 
 export function retry(maxTries: number, delayInMs: number = 0) {
     return function retryDecorator(_target: any, _propertyKey: string, descriptor: PropertyDescriptor) {
-
         const originalFunc = descriptor.value;
 
         descriptor.value = patchRetry(originalFunc, maxTries, delayInMs);
@@ -62,5 +60,3 @@ export function retry(maxTries: number, delayInMs: number = 0) {
         return descriptor;
     };
 }
-
-

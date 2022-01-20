@@ -1,3 +1,5 @@
+import { inspect } from 'util';
+
 export function isConstructor(f: Function) {
     try {
         Reflect.construct(String, [], f);
@@ -32,4 +34,20 @@ export function formatDateUTC(date: Date) {
         .getUTCDate()
         .toString()
         .padStart(2, '0')}`;
+}
+
+export function stringifyErrorLike(err: Error | { [k: string]: any; } | string | null | undefined) {
+    if (!err) {
+        return 'null';
+    }
+
+    if (typeof err === 'string') {
+        return err;
+    }
+
+    if (err instanceof Error) {
+        return err.toString();
+    }
+
+    return inspect(err, { depth: 6 });
 }

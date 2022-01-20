@@ -22,6 +22,9 @@ const keyExcept = new Set(['status', 'stack', 'message', 'name', 'readableMessag
 export class ApplicationError extends Error {
     code: string | number;
     status: number;
+    readableMessage: string;
+
+    err?: Error;
     [k: string]: any;
 
     constructor(status: number, detail?: any) {

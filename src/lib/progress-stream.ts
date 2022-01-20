@@ -15,7 +15,7 @@ export enum PROGRESS_TYPE {
 
 export interface ProgressEvent {
     type: PROGRESS_TYPE;
-    subject: string;
+    subject?: string;
     payload?: any;
     [k: string]: any;
 }
@@ -82,7 +82,7 @@ export class ProgressStream extends Duplex {
             done: (payload?: any, etc?: object) =>
                 this.write({ type: PROGRESS_TYPE.DONE, subject, payload, ...etc }),
             error: (error: Error | string, etc?: object) =>
-                this.write({ type: PROGRESS_TYPE.ERROR, subject, payload: `${error}`, ...etc }),
+                this.write({ type: PROGRESS_TYPE.ERROR, subject, payload: `${error.toString()}`, ...etc }),
         };
 
         return theCompanion;

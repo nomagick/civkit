@@ -17,3 +17,12 @@ export { FileTailer } from './watch-tailer';
 export { loadYamlBase64Text, loadYamlFile, loadYamlText } from './yaml';
 
 export { propertyInjectorFactory } from './property-injector';
+
+export { ensureDir, walkDirForSummary } from './filesystem';
+
+export {
+    UnionToIntersection,
+    ExtractParameters, ExtractRequestBody, Extract200JSONResponse,
+    OpenAPI200JSONResponse,
+    OpenAPIJSONRequest
+} from './typings';

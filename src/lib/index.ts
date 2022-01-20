@@ -74,8 +74,9 @@ export { AbstractStorageManager } from './file-storage';
 
 export {
     AutoCastable, AutoCastingError,
-    Prop,
+    Prop, Also,
     AUTOCASTABLE_OPTIONS_SYMBOL,
+    AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL,
     NOT_RESOLVED,
     castToType,
     inputSingle,

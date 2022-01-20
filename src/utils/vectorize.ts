@@ -96,3 +96,21 @@ export function deepCreate(source: object): any {
 
     return result;
 }
+
+export function deepClean<T>(object: T): Partial<T> {
+    for (const [k, v] of Object.entries(object)) {
+        if (v === null || v === undefined) {
+            delete (object as any)[k];
+        } else if (_.isArray(v)) {
+            for (const x of v) {
+                if (_.isPlainObject(x) || _.isArray(x)) {
+                    deepClean(x);
+                }
+            }
+        } else if (_.isPlainObject(v)) {
+            deepClean(v);
+        }
+    }
+
+    return object as any;
+}

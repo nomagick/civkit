@@ -1,24 +1,23 @@
-import { Defer } from "../lib/defer";
+import { Defer } from '../lib/defer';
 const NOOP = () => undefined;
+
 export function serialOperation(id: symbol) {
-
     return function serialOperationDecorator(_target: any, _propName: string | symbol, propDesc: PropertyDescriptor) {
-
         const func: Function = propDesc.value;
 
         if (typeof func !== 'function') {
             throw new Error('Invalid use of serial operation decorator');
         }
 
-        async function serialOperationAwaredFunction(this: any, ...argv: any[]) {
+        async function serialOperationAwareFunction(this: any, ...argv: any[]) {
             const lastPromise = this[id] as Promise<unknown> | undefined;
 
-            const deferred = Defer();
+            const deferred = Defer<unknown>();
 
             this[id] = deferred.promise;
             await lastPromise?.then(NOOP, NOOP);
 
-            let result;
+            let result: unknown;
             try {
                 result = await func.apply(this, argv);
 
@@ -30,9 +29,8 @@ export function serialOperation(id: symbol) {
             return deferred.promise;
         }
 
-        propDesc.value = serialOperationAwaredFunction;
+        propDesc.value = serialOperationAwareFunction;
 
         return propDesc;
     };
-
 }

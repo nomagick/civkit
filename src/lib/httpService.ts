@@ -17,6 +17,8 @@ import AbortController from "abort-controller";
 
 export { FetchError, Request, Response, Headers, RequestInit } from 'node-fetch';
 
+import { stringifyErrorLike } from '../utils/lang';
+
 export function timeout<T>(promise: Promise<T>, ttl: number): Promise<T> {
 
     const deferred = Defer();
@@ -77,15 +79,29 @@ export interface HTTPServiceConfig {
 }
 
 export class HTTPServiceError<T extends HTTPServiceRequestOptions = HTTPServiceRequestOptions> extends Error {
-    err: Error | FetchError;
+    err?: Error | FetchError;
     serial: number;
     status?: string | number;
     config?: T;
     response?: Response;
-    constructor(serial: number, err: Error | FetchError) {
-        super(`Req(${serial}): ${err}`);
+    constructor(serial: number, options?: {
+        err?: Error | FetchError;
+        status?: string | number;
+        config?: T;
+        response?: Response;
+    }) {
+        super(`Req(${serial}): ${options?.err?.message}`);
         this.serial = serial;
-        this.err = err;
+        if (options) {
+            Object.assign(this, options);
+        }
+        this.message = `Req(${serial} ${(this.config?.method || 'get').toUpperCase()} ${this.config?.url}): ${stringifyErrorLike(this.err)}`;
+        if (this.err?.stack && this.stack) {
+            const message_lines = (this.message.match(/\n/g) || []).length + 1;
+            this.stack = this.stack.split('\n').slice(0, message_lines + 1).join('\n') +
+                '\n\nWhich was derived from:\n\n' +
+                this.err.stack;
+        }
     }
 }
 
@@ -231,7 +247,7 @@ export abstract class HTTPService<
                 try {
                     const parsed = await this.__processResponse(options, r);
                     Object.defineProperties(r, {
-                        data: { value: parsed },
+                        data: { value: parsed, writable: true },
                     });
 
                     this.emit('parsed', parsed, r, serial);
@@ -240,10 +256,12 @@ export abstract class HTTPService<
 
                     return;
                 } catch (err: any) {
-                    const newErr = new this.Error(serial, err);
-                    newErr.config = config;
-                    newErr.response = r;
-                    newErr.status = r.status || err.code || err.errno;
+                    const newErr = new this.Error(serial, {
+                        err,
+                        config,
+                        response: r,
+                        status: r.status || err.code || err.errno
+                    });
 
                     this.emit('exception', newErr, r, serial);
 
@@ -251,9 +269,11 @@ export abstract class HTTPService<
                 }
             },
             (err: any) => {
-                const newErr = new this.Error(serial, err);
-                newErr.config = config;
-                newErr.status = err.code || err.errno;
+                const newErr = new this.Error(serial, {
+                    err,
+                    config,
+                    status: err.code || err.errno
+                });
 
                 this.emit('exception', newErr, undefined, serial);
                 deferred.reject(newErr);
@@ -262,6 +282,7 @@ export abstract class HTTPService<
 
         return deferred.promise as any;
     }
+
 
     async __processResponse(options: HTTPServiceRequestOptions, r: Response) {
         const contentType = r.headers.get('Content-Type');
@@ -378,6 +399,31 @@ export abstract class HTTPService<
     }
 }
 // eslint-disable max-len
+export interface HTTPService {
+    on(name: 'request', listener: (config: HTTPServiceRequestOptions, serial: number) => void): this;
+
+    on(
+        name: 'response',
+        listener: (response: Response & FetchPatch<HTTPServiceRequestOptions>, serial: number) => void
+    ): this;
+    on(
+        name: 'exception',
+        listener: (
+            error: HTTPServiceError,
+            response: (Response & FetchPatch<HTTPServiceRequestOptions>) | undefined,
+            serial: number
+        ) => void
+    ): this;
+    on(
+        name: 'parsed',
+        listener: (
+            parsed: any,
+            response: Response & FetchPatch<HTTPServiceRequestOptions> & { data: any; },
+            serial: number
+        ) => void
+    ): this;
+    on(event: string | symbol, listener: (...args: any[]) => void): this;
+}
 
 export type SimpleCookie = Cookie.Properties[] | { [key: string]: string } | string[];
 export class InertMemoryCookieStore extends MemoryCookieStore {

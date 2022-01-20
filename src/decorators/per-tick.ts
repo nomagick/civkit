@@ -3,9 +3,7 @@ const NOT_RUN = Symbol('NOT RUN');
 const tickFunction = process?.nextTick || setImmediate || setTimeout;
 
 export function perTick() {
-
     return function perTickDecorator(_target: any, _propName: string | symbol, propDesc: PropertyDescriptor) {
-
         const func: Function = propDesc.value;
 
         if (typeof func !== 'function') {
@@ -26,7 +24,7 @@ export function perTick() {
             }
 
             tickActive = true;
-            tickFunction(() => tickActive = false);
+            tickFunction(() => (tickActive = false));
             try {
                 lastResult = func.apply(this, argv);
 
@@ -44,9 +42,7 @@ export function perTick() {
 }
 
 export function perNextTick() {
-
     return function perTickDecorator(_target: any, _propName: string | symbol, propDesc: PropertyDescriptor) {
-
         const func: Function = propDesc.value;
 
         if (typeof func !== 'function') {

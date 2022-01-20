@@ -55,7 +55,7 @@ export abstract class AbstractScheduleService extends AsyncService {
             this.logger.info(`Scheduled job cancelled: ${name}`, { name, schedule });
         });
 
-        job.on('run', () => {
+        job.on('scheduled', () => {
             this.logger.info(`Scheduled job running: ${name}`, { name, schedule });
         });
 

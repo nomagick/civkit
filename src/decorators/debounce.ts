@@ -2,7 +2,6 @@ export function debounce(waitMs: number = 1000) {
     let lastRunAt = 0;
 
     return function debounceDecorator(_target: any, _propName: string | symbol, propDesc: PropertyDescriptor) {
-
         const func: Function = propDesc.value;
 
         if (typeof func !== 'function') {
@@ -12,7 +11,7 @@ export function debounce(waitMs: number = 1000) {
         let resultPromise: Promise<any> | undefined;
 
         function newFunc(this: any, ...argv: any[]) {
-            if ((lastRunAt + waitMs) >= Date.now()) {
+            if (lastRunAt + waitMs >= Date.now()) {
                 return resultPromise;
             }
             lastRunAt = Date.now();

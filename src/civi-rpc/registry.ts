@@ -14,6 +14,7 @@ export interface RPCOptions {
     method?: Function;
     returnType?: Function | Function[];
     returnArrayOf?: Function | Function[];
+    returnDictOf?: Function | Function[];
     desc?: string;
     ext?: { [k: string]: any; };
 }
@@ -130,7 +131,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                     throw err;
                 }
                 if (err instanceof AutoCastingError) {
-                    throw new ParamValidationError({ err });
+                    throw new ParamValidationError({ ...err, err, message: err.message });
                 }
 
                 throw err;
@@ -138,7 +139,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
             const r = func.apply(host, params);
 
-            if (!(conf!.returnType || conf!.returnArrayOf)) {
+            if (!(conf!.returnType || conf!.returnArrayOf || conf!.returnDictOf)) {
                 return r;
             }
 
@@ -152,6 +153,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                                 path: ROOT_RETURN,
                                 type: conf!.returnType,
                                 arrayOf: conf!.returnArrayOf,
+                                dictOf: conf!.returnDictOf,
                                 desc: conf!.desc,
                             });
 

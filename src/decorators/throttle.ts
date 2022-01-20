@@ -2,7 +2,6 @@ export function throttle(cap: number = 1) {
     let s = 0;
 
     return function throttleDecorator(_target: any, _propName: string | symbol, propDesc: PropertyDescriptor) {
-
         const func: Function = propDesc.value;
 
         if (typeof func !== 'function') {
@@ -19,8 +18,11 @@ export function throttle(cap: number = 1) {
 
             try {
                 const r = func.apply(this, argv);
-                if (r.then && ((typeof r.then) === 'function')) {
-                    r.then(() => s -= 1, () => s -= 1);
+                if (r.then && typeof r.then === 'function') {
+                    r.then(
+                        () => (s -= 1),
+                        () => (s -= 1)
+                    );
                     lastPromise = r;
                 } else {
                     s -= 1;
