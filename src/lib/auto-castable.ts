@@ -264,6 +264,9 @@ export function inputSingle<T>(
         if (config.default !== undefined) {
             return config.default;
         }
+        if ((typeof config.defaultFactory) === 'function') {
+            return config.defaultFactory!.call(host, input, access);
+        }
         if (config.required) {
             throw new AutoCastingError({
                 reason: `Required but not provided.`,
@@ -542,6 +545,9 @@ export function inputSingle<T>(
         if (config.default) {
             return config.default;
         }
+        if ((typeof config.defaultFactory) === 'function') {
+            return config.defaultFactory!.call(host, input, access);
+        }
 
         if (config.required || inputProp !== undefined) {
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
@@ -613,6 +619,7 @@ export interface PropOptions<T> {
 
     required?: boolean;
     default?: T extends Array<infer P> ? P[] : T;
+    defaultFactory?: (obj?: any, access?: string | symbol) => T extends Array<infer P> ? P[] : T;
     desc?: string;
 
     ext?: { [k: string]: any; };
