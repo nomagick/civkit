@@ -128,7 +128,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
             throw r.lastErrorObject;
         }
 
-        return r.value || undefined;
+        return (r.value as T) || undefined;
     }
 
     async insertOne(
