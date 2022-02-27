@@ -7,9 +7,27 @@ export {
 export {
     APPLICATION_ERROR,
     ApplicationError,
-    ParamValidationError, ResourceIdConflictError,
+    ParamValidationError, 
+    AuthenticationFailedError,
+    AuthenticationRequiredError,
+    RPCMethodNotFoundError,
+    RequestedEntityNotFoundError,
+    ResourceMethodNotAllowedError,
+    IncompatibleMethodError,
+    ResourceIdConflictError,
     DataCorruptionError,
-    ResourceNotFoundError, OperationNotAllowedError, SSOSuperUserRequiredError
+    DataStreamBrokenError,
+    DownstreamServiceError,
+    ServerSubprocessError,
+    ResourceNotFoundError, 
+    OperationNotAllowedError, 
+    InternalServerError,
+    NotImplementedError,
+    IdentifierNamespaceOccupiedError,
+    ExternalServiceFailureError,
+    SubmittedDataMalformedError,
+    RequestPayloadTooLargeError,
+    SSOSuperUserRequiredError,
 } from './errors';
 
 export {
