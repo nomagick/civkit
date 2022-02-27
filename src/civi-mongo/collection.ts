@@ -1,11 +1,14 @@
 import _ from 'lodash';
 import {
     AggregateOptions, ChangeStream, ChangeStreamDocument, ChangeStreamOptions,
-    ClientSession, Collection, CountDocumentsOptions, DeleteOptions, Filter,
-    FindOneAndUpdateOptions, FindOptions, InsertOneOptions, ObjectId, OptionalId, UpdateFilter,
-    UpdateOptions
+    ClientSession, ClientSessionOptions, Collection, CountDocumentsOptions,
+    DeleteOptions, Filter, FindOneAndDeleteOptions, FindOneAndUpdateOptions,
+    FindOptions, InsertOneOptions, ObjectId, OptionalId, UpdateFilter, UpdateOptions,
+    WithTransactionCallback
 } from 'mongodb';
-import { deepCreate, vectorize } from '../utils';
+import { delay } from '../utils/timeout';
+import { deepCreate, vectorize } from '../utils/vectorize';
+
 import { AsyncService } from '../lib/async-service';
 import { AbstractMongoDB } from './client';
 
@@ -29,25 +32,6 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         this.mongo.on('crippled', () => this.emit('crippled'));
         await this.dependencyReady();
         this.collection = this.mongo.db.collection(this.collectionName);
-    }
-
-    async createIndexes(_options?: object) {
-        return;
-    }
-
-    async ensureCollection(_options?: object) {
-        const r = await this.mongo.db.listCollections(
-            { name: this.collectionName },
-            { nameOnly: true }
-        ).toArray();
-
-        if (r.length) {
-            return;
-        }
-
-        if (r.length <= 0) {
-            await this.mongo.db.createCollection(this.collectionName);
-        }
     }
 
     async getForModification(_id: P) {
@@ -74,6 +58,15 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
 
     async findOne(query: Filter<T>, options?: FindOptions<T>) {
         const r = await this.collection.findOne(query, options);
+
+        return r || undefined;
+    }
+
+    async findOneAndDelete(
+        query: Filter<T>,
+        options?: FindOneAndDeleteOptions & { bypassDocumentValidation?: boolean | undefined; }
+    ) {
+        const r = await this.collection.findOneAndDelete(query, options!);
 
         return r || undefined;
     }
@@ -167,6 +160,63 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         return r.value! as T;
     }
 
+    async simpleSet(_id: P, data: Partial<T>, options?: FindOneAndUpdateOptions) {
+        const now = new Date();
+        const r = await this.collection.findOneAndUpdate(
+            { _id },
+            { $set: { ..._.omit(data, '_id'), updatedAt: now }, $setOnInsert: { createdAt: now } } as any,
+            { upsert: true, returnDocument: 'after', ...options }
+        );
+        if (!r.ok) {
+            throw r.lastErrorObject;
+        }
+        return r.value! as T;
+    }
+
+    async withTransaction<T>(func: WithTransactionCallback<T>, options?: ClientSessionOptions & {
+        maxTries?: number;
+        retryDelayMs?: number;
+    }) {
+        const session = this.mongo.createSession(options);
+
+        let triesLeft = options?.maxTries ?? Infinity;
+        let lastError: Error | undefined;
+        let firstTry = true;
+        const patchedFunc = async function (this: unknown, ...args: Parameters<typeof func>) {
+            if (triesLeft <= 0) {
+                if (lastError) {
+                    lastError.message = `${lastError.message} (after ${options!.maxTries} tries)`;
+                    throw lastError;
+                }
+                throw new Error(`Transaction failed after ${options!.maxTries} tries`);
+            }
+            if (firstTry) {
+                firstTry = false;
+            } else if (options?.retryDelayMs) {
+                await delay(options.retryDelayMs);
+            }
+
+            triesLeft -= 1;
+
+            try {
+                return await func.apply(this, args);
+            } catch (err: any) {
+                lastError = err;
+                throw err;
+            }
+        };
+
+        try {
+            const r = await session.withTransaction(patchedFunc, options?.defaultTransactionOptions);
+
+            return r;
+        } finally {
+            if (!session.hasEnded) {
+                await session.endSession();
+            }
+        }
+    }
+
     async save(data: Partial<T> & { _id: P; }, options?: FindOneAndUpdateOptions) {
         const r = await this.collection.findOneAndUpdate({ _id: data._id }, { $set: _.omit(data, '_id') as T }, {
             upsert: true,
@@ -251,6 +301,4 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
 
         return changeStream;
     }
-
-
 }
