@@ -94,3 +94,9 @@ export {
 export {
     NDJsonStream
 } from './nd-json';
+
+export {
+    randomInt,
+    randomPick,
+    randomMultiPick
+} from './random';

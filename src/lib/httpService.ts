@@ -95,7 +95,10 @@ export class HTTPServiceError<T extends HTTPServiceRequestOptions = HTTPServiceR
         if (options) {
             Object.assign(this, options);
         }
-        this.message = `Req(${serial} ${(this.config?.method || 'get').toUpperCase()} ${this.config?.url}): ${stringifyErrorLike(this.err)}`;
+        this.message = `Req(${serial} ${this.response?.status || '???'} ${(this.config?.method || 'get').toUpperCase()} ${this.config?.url}): ${stringifyErrorLike(this.err)}`;
+        if (this.response?.status !== undefined) {
+            this.status = this.response.status;
+        }
         if (this.err?.stack && this.stack) {
             const message_lines = (this.message.match(/\n/g) || []).length + 1;
             this.stack = this.stack.split('\n').slice(0, message_lines + 1).join('\n') +
@@ -181,7 +184,9 @@ export abstract class HTTPService<
         const pString = params.toString();
         const url = new URL(pString ? `${pathName}?${pString}` : pathName, this.baseUrl);
 
-        url.pathname = `${this.baseURL.pathname}${url.pathname}`.replace(/^\/+/, '/');
+        if (url.origin === this.baseURL.origin) {
+            url.pathname = `${this.baseURL.pathname}${url.pathname}`.replace(/^\/+/, '/');
+        }
 
         return url.toString();
     }
