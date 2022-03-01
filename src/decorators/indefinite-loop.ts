@@ -26,6 +26,7 @@ export function indefiniteLoop(concurrency: number = 1, terminator: any = null) 
     return function indefiniteLoopDecorator(_target: any, _propName: string | symbol, propDesc: PropertyDescriptor) {
 
         const func: Function = propDesc.value;
+        const refObj = {};
 
         if (typeof func !== 'function') {
             throw new Error('Invalid use of indefiniteLoop decorator');
@@ -40,7 +41,7 @@ export function indefiniteLoop(concurrency: number = 1, terminator: any = null) 
             }
 
             const paramHash = objHashMd5B64Of(
-                [this, ...argv].map((x) => {
+                [this, refObj, ...argv].map((x) => {
                     if (typeof x === 'object' || typeof x === 'function') {
                         return _idOf(x);
                     }
