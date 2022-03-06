@@ -1,8 +1,30 @@
 import { AsyncService } from './async-service';
 import pino from 'pino';
 
+export interface LoggerInterface {
+    error(message: string, ...args: any[]): void;
+    error(obj: object, message?: string, ...args: any[]): void;
+
+    warn(message: string, ...args: any[]): void;
+    warn(obj: object, message?: string, ...args: any[]): void;
+
+    info(message: string, ...args: any[]): void;
+    info(obj: object, message?: string, ...args: any[]): void;
+
+    debug(message: string, ...args: any[]): void;
+    debug(obj: object, message?: string, ...args: any[]): void;
+
+    fatal(message: string, ...args: any[]): void;
+    fatal(obj: object, message?: string, ...args: any[]): void;
+
+    trace(message: string, ...args: any[]): void;
+    trace(obj: object, message?: string, ...args: any[]): void;
+
+    silent(message: string, ...args: any[]): void;
+    silent(obj: object, message?: string, ...args: any[]): void;
+}
+
 export type LoggerOptions = pino.LoggerOptions;
-export type LoggerInterface = pino.BaseLogger;
 
 const logLevels: Array<keyof LoggerInterface> = [
     'fatal',
@@ -74,24 +96,5 @@ for (const level of logLevels) {
     (AbstractLogger.prototype as any)[level] = wipeBehindPinoFunction(level);
 }
 
-export interface AbstractLogger {
-    error(message: string, ...args: any[]): void;
-    error(obj: object, message?: string, ...args: any[]): void;
-
-    warn(message: string, ...args: any[]): void;
-    warn(obj: object, message?: string, ...args: any[]): void;
-
-
-    info(message: string, ...args: any[]): void;
-    info(obj: object, message?: string, ...args: any[]): void;
-
-    debug(message: string, ...args: any[]): void;
-    debug(obj: object, message?: string, ...args: any[]): void;
-
-    fatal(message: string, ...args: any[]): void;
-    fatal(obj: object, message?: string, ...args: any[]): void;
-
-    trace(message: string, ...args: any[]): void;
-    trace(obj: object, message?: string, ...args: any[]): void;
-}
-
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface AbstractLogger extends LoggerInterface {}
