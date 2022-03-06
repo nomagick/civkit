@@ -2,22 +2,23 @@ import { AsyncService } from './async-service';
 import pino from 'pino';
 
 export type LoggerOptions = pino.LoggerOptions;
-export type LoggerInterface = pino.Logger;
+export type LoggerInterface = pino.BaseLogger;
 
-const logLevels = [
+const logLevels: Array<keyof LoggerInterface> = [
     'fatal',
     'error',
     'warn',
     'info',
     'debug',
-    'trace'
+    'trace',
+    'silent'
 ];
 
-function wipeBehindPinoFunction(level: string, binding?: object) {
+function wipeBehindPinoFunction(level: keyof LoggerInterface, binding?: object) {
 
     return function patchedLogger(this: AbstractLogger, ...args: any[]) {
         const thePino = this.logger;
-        const logFunc = thePino[level];
+        const logFunc = thePino[level] as pino.LogFn;
         const texts: string[] = [];
         const objects: object[] = [];
 
@@ -62,7 +63,7 @@ export abstract class AbstractLogger extends AsyncService {
         });
 
         for (const level of logLevels) {
-            childLogger[level] = wipeBehindPinoFunction(level, bindings);
+            (childLogger as any)[level] = wipeBehindPinoFunction(level, bindings) as pino.LogFn;
         }
 
         return childLogger;
