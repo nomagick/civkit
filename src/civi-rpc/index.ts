@@ -43,3 +43,9 @@ export {
 } from './registry';
 
 export { Prop, PropOptions } from '../lib/auto-castable';
+
+export { RestParameters } from './magic';
+
+export { OpenAPIManager } from './openapi';
+
+export { KoaRPCRegistry, KoaServer } from './koa';

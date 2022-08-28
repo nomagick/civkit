@@ -1,5 +1,7 @@
 import _ from 'lodash';
 
+import { chainEntries, topLevelConstructorOf } from './lang';
+
 function _vectorize(obj: object, stack: string[] = []) {
     const vectors: Array<[string, any]> = [];
     for (const x in obj) {
@@ -22,6 +24,68 @@ function _vectorize(obj: object, stack: string[] = []) {
 
 export function vectorize(obj: object) {
     return _.fromPairs(_vectorize(obj)) as { [k: string]: any; };
+}
+
+function _vectorize2(obj: object, stack: string[] = [], mode: 'array' | 'inherited' = 'inherited') {
+    const vectors: Array<[string, any]> = [];
+    for (const [k, v] of chainEntries(obj)) {
+        if (mode === 'array') {
+            // Array is somewhat special
+            if (k === 'length') {
+                continue;
+            }
+            if (!obj.hasOwnProperty(k)) {
+                continue;
+            }
+            vectors.push([stack.concat(k).join('.'), deepSurface(v)]);
+            continue;
+        }
+
+        if (obj.hasOwnProperty(k)) {
+            if (_.isPlainObject(v) || Array.isArray(v)) {
+                vectors.push([stack.concat(k).join('.'), deepSurface(v)]);
+                continue;
+            }
+            if (
+                typeof v === 'object' &&
+                v !== null
+            ) {
+                const topLevelConstructor = topLevelConstructorOf(v);
+                if (topLevelConstructor === Object) {
+                    vectors.push(..._vectorize2(v, stack.concat(k)));
+                } else if (topLevelConstructor === Array) {
+                    vectors.push(..._vectorize2(v, stack.concat(k), 'array'));
+                } else if (topLevelConstructor) {
+                    vectors.push([stack.concat(k).join('.'), v]);
+                }
+                continue;
+            }
+
+            vectors.push([stack.concat(k).join('.'), v]);
+            continue;
+        }
+
+        if (
+            typeof v === 'object' && v !== null
+        ) {
+            const topLevelConstructor = topLevelConstructorOf(v);
+            if (topLevelConstructor === Object) {
+                vectors.push(..._vectorize2(v, stack.concat(k)));
+            } else if (topLevelConstructor === Array) {
+                vectors.push(..._vectorize2(v, stack.concat(k), 'array'));
+            } else if (topLevelConstructor) {
+                vectors.push([stack.concat(k).join('.'), v]);
+            }
+
+            continue;
+        }
+    }
+
+    return vectors;
+}
+
+export function vectorize2(obj: object) {
+    return _.fromPairs(_vectorize2(obj)) as { [k: string]: any; };
 }
 
 export function specialDeepVectorize(obj: object, stack: string[] = [], refStack: Set<any> = new Set()) {
@@ -82,19 +146,40 @@ export function parseJSONText(text?: string) {
 }
 
 export function deepCreate(source: object): any {
-    if (Array.isArray(source)) {
-        return source.map((x) => (_.isPlainObject(x) ? deepCreate(x) : x));
-    }
-
-    const result = Object.create(source);
+    const clone: any = Array.isArray(source) ? [...source] : { ...source };
 
     for (const [k, v] of Object.entries(source)) {
-        if (_.isPlainObject(v)) {
-            result[k] = deepCreate(v);
+        if (_.isObjectLike(v)) {
+            clone[k] = deepCreate(v);
         }
     }
 
+    const result = Object.create(clone);
+
     return result;
+}
+
+export function deepSurface(source: any): any {
+    if (typeof source !== 'object' || source === null) {
+        return source;
+    }
+
+    const topLevelConstructor = topLevelConstructorOf(source);
+    if (topLevelConstructor === Array) {
+        return (source as Array<any>).map((x) => (_.isPlainObject(x) ? x : deepSurface(x)));
+    }
+
+    if (topLevelConstructor !== Object) {
+        return source;
+    }
+
+    const clone: any = {};
+
+    for (const [k, v] of chainEntries(source)) {
+        clone[k] = deepSurface(v);
+    }
+
+    return clone;
 }
 
 export function deepClean<T>(object: T): Partial<T> {

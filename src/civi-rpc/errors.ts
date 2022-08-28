@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-magic-numbers */
+
 export enum APPLICATION_ERROR {
     UNKNOWN_ERROR = -1,
 
@@ -22,6 +24,7 @@ export enum APPLICATION_ERROR {
     INCOMPATIBLE_METHOD_ERROR = 40502,
 
     INTERNAL_RESOURCE_ID_CONFLICT = 40901,
+    RESOURCE_POLICY_DENY = 40902,
 
     REQUEST_PAYLOAD_TOO_LARGE = 41301,
 
@@ -29,13 +32,17 @@ export enum APPLICATION_ERROR {
     IDENTIFIER_NAMESPACE_OCCUPIED = 42202,
     SUBMITTED_DATA_MALFORMED = 42203,
     EXTERNAL_SERVICE_FAILURE = 42204,
+    DOWNSTREAM_SERVICE_FAILURE = 42205,
+    ASSERTION_FAILURE = 42206,
 
     SERVER_INTERNAL_ERROR = 50001,
     DOWNSTREAM_SERVICE_ERROR = 50002,
     SERVER_SUBPROCESS_ERROR = 50003,
     SANDBOX_BUILD_NOT_FOUND = 50004,
     NOT_IMPLEMENTED_ERROR = 50005,
+    RESPONSE_STREAM_CLOSED = 50006,
 }
+
 const keyExcept = new Set(['status', 'stack', 'message', 'name', 'readableMessage']);
 export class ApplicationError extends Error {
     code: string | number;
@@ -43,18 +50,31 @@ export class ApplicationError extends Error {
     readableMessage: string;
 
     err?: Error;
+
     [k: string]: any;
+
+    get error() {
+        return this.err;
+    }
+
+    set error(err: Error | undefined) {
+        this.err = err;
+    }
 
     constructor(status: number, detail?: any) {
         super(`ApplicationError: ${status}`);
         this.name = Object.getPrototypeOf(this).constructor.name;
         this.message = `${status}`;
-        this.readableMessage = `ApplicationError: ${status}`;
+        this.readableMessage = `${this.constructor.name}: ${status}`;
         this.status = status;
         this.code = status > 1000 ? parseInt(`${status}`.substring(0, 3), 10) : status;
 
         if (typeof detail === 'object') {
+            if (detail instanceof Error) {
+                this.error = detail;
+            }
             Object.assign(this, detail || {});
+
         } else if (typeof detail === 'string') {
             this.message = detail;
         }
@@ -64,10 +84,12 @@ export class ApplicationError extends Error {
                 '\n\nWhich was derived from:\n\n' +
                 this.err.stack;
         }
+
+        this.readableMessage = `${this.name}: ${this.message}`;
     }
 
-    toString() {
-        return `${this.name}: ${this.status}; \n${JSON.stringify(this.detail)}`;
+    override toString() {
+        return `${this.name}: ${this.status}; ${this.message || JSON.stringify(this.detail)}`;
     }
 
     get detail() {
@@ -86,18 +108,32 @@ export class ApplicationError extends Error {
     }
 
     toObject() {
-        if (!process.env.NODE_ENV?.toLowerCase().includes('dev')) {
-            return { name: this.name, status: this.status, data: this.detail };
+        if (process.env.NODE_ENV?.toLowerCase().includes('dev')) {
+            return {
+                ...this.detail,
+                code: this.code,
+                name: this.name,
+                status: this.status,
+                message: this.message,
+                readableMessage: this.readableMessage,
+                stack: this.stack
+            };
         }
 
-        return { name: this.name, status: this.status, message: this.message, detail: this.detail, stack: this.stack };
+        return {
+            ...this.detail,
+            code: this.code,
+            name: this.name,
+            status: this.status,
+            message: this.message,
+            readableMessage: this.readableMessage,
+        };
     }
 
     toJSON() {
         return this.toObject();
     }
 }
-
 
 export class ParamValidationError extends ApplicationError {
     constructor(detail?: any) {
@@ -109,49 +145,42 @@ export class ParamValidationError extends ApplicationError {
 export class AuthenticationFailedError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.AUTHENTICATION_FAILED, detail);
-        this.readableMessage = `AuthenticationFailedError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class AuthenticationRequiredError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.AUTHENTICATION_REQUIRED, detail);
-        this.readableMessage = `AuthenticationRequiredError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class ResourceNotFoundError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.INTERNAL_RESOURCE_NOT_FOUND, detail);
-        this.readableMessage = `InternalResourceNotFound: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class RPCMethodNotFoundError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.RPC_METHOD_NOT_FOUND, detail);
-        this.readableMessage = `RPCMethodNotFound: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class RequestedEntityNotFoundError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.REQUESTED_ENTITY_NOT_FOUND, detail);
-        this.readableMessage = `RequestedEntityNotFoundError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class ResourceMethodNotAllowedError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.INTERNAL_RESOURCE_METHOD_NOT_ALLOWED, detail);
-        this.readableMessage = `ResourceMethodNotAllowed: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class IncompatibleMethodError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.INCOMPATIBLE_METHOD_ERROR, detail);
-        this.readableMessage = `IncompatibleMethodError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
@@ -159,89 +188,111 @@ export class IncompatibleMethodError extends ApplicationError {
 export class OperationNotAllowedError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.OPERATION_NOT_ALLOWED, detail);
-        this.readableMessage = `OperationNotAllowed: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class SSOSuperUserRequiredError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.SSO_SUPER_USER_REQUIRED, detail);
-        this.readableMessage = `SSOSuperUserRequired: ${this.message} ${JSON.stringify(this.detail)}`;
+    }
+}
+
+export class AssertionFailureError extends ApplicationError {
+    constructor(detail?: any) {
+        super(APPLICATION_ERROR.ASSERTION_FAILURE, detail);
     }
 }
 
 export class ResourceIdConflictError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.INTERNAL_RESOURCE_ID_CONFLICT, detail);
-        this.readableMessage = `InternalResourceIDConflict: ${this.message} ${JSON.stringify(this.detail)}`;
+    }
+}
+export class ResourcePolicyDenyError extends ApplicationError {
+    constructor(detail?: any) {
+        super(APPLICATION_ERROR.RESOURCE_POLICY_DENY, detail);
     }
 }
 
 export class DataCorruptionError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.INTERNAL_DATA_CORRUPTION, detail);
-        this.readableMessage = `InternalDataCorruption: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class DataStreamBrokenError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.DATA_STREAM_BROKEN_ERROR, detail);
-        this.readableMessage = `DataStreamBroken: ${this.message} ${JSON.stringify(this.detail)}`;
+    }
+}
+
+export class UnexpectedMimeTypeError extends ApplicationError {
+    constructor(detail?: any) {
+        super(APPLICATION_ERROR.UNEXPECTED_MIME_TYPE_ERROR, detail);
     }
 }
 
 export class DownstreamServiceError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.DOWNSTREAM_SERVICE_ERROR, detail);
-        this.readableMessage = `DownstreamServiceError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 export class ServerSubprocessError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.SERVER_SUBPROCESS_ERROR, detail);
-        this.readableMessage = `ServerSubprocessError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class InternalServerError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.SERVER_INTERNAL_ERROR, detail);
-        this.readableMessage = `ServerInternalError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class NotImplementedError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.NOT_IMPLEMENTED_ERROR, detail);
-        this.readableMessage = `NotImplementedError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class IdentifierNamespaceOccupiedError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.IDENTIFIER_NAMESPACE_OCCUPIED, detail);
-        this.readableMessage = `IdentifierNamespaceOccupiedError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class ExternalServiceFailureError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.EXTERNAL_SERVICE_FAILURE, detail);
-        this.readableMessage = `ExternalServiceFailureError: ${this.message} ${JSON.stringify(this.detail)}`;
+    }
+}
+
+export class DownstreamServiceFailureError extends ApplicationError {
+    constructor(detail?: any) {
+        super(APPLICATION_ERROR.DOWNSTREAM_SERVICE_FAILURE, detail);
     }
 }
 
 export class SubmittedDataMalformedError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.SUBMITTED_DATA_MALFORMED, detail);
-        this.readableMessage = `SubmittedDataMalformedError: ${this.message} ${JSON.stringify(this.detail)}`;
     }
 }
 
 export class RequestPayloadTooLargeError extends ApplicationError {
     constructor(detail?: any) {
         super(APPLICATION_ERROR.REQUEST_PAYLOAD_TOO_LARGE, detail);
-        this.readableMessage = `RequestPayloadTooLarge: ${this.message} ${JSON.stringify(this.detail)}`;
+    }
+}
+
+export class SandboxBuildNotFoundError extends ApplicationError {
+    constructor(detail?: any) {
+        super(APPLICATION_ERROR.SANDBOX_BUILD_NOT_FOUND, detail);
+    }
+}
+
+export class ResponseStreamClosedError extends ApplicationError {
+    constructor(detail?: any) {
+        super(APPLICATION_ERROR.RESPONSE_STREAM_CLOSED, detail);
     }
 }

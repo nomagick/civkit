@@ -1,5 +1,6 @@
 import { AsyncService } from './async-service';
 import pino from 'pino';
+import { executionAsyncResource } from 'async_hooks';
 
 export interface LoggerInterface {
     error(message: string, ...args: any[]): void;
@@ -36,8 +37,12 @@ const logLevels: Array<keyof LoggerInterface> = [
     'silent'
 ];
 
-function wipeBehindPinoFunction(level: keyof LoggerInterface, binding?: object) {
+export const REQUEST_ID = Symbol('requestId');
+export interface ResourceInterface {
+    [REQUEST_ID]?: string;
+}
 
+function wipeBehindPinoFunction(level: keyof LoggerInterface, binding?: object) {
     return function patchedLogger(this: AbstractLogger, ...args: any[]) {
         const thePino = this.logger;
         const logFunc = thePino[level] as pino.LogFn;
@@ -60,9 +65,13 @@ function wipeBehindPinoFunction(level: keyof LoggerInterface, binding?: object) 
             }
         }
 
+        const resource: ResourceInterface = executionAsyncResource();
+        if (resource?.[REQUEST_ID]) {
+            objects.push({ 'requestId': resource[REQUEST_ID] });
+        }
+
         return logFunc.call(thePino, Object.assign({}, binding, ...objects), texts.join(' '));
     };
-
 }
 
 export abstract class AbstractLogger extends AsyncService {
@@ -97,4 +106,4 @@ for (const level of logLevels) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface AbstractLogger extends LoggerInterface {}
+export interface AbstractLogger extends LoggerInterface { }

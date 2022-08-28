@@ -138,6 +138,14 @@ export abstract class AbstractTempFileManger extends AsyncService {
         return r;
     }
 
+    bindPathTo<T extends object>(thing: T, path: string) {
+        const fullPath = this.fullPath(path);
+
+        this.finalizationRegistry.register(thing, fullPath);
+
+        return thing;
+    }
+
     cacheText(str: string, fileName?: string) {
         return this.cacheBuffer(Buffer.from(str), fileName);
     }

@@ -1,9 +1,9 @@
 import { RPCHost, RPC_CALL_ENVIROMENT } from './base';
 import { AsyncService } from '../lib/async-service';
-import { Defer } from '../lib/defer';
-import { RPCMethodNotFoundError, ParamValidationError, ApplicationError, DataCorruptionError } from './errors';
+import { RPCMethodNotFoundError, ParamValidationError, ApplicationError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
 import { AutoCastingError, inputSingle, PropOptions, __patchPropOptionsEnumToSet } from '../lib/auto-castable';
+import { RestParameters, shallowDetectRestParametersKeys } from './magic';
 
 export interface RPCOptions {
     name: string | string[];
@@ -15,14 +15,16 @@ export interface RPCOptions {
     returnType?: Function | Function[];
     returnArrayOf?: Function | Function[];
     returnDictOf?: Function | Function[];
+    returnMetaType?: Function | Function[];
     desc?: string;
+    markdown?: string;
     ext?: { [k: string]: any; };
+    deprecated?: boolean;
+    tags?: string[];
+    [k: string]: any;
 }
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
-
-const ROOT_INPUT = Symbol('RootInput');
-const ROOT_RETURN = Symbol('RootReturn');
 
 export abstract class AbstractRPCRegistry extends AsyncService {
     private __tick: number = 0;
@@ -107,24 +109,29 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         const paramPickerMeta = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, conf.hostProto);
         const paramPickerConf = paramPickerMeta ? paramPickerMeta[conf.nameOnProto] : undefined;
 
+        const detectEtc = paramTypes.find((x) => (x?.prototype instanceof RestParameters || x === RestParameters));
+
         function patchedRPCMethod<T extends object = any>(this: RPCHost, input: T) {
             let params;
+            const etcDetectKit = detectEtc ? shallowDetectRestParametersKeys(input) : undefined;
+            const patchedInput = etcDetectKit?.proxy || input;
             try {
                 params = paramTypes.map((t, i) => {
                     const propOps = paramPickerConf?.[i];
 
                     if (!propOps) {
-
-                        const paramOptions = { path: ROOT_INPUT, type: t };
+                        const paramOptions = { type: t };
 
                         conf!.paramOptions[i] = paramOptions;
 
-                        return inputSingle(func, { [ROOT_INPUT]: input }, ROOT_INPUT, paramOptions);
+                        return inputSingle(
+                            'Input', patchedInput, undefined, { type: t }
+                        );
                     }
 
                     conf!.paramOptions[i] = { type: t, ...propOps };
 
-                    return inputSingle(undefined, input, propOps.path, { type: t, ...propOps });
+                    return inputSingle('Input', patchedInput, propOps.path, { type: t, ...propOps });
                 });
             } catch (err) {
                 if (err instanceof ApplicationError) {
@@ -137,45 +144,18 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 throw err;
             }
 
-            const r = func.apply(host, params);
-
-            if (!(conf!.returnType || conf!.returnArrayOf || conf!.returnDictOf)) {
-                return r;
-            }
-
-            if (r instanceof Promise || typeof r.then === 'function') {
-                const deferred = Defer<T>();
-
-                r.then(
-                    (resolved: any) => {
-                        try {
-                            const transformed = inputSingle(func, { [ROOT_RETURN]: resolved }, ROOT_RETURN, {
-                                path: ROOT_RETURN,
-                                type: conf!.returnType,
-                                arrayOf: conf!.returnArrayOf,
-                                dictOf: conf!.returnDictOf,
-                                desc: conf!.desc,
-                            });
-
-                            deferred.resolve(transformed);
-                        } catch (err) {
-                            if (err instanceof ApplicationError) {
-                                return deferred.reject(err);
-                            }
-                            if (err instanceof AutoCastingError) {
-                                return deferred.reject(new DataCorruptionError({ err }));
-                            }
-
-                            return deferred.reject(err);
+            if (etcDetectKit) {
+                const etcKeys = Array.from(etcDetectKit.etcKeys.keys());
+                for (const x of params) {
+                    if (x instanceof RestParameters) {
+                        for (const k of etcKeys) {
+                            Reflect.set(x, k, Reflect.get(input, k));
                         }
-                    },
-                    (rejected: any) => {
-                        deferred.reject(rejected);
                     }
-                );
-
-                return deferred.promise;
+                }
             }
+
+            const r = func.apply(host, params);
 
             return r;
         }
@@ -220,6 +200,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 ..._options,
                 name: _options.name || methodName,
                 paramTypes: _options.paramTypes || Reflect.getMetadata('design:paramtypes', tgt, methodName),
+                returnType: _options.returnType || Reflect.getMetadata('design:returntype', tgt, methodName),
                 hostProto: tgt,
                 nameOnProto: methodName,
             };
@@ -253,6 +234,10 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             if (!methodConf) {
                 methodConf = [];
                 paramConf[methodName] = methodConf;
+            }
+
+            if (conf && !conf.type) {
+                conf.type = designType;
             }
 
             methodConf[paramIdx] = conf ? __patchPropOptionsEnumToSet(conf, designType) : conf;

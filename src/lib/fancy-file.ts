@@ -5,6 +5,7 @@ import { basename } from 'path';
 import { Defer, Deferred } from './defer';
 import { HashManager } from './hash';
 import { mimeOf, MIMEVec, parseContentType } from './mime';
+import { Also } from './auto-castable';
 
 const PEEK_BUFFER_SIZE = 32 * 1024;
 
@@ -51,6 +52,14 @@ export interface HashedFile extends ResolvedFile {
 // });
 // fileUnlinkedPromise.catch(() => undefined);
 
+@Also({
+    openapi: {
+        schema: {
+            type: 'string',
+            format: 'binary'
+        }
+    }
+})
 export class FancyFile {
     protected static _keys = ['mimeType', 'mimeVec', 'fileName', 'filePath', 'sha256Sum', 'size'];
     protected static _fromLocalFile(filePath: string, partialFile: PartialFile = {}) {

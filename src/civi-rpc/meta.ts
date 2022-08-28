@@ -15,7 +15,7 @@ export function assignMeta<T extends object, P extends object>(target: T, meta: 
     return target;
 }
 
-export function extractMeta(target: object): object | undefined {
+export function extractMeta(target: object): {[k: string]: any} | undefined {
     if (typeof target !== 'object' || !target) {
         return;
     }

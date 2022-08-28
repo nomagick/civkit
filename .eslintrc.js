@@ -17,6 +17,7 @@ module.exports = {
         "no-useless-escape": "warn",
         "no-prototype-builtins": "off",
         "no-extra-boolean-cast": "off",
+        "no-constant-condition": "off",
         "@typescript-eslint/no-unused-vars": ["error", {
             "ignoreRestSiblings": true,
             "caughtErrorsIgnorePattern": "^_",

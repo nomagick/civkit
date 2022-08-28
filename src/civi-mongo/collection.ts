@@ -2,12 +2,12 @@ import _ from 'lodash';
 import {
     AggregateOptions, ChangeStream, ChangeStreamDocument, ChangeStreamOptions,
     ClientSession, ClientSessionOptions, Collection, CountDocumentsOptions,
-    DeleteOptions, Filter, FindOneAndDeleteOptions, FindOneAndUpdateOptions,
+    DeleteOptions, Filter, FindOneAndDeleteOptions, FindOneAndReplaceOptions, FindOneAndUpdateOptions,
     FindOptions, InsertOneOptions, ObjectId, OptionalId, UpdateFilter, UpdateOptions,
-    WithTransactionCallback
+    WithTransactionCallback, CreateIndexesOptions, CreateCollectionOptions
 } from 'mongodb';
 import { delay } from '../utils/timeout';
-import { deepCreate, vectorize } from '../utils/vectorize';
+import { deepCreate, vectorize2 } from '../utils/vectorize';
 
 import { AsyncService } from '../lib/async-service';
 import { AbstractMongoDB } from './client';
@@ -45,7 +45,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     }
 
     async get(_id: P) {
-        const r = await this.collection.findOne({ _id });
+        const r = await this.collection.findOne({ _id } as any as Filter<T>);
 
         return r;
     }
@@ -68,7 +68,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     ) {
         const r = await this.collection.findOneAndDelete(query, options!);
 
-        return r || undefined;
+        return (r.value as T) || undefined;
     }
 
     async simpleFind(query: Filter<T>, options?: FindOptions<T>) {
@@ -124,6 +124,23 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         return (r.value as T) || undefined;
     }
 
+    async replaceOne(
+        filter: Filter<T>,
+        replace: OptionalId<T>,
+        options?: FindOneAndReplaceOptions,
+    ) {
+        const r = await this.collection.findOneAndReplace(
+            filter,
+            replace,
+            { upsert: true, returnDocument: 'after', ...options });
+
+        if (!r.ok) {
+            throw r.lastErrorObject;
+        }
+
+        return (r.value as T) || undefined;
+    }
+
     async insertOne(
         doc: OptionalId<T>,
         options?: InsertOneOptions,
@@ -150,8 +167,8 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     async set(_id: P, data: Partial<T>, options?: FindOneAndUpdateOptions) {
         const now = new Date();
         const r = await this.collection.findOneAndUpdate(
-            { _id },
-            { $set: vectorize({ ...data, updatedAt: now }), $setOnInsert: { createdAt: now } } as any,
+            { _id } as any as Filter<T>,
+            { $set: vectorize2({ ...data, updatedAt: now }), $setOnInsert: { createdAt: now } } as any,
             { upsert: true, returnDocument: 'after', ...options }
         );
         if (!r.ok) {
@@ -163,7 +180,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     async simpleSet(_id: P, data: Partial<T>, options?: FindOneAndUpdateOptions) {
         const now = new Date();
         const r = await this.collection.findOneAndUpdate(
-            { _id },
+            { _id } as any as Filter<T>,
             { $set: { ..._.omit(data, '_id'), updatedAt: now }, $setOnInsert: { createdAt: now } } as any,
             { upsert: true, returnDocument: 'after', ...options }
         );
@@ -207,18 +224,38 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         };
 
         try {
+
             const r = await session.withTransaction(patchedFunc, options?.defaultTransactionOptions);
 
             return r;
+        } catch (err) {
+            try {
+                await session.abortTransaction();
+            } catch (_err2) {
+                // Nothing could be done if aborting the transaction failed
+                // Let the session end and transaction to expire
+                // Swallow the transaction abortion error here.
+                void 0;
+            }
+
+            throw err;
         } finally {
             if (!session.hasEnded) {
-                await session.endSession();
+                try {
+                    await session.endSession({ force: true, forceClear: true });
+                } catch (_err3) {
+                    // Nothing could be done if endSession fails.
+                    // Also, it's not a big deal if the session is already ended.
+                    // So swallow the error here.
+                    void 0;
+                }
             }
         }
+
     }
 
     async save(data: Partial<T> & { _id: P; }, options?: FindOneAndUpdateOptions) {
-        const r = await this.collection.findOneAndUpdate({ _id: data._id }, { $set: _.omit(data, '_id') as T }, {
+        const r = await this.collection.findOneAndUpdate({ _id: data._id } as any as Filter<T>, { $set: _.omit(data, '_id') as T }, {
             upsert: true,
             returnDocument: 'after',
             ...options,
@@ -232,11 +269,11 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     }
 
     clear(_id: P) {
-        return this.collection.deleteOne({ _id });
+        return this.collection.deleteOne({ _id } as any as Filter<T>);
     }
 
     del(_id: P) {
-        return this.collection.deleteOne({ _id });
+        return this.collection.deleteOne({ _id } as any as Filter<T>);
     }
 
     async deleteOne(
@@ -300,5 +337,100 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         this.once('crippled', () => changeStream.closed ?? changeStream.close()?.catch(() => 'swallow'));
 
         return changeStream;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async createIndexes(_options?: CreateIndexesOptions) {
+        return;
+    }
+
+    async ensureCollection(options?: CreateCollectionOptions) {
+        const r = await this.mongo.db.listCollections(
+            { name: this.collectionName },
+            { nameOnly: true, ...options }
+        ).toArray();
+
+        if (r.length) {
+            return;
+        }
+
+        if (r.length <= 0) {
+            await this.mongo.db.createCollection(this.collectionName, options);
+        }
+    }
+}
+
+
+export abstract class MongoCappedCollection<T extends object, P = ObjectId> extends MongoCollection<T, P> {
+    abstract collectionSize: number;
+
+    override async ensureCollection(options?: { session?: ClientSession; }) {
+        this.logger.info(`Ensuring capped collection ${this.constructor.name}(${this.collectionName})...`);
+        const r = await this.mongo.db.listCollections(
+            { name: this.collectionName },
+            { session: options?.session }
+        ).toArray();
+
+        if (r.length) {
+            const collection: CollectionInfo | undefined = r[0];
+            if (!(collection?.options?.capped)) {
+                throw new Error(`Collection ${this.collectionName} is supposed to be a capped collection however a normal collection with the same name already existed.`);
+            }
+            if (collection?.options?.size !== this.collectionSize) {
+                throw new Error(`Capped collection ${this.collectionName} is supposed to have size ${this.collectionSize} however it has size ${collection.options.size}.`);
+            }
+
+            this.logger.info(`Looks like capped collection ${this.constructor.name}(${this.collectionName}) already exists`);
+            return;
+        }
+
+        if (r.length <= 0) {
+            this.logger.warn(`Creating capped collection ${this.constructor.name}(${this.collectionName}) with size ${this.collectionSize}...`);
+            await this.mongo.db.createCollection(this.collectionName, { capped: true, size: this.collectionSize });
+
+            this.logger.info(`Capped collection created: ${this.constructor.name}(${this.collectionName})`);
+        }
+    }
+
+    async simpleTail(query: Filter<T>, options?: FindOptions<T>) {
+        const throughStream = new PassThrough({ objectMode: true, decodeStrings: false });
+        let cursorStream: Readable | undefined;
+        let lastId: P | undefined;
+        let stop: boolean = false;
+        const rotate = async () => {
+            if (stop) {
+                return;
+            }
+            const lastCursorStream = cursorStream;
+            const patchedQuery: any = { ...query };
+            if (lastId && !patchedQuery._id) {
+                patchedQuery._id = { $gt: lastId };
+            }
+
+            cursorStream = this.collection.find(patchedQuery, {
+                sort: { $natural: 1 },
+                ...options,
+                tailable: true,
+                awaitData: true,
+                noCursorTimeout: true,
+            } as FindOptions<T>).stream();
+            cursorStream.on('data', (data: T & { _id: P; }) => {
+                lastId = data._id;
+            });
+            cursorStream.once('close', rotate);
+            if (lastCursorStream) {
+                lastCursorStream.unpipe(throughStream);
+            }
+            cursorStream.pipe(throughStream, { end: false });
+        };
+        throughStream.once('close', () => {
+            stop = true;
+            if (cursorStream) {
+                cursorStream.destroy();
+            }
+        });
+        rotate();
+
+        return throughStream as Readable;
     }
 }

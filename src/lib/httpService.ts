@@ -63,7 +63,6 @@ function getAgent(protocol: 'http' | 'https') {
 }
 
 export interface HTTPServiceConfig {
-
     agent?: HTTPAgent | HTTPSAgent;
     requestOptions?: HTTPServiceRequestOptions;
 
@@ -72,14 +71,13 @@ export interface HTTPServiceConfig {
     port?: number;
     baseUri?: string;
 
-    baseParams?: { [k: string]: string | string[] };
-    baseHeaders?: { [k: string]: string | string[] };
+    baseParams?: { [k: string]: string | string[]; };
+    baseHeaders?: { [k: string]: string | string[]; };
     initialCookies?: SimpleCookie;
-
 }
 
 export class HTTPServiceError<T extends HTTPServiceRequestOptions = HTTPServiceRequestOptions> extends Error {
-    err?: Error | FetchError;
+    err?: Error | FetchError | { [k: string]: any; } | null;
     serial: number;
     status?: string | number;
     config?: T;
@@ -192,7 +190,7 @@ export abstract class HTTPService<
     }
 
     __composeOption(...options: Array<To | undefined>): To {
-        const finalOptions: any = _.merge({}, this.baseOptions, ...options);
+        const finalOptions: any = _.merge({}, this.baseOptions, { headers: this.baseHeaders }, ...options);
 
         return finalOptions;
     }
@@ -602,4 +600,4 @@ export interface CookieAwareHTTPService {
 
 }
 
-export type HTTPServiceResponse<T> = Response & { data: T };
+export type HTTPServiceResponse<T> = Response & { data: T; };

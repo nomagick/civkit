@@ -29,7 +29,7 @@ export class AutoCastable {
 
         const entryVecs = chainEntries(this.prototype[AUTOCASTABLE_OPTIONS_SYMBOL] || {});
         for (const [prop, config] of entryVecs) {
-            const val = inputSingle(this, input, prop, config);
+            const val = inputSingle(undefined, input, prop, config);
             if (val === undefined) {
                 continue;
             }
@@ -38,10 +38,9 @@ export class AutoCastable {
 
         if (this.prototype[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
             const additionalConf = this.prototype[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
-
             if (additionalConf?.dictOf && _.isObjectLike(input)) {
                 const namedEntryKeys = entryVecs.map(([k]) => k);
-                const dict = inputSingle(this, _.omit(input, ...namedEntryKeys), undefined, additionalConf);
+                const dict = inputSingle(undefined, _.omit(input, ...namedEntryKeys), undefined, additionalConf);
 
                 Object.assign(instance, dict);
             }
@@ -77,15 +76,14 @@ export class AutoCastingError extends Error {
 }
 
 function makeAutoCastingErrorMessage(err: AutoCastingError) {
-    return `Casting failed for ${err.hostName || 'input'}.${err.propName}: ${err.path
-        } ${err.reason[0]?.toLowerCase()}${err.reason.substring(1)}`;
+    return `Casting failed for [${err.hostName || 'input'}(${err.path} => ${err.propName})]: ${err.reason[0]?.toLowerCase()}${err.reason.substring(1)}`;
 }
 
 export function castToType(ensureTypes: any[], inputProp: any) {
     let val: any = NOT_RESOLVED;
     let lastErr: Error | undefined | unknown;
     if (inputProp === undefined) {
-        if (ensureTypes.includes(undefined)) {
+        if (ensureTypes.includes(Object) || ensureTypes.includes(undefined)) {
             return undefined;
         }
 
@@ -232,32 +230,70 @@ export function castToType(ensureTypes: any[], inputProp: any) {
     return val;
 }
 
+function makePropName(superName?: string, propName?: string | symbol, objIdx?: string | symbol) {
+    let [p1, p2, p3] = ['', '', ''];
+
+    if (propName) {
+        p1 = `${propName.toString()}`;
+    }
+
+    if (objIdx) {
+        p2 = `${p1 ? '.' : ''}${objIdx.toString()}`;
+    }
+
+    if (superName) {
+        p3 = `${p2 ? '.' : ''}${superName}`;
+    }
+
+    return `${p1}${p2}${p3}`;
+}
+
+function makePropNameArr(superName?: string, propName?: string | symbol, arrIdx?: number | string) {
+    let [p1, p2, p3] = ['', '', ''];
+    if (superName) {
+        p3 = `.${superName}`;
+    }
+    if (propName && !(typeof propName === 'symbol' && propName.description?.toLowerCase().includes('root'))) {
+        p1 = `${propName.toString()}`;
+    }
+
+    if (arrIdx || arrIdx === 0) {
+        p2 = `[${arrIdx.toString()}]`;
+    }
+
+    return `${p1}${p2}${p3}`;
+}
+
 export function inputSingle<T>(
-    host: Function | undefined, input: any, prop: string | symbol | undefined, config: PropOptions<T>
+    hostName: string | undefined, input: any, prop: string | symbol | undefined, config: PropOptions<T>
 ) {
     let types: any;
     let isArray = false;
     let isDict = false;
     const access = config.path || prop;
-    const hostName = host?.name;
     const propName = prop?.toString() || '';
     const accessText = access ? access.toString() : '';
 
     const inputProp = access === undefined ? input : _.get(input, access);
 
-    if (config.type) {
-        types = Array.isArray(config.type) ? config.type : [config.type];
-    } else if (config.arrayOf) {
+    if (config.arrayOf) {
         isArray = true;
         types = Array.isArray(config.arrayOf) ? config.arrayOf : [config.arrayOf];
     } else if (config.dictOf) {
         isDict = true;
         types = Array.isArray(config.dictOf) ? config.dictOf : [config.dictOf];
+    } else if (config.type) {
+        types = Array.isArray(config.type) ? config.type : [config.type];
     } else {
-        throw new Error(`Type info not provided${accessText ? `: ${accessText}` : host?.name}`);
+        throw new Error(`Type info not provided${accessText ? `: ${accessText}` : `: ${hostName}`}`);
     }
 
-    const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
+    const typeNames = types.map((t: any) => {
+        if (t === null) {
+            return 'null';
+        }
+        return (t.name ? t.name : t).toString();
+    });
 
 
     if (inputProp === undefined) {
@@ -265,7 +301,7 @@ export function inputSingle<T>(
             return config.default;
         }
         if ((typeof config.defaultFactory) === 'function') {
-            return config.defaultFactory!.call(host, input, access);
+            return config.defaultFactory!.call(undefined, input, access);
         }
         if (config.required) {
             throw new AutoCastingError({
@@ -281,7 +317,7 @@ export function inputSingle<T>(
         return undefined;
     }
 
-    if (inputProp === null) {
+    if (inputProp === null && config.nullable) {
         return null;
     }
 
@@ -299,21 +335,20 @@ export function inputSingle<T>(
             try {
                 elem = castToType(types, x);
             } catch (err: any) {
-                console.log(err);
                 if (err.propName) {
                     err.hostName = hostName;
-                    err.propName = `${propName}[${i}].${err.propName}`;
-                    err.path = `${accessText}[${i}].${err.path}`;
+                    err.propName = makePropNameArr(err.propName, propName, i);
+                    err.path = makePropNameArr(err.path, accessText, i);
                     err.message = makeAutoCastingErrorMessage(err);
 
                     throw err;
                 }
 
                 throw new AutoCastingError({
-                    reason: `Not within type [${typeNames.join('|')}].`,
+                    reason: `Not of type [${typeNames.join('|')}].`,
                     path: `${accessText}[${i}]`,
                     hostName,
-                    propName: `${propName}[${i}]`,
+                    propName: makePropNameArr(undefined, propName, i),
                     value: x,
                     types: typeNames,
                     error: err.toString(),
@@ -323,10 +358,10 @@ export function inputSingle<T>(
 
             if (elem === NOT_RESOLVED) {
                 throw new AutoCastingError({
-                    reason: `Not within type [${typeNames.join('|')}].`,
+                    reason: `Not of type [${typeNames.join('|')}].`,
                     path: `${accessText}[${i}]`,
                     hostName,
-                    propName: `${propName}[${i}]`,
+                    propName: makePropNameArr(undefined, propName, i),
                     value: x,
                     types: typeNames,
                     desc: config.desc,
@@ -342,10 +377,10 @@ export function inputSingle<T>(
                         result = validator(elem, input);
                     } catch (err: any) {
                         throw new AutoCastingError({
-                            reason: `Validator ${config.validate.name} has thrown an error: ${err.toString()}.`,
+                            reason: `Validator '${config.validate.name}' has thrown an error: ${err.toString()}.`,
                             path: `${accessText}`,
                             hostName,
-                            propName: `${propName}[${i}]`,
+                            propName: makePropNameArr(undefined, propName, i),
                             value: inputProp,
                             validator: config.validate.name,
                             desc: config.desc,
@@ -358,7 +393,7 @@ export function inputSingle<T>(
                             reason: `Rejected by validator ${config.validate.name}.`,
                             path: `${accessText}`,
                             hostName,
-                            propName: `${propName}[${i}]`,
+                            propName: makePropNameArr(undefined, propName, i),
                             value: inputProp,
                             validator: config.validate.name,
                             desc: config.desc,
@@ -418,18 +453,18 @@ export function inputSingle<T>(
             } catch (err: any) {
                 if (err.propName) {
                     err.hostName = hostName;
-                    err.propName = `${propName}['${k}'].${err.propName}`;
-                    err.path = `${accessText}['${k}'].${err.path}`;
+                    err.propName = makePropName(err.propName, propName, k);
+                    err.path = makePropName(err.path, accessText, k);
                     err.message = makeAutoCastingErrorMessage(err);
 
                     throw err;
                 }
 
                 throw new AutoCastingError({
-                    reason: `Not within type [${typeNames.join('|')}].`,
-                    path: `${accessText}['${k}']`,
+                    reason: `Not of type [${typeNames.join('|')}].`,
+                    path: makePropName(undefined, accessText, k),
                     hostName,
-                    propName: `${propName}['${k}']`,
+                    propName: makePropName(undefined, propName, k),
                     value: v,
                     types: typeNames,
                     error: err.toString(),
@@ -439,10 +474,10 @@ export function inputSingle<T>(
 
             if (elem === NOT_RESOLVED) {
                 throw new AutoCastingError({
-                    reason: `Not within type [${typeNames.join('|')}].`,
-                    path: `${accessText}['${k}']`,
+                    reason: `Not of type [${typeNames.join('|')}].`,
+                    path: makePropName(undefined, accessText, k),
                     hostName,
-                    propName: `${propName}['${k}']`,
+                    propName: makePropName(undefined, accessText, k),
                     value: v,
                     types: typeNames,
                     desc: config.desc,
@@ -458,10 +493,10 @@ export function inputSingle<T>(
                         result = validator(elem, input);
                     } catch (err: any) {
                         throw new AutoCastingError({
-                            reason: `Validator ${config.validate.name} has thrown an error: ${err.toString()}.`,
-                            path: `${accessText}`,
+                            reason: `Validator '${config.validate.name}' has thrown an error: ${err.toString()}.`,
+                            path: accessText,
                             hostName,
-                            propName: `${propName}['${k}']`,
+                            propName: makePropName(undefined, accessText, k),
                             value: inputProp,
                             validator: config.validate.name,
                             desc: config.desc,
@@ -472,9 +507,9 @@ export function inputSingle<T>(
                     if (!result) {
                         throw new AutoCastingError({
                             reason: `Rejected by validator ${config.validate.name}.`,
-                            path: `${accessText}`,
+                            path: accessText,
                             hostName,
-                            propName: `${propName}['${k}']`,
+                            propName: makePropName(undefined, accessText, k),
                             value: inputProp,
                             validator: config.validate.name,
                             desc: config.desc,
@@ -500,7 +535,7 @@ export function inputSingle<T>(
                 if (!result) {
                     throw new AutoCastingError({
                         reason: `Rejected by collection validator ${config.validateCollection.name}.`,
-                        path: `${accessText}`,
+                        path: accessText,
                         hostName,
                         propName,
                         value: dictInput,
@@ -521,15 +556,15 @@ export function inputSingle<T>(
     } catch (err: any) {
         if (err.propName) {
             err.hostName = hostName;
-            err.propName = `${propName}.${err.propName}`;
-            err.path = `${accessText}.${err.path}`;
+            err.propName = makePropName(err.propName, propName);
+            err.path = makePropName(err.path, accessText);
             err.message = makeAutoCastingErrorMessage(err);
 
             throw err;
         }
         if (inputProp !== undefined) {
             throw new AutoCastingError({
-                reason: `Not within type [${typeNames.join('|')}].`,
+                reason: `Not of type [${typeNames.join('|')}].`,
                 path: `${accessText}`,
                 hostName,
                 propName,
@@ -546,14 +581,14 @@ export function inputSingle<T>(
             return config.default;
         }
         if ((typeof config.defaultFactory) === 'function') {
-            return config.defaultFactory!.call(host, input, access);
+            return config.defaultFactory!.call(undefined, input, access);
         }
 
         if (config.required || inputProp !== undefined) {
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new AutoCastingError({
-                reason: `Not within type [${typeNames.join('|')}].`,
-                path: `${accessText}`,
+                reason: `Not of type [${typeNames.join('|')}].`,
+                path: accessText,
                 hostName,
                 propName,
                 value: inputProp,
@@ -574,8 +609,8 @@ export function inputSingle<T>(
                 result = validator(item, input);
             } catch (err: any) {
                 throw new AutoCastingError({
-                    reason: `Validator ${config.validate.name} has thrown an error: ${err.toString()}.`,
-                    path: `${accessText}`,
+                    reason: `Validator '${config.validate.name}' has thrown an error: ${err.toString()}.`,
+                    path: accessText,
                     hostName,
                     propName,
                     value: inputProp,
@@ -588,7 +623,7 @@ export function inputSingle<T>(
             if (!result) {
                 throw new AutoCastingError({
                     reason: `Rejected by validator ${config.validate.name}.`,
-                    path: `${accessText}`,
+                    path: accessText,
                     hostName,
                     propName,
                     value: inputProp,
@@ -619,8 +654,12 @@ export interface PropOptions<T> {
 
     required?: boolean;
     default?: T extends Array<infer P> ? P[] : T;
-    defaultFactory?: (obj?: any, access?: string | symbol) => T extends Array<infer P> ? P[] : T;
+    defaultFactory?: (this: undefined, obj?: any, access?: string | symbol) => T extends Array<infer P> ? P[] : T;
     desc?: string;
+    markdown?: string;
+
+    nullable?: boolean;
+    deprecated?: boolean;
 
     ext?: { [k: string]: any; };
 }
@@ -713,10 +752,10 @@ export function Prop<T = any>(options: PropOptions<T> | string = {}) {
     };
 }
 
-export function Also<T = any>(options: AdditionalPropOptions<T> = {}) {
+export function Also<T = any>(options: AdditionalPropOptions<T> & { [k: string]: any; } = {}) {
 
     return function RPCParamPropDecorator(
-        _tgt: typeof AutoCastable
+        _tgt: { new(): any; }
     ) {
         const tgt = _tgt.prototype;
         if (!tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
@@ -726,7 +765,6 @@ export function Also<T = any>(options: AdditionalPropOptions<T> = {}) {
         }
 
         const hostConfig = tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]!;
-
-        __patchPropOptionsEnumToSet(hostConfig, options.dictOf);
+        Object.assign(hostConfig, __patchPropOptionsEnumToSet(options, hostConfig.dictOf));
     };
 }
