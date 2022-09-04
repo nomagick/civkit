@@ -411,6 +411,8 @@ export abstract class AbstractX509Manager extends AsyncService {
         });
 
         this.dirWatchers.set(dir, dirWatcher);
+
+        return dirWatcher;
     }
 
     dumpBundle(...claims: string[]) {

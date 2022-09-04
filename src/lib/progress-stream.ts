@@ -109,8 +109,8 @@ export interface ProgressStream {
         callback?: (error: Error | null | undefined) => void
     ): boolean;
 
-    end(cb?: () => void): void;
-    end(chunk: ProgressEvent, cb?: () => void): void;
+    end(cb?: () => void): this;
+    end(chunk: ProgressEvent, cb?: () => void): this;
 
     on(event: 'close', listener: () => void): this;
     on(event: 'data', listener: (chunk: ProgressEvent) => void): this;
