@@ -1,9 +1,10 @@
-import { v1 as UUIDv1 } from 'uuid';
 import fs, { promises as fsp } from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
 import { FancyFile } from './fancy-file';
 import { AsyncService } from './async-service';
+import { PromiseThrottle } from './throttle';
+import { randomUUID } from 'crypto';
 
 export abstract class AbstractTempFileManger extends AsyncService {
     abstract rootDir: string;
@@ -33,9 +34,25 @@ export abstract class AbstractTempFileManger extends AsyncService {
             }
         };
         process.on('exit', cleanupFunc);
-        process.on('SIGINT', cleanupFunc);
-        process.on('SIGTERM', cleanupFunc);
         // process.on('SIGKILL', cleanupFunc);
+    }
+
+    override async standDown() {
+        super.standDown();
+        const throttler = new PromiseThrottle(2 * 10);
+        const promises = Array.from(this.trackedPaths.values()).map(async (x) => {
+            await throttler.acquire();
+            try {
+                await fsp.rm(x, { recursive: true, force: true, maxRetries: 3 });
+                this.trackedPaths.delete(x);
+            } catch (_e) {
+                void 0;
+            } finally {
+                throttler.release();
+            }
+        });
+
+        await Promise.allSettled(promises);
     }
 
     override async init() {
@@ -69,7 +86,7 @@ export abstract class AbstractTempFileManger extends AsyncService {
     }
 
     newName() {
-        return UUIDv1();
+        return randomUUID();
     }
 
     async touch(relativePath?: string, options: { flags?: string | number, mode?: fs.Mode, close?: boolean; } = {}) {
@@ -99,7 +116,6 @@ export abstract class AbstractTempFileManger extends AsyncService {
 
         const fullPath = this.fullPath(relativePath);
         this.trackedPaths.add(fullPath);
-
         return fullPath;
     }
 
@@ -120,6 +136,13 @@ export abstract class AbstractTempFileManger extends AsyncService {
         return fsp.rm(pathToRemove, { recursive: true, force: true, maxRetries: 5 });
     }
 
+    async nuke() {
+        const dirContents = await fsp.readdir(this.rootDir);
+        await Promise.all(dirContents.map(async (x) => fsp.rm(x, { recursive: true, force: true, maxRetries: 5 })));
+        this.trackedPaths.clear();
+        super.standDown();
+    }
+
     cacheReadable(readable: Readable, fileName?: string) {
         const tmpFilePath = this.alloc();
 
@@ -138,16 +161,16 @@ export abstract class AbstractTempFileManger extends AsyncService {
         return r;
     }
 
+    cacheText(str: string, fileName?: string) {
+        return this.cacheBuffer(Buffer.from(str), fileName);
+    }
+
     bindPathTo<T extends object>(thing: T, path: string) {
         const fullPath = this.fullPath(path);
 
         this.finalizationRegistry.register(thing, fullPath);
 
         return thing;
-    }
-
-    cacheText(str: string, fileName?: string) {
-        return this.cacheBuffer(Buffer.from(str), fileName);
     }
 
     access(fileName: string) {

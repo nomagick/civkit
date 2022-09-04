@@ -13,7 +13,6 @@ import { EventEmitter } from 'events';
 import { stringify as formDataStringify } from 'querystring';
 import { Defer, TimeoutError } from './defer';
 import fetch, { RequestInit, Response, FetchError, Headers } from 'node-fetch';
-import AbortController from "abort-controller";
 
 export { FetchError, Request, Response, Headers, RequestInit } from 'node-fetch';
 

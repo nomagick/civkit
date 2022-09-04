@@ -4,8 +4,9 @@ import { basename } from 'path';
 
 import { Defer, Deferred } from './defer';
 import { HashManager } from './hash';
-import { mimeOf, MIMEVec, parseContentType } from './mime';
+import { mimeOf, MIMEVec, parseContentType, restoreContentType } from './mime';
 import { Also } from './auto-castable';
+import { TransferProtocolMetadata, RPC_TRANSFER_PROTOCOL_META_SYMBOL } from '../civi-rpc/meta';
 
 const PEEK_BUFFER_SIZE = 32 * 1024;
 
@@ -23,12 +24,27 @@ export interface PartialFile {
 }
 
 export class ResolvedFile {
+    __resolvedOf!: FancyFile;
     mimeType!: string;
     mimeVec!: MIMEVec;
     fileName!: string;
     size!: number;
     sha256Sum?: string;
     filePath!: string;
+
+    get [RPC_TRANSFER_PROTOCOL_META_SYMBOL](): TransferProtocolMetadata {
+        return {
+            contentType: restoreContentType(this.mimeVec),
+            headers: {
+                'content-length': this.size.toString(),
+                'content-disposition': `attachment; filename="${this.fileName}"`,
+
+                // RFC1864 being obsoleted, for not supporting partial responses.
+                // https://datatracker.ietf.org/doc/html/rfc1864
+                'content-sha256': this.sha256Sum || ''
+            }
+        };
+    }
 
     createReadStream() {
         const fpath = this.filePath;
@@ -367,6 +383,7 @@ export class FancyFile {
                 const [mimeType, mimeVec, fileName, size, sha256Sum, filePath] = vec;
                 const resolvedFile = new ResolvedFile();
                 Object.assign(resolvedFile, { mimeType, mimeVec, fileName, size, sha256Sum, filePath });
+                resolvedFile.__resolvedOf = this;
 
                 return resolvedFile;
             }) as Promise<ResolvedFile>;

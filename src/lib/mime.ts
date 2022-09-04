@@ -1,9 +1,16 @@
-import magic from 'file-type';
 import mime from 'mime';
 
 import _ from 'lodash';
 
-export const CUSTOM_MIME: { [key: string]: string[] } = {};
+import { LibmagicIO } from 'libmagic-ffi';
+
+const mimeDetector = new LibmagicIO({
+    returnContentType: true,
+    followSymlink: true,
+    noCheckCompressedFiles: true,
+});
+
+export const CUSTOM_MIME: { [key: string]: string[]; } = {};
 
 mime.define(CUSTOM_MIME);
 
@@ -37,11 +44,11 @@ export function extOfMime(mimeType: string) {
 }
 
 export function detectFile(path: string) {
-    return magic.fromFile(path);
+    return mimeDetector.detectFile(path);
 }
 
 export function detectBuff(buff: Buffer) {
-    return magic.fromBuffer(buff);
+    return mimeDetector.detectBuffer(buff);
 }
 
 export async function mimeOf(data: string | Buffer) {
@@ -51,7 +58,7 @@ export async function mimeOf(data: string | Buffer) {
     } else {
         result = await detectBuff(data);
     }
-    const vec = parseContentType(result?.mime || 'application/octet-stream');
+    const vec = parseContentType(result || 'application/octet-stream');
     if (!vec) {
         throw new Error('Unable to detect mime');
     }
@@ -63,7 +70,7 @@ export interface MIMEVec {
     mediaType: string;
     subType: string;
     suffix?: string;
-    attrs?: { [k: string]: string };
+    attrs?: { [k: string]: string; };
 }
 
 const CONTENT_TYPE_RE =
@@ -94,7 +101,7 @@ export function parseContentType(mimeStr: string): MIMEVec | null {
         return null;
     }
     const [, mediaType, subType, suffix, typeParamText] = r;
-    const attrs: { [k: string]: string } = {};
+    const attrs: { [k: string]: string; } = {};
     if (typeParamText) {
         const paramVecs = typeParamText.split(/\s*;\s*/);
         for (const vec of paramVecs) {

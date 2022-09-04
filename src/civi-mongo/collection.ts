@@ -4,18 +4,21 @@ import {
     ClientSession, ClientSessionOptions, Collection, CountDocumentsOptions,
     DeleteOptions, Filter, FindOneAndDeleteOptions, FindOneAndReplaceOptions, FindOneAndUpdateOptions,
     FindOptions, InsertOneOptions, ObjectId, OptionalId, UpdateFilter, UpdateOptions,
-    WithTransactionCallback, CreateIndexesOptions, CreateCollectionOptions
+    WithTransactionCallback, CreateIndexesOptions, CreateCollectionOptions, MatchKeysAndValues, CollectionInfo
 } from 'mongodb';
 import { delay } from '../utils/timeout';
 import { deepCreate, vectorize2 } from '../utils/vectorize';
 
 import { AsyncService } from '../lib/async-service';
 import { AbstractMongoDB } from './client';
+import { LoggerInterface } from '../lib/logger';
+import { PassThrough, Readable } from 'stream';
 
 export abstract class AbstractMongoCollection<T extends object, P = ObjectId> extends AsyncService {
 
     abstract collectionName: string;
     abstract mongo: AbstractMongoDB;
+    abstract logger: LoggerInterface;
 
     abstract typeclass?: { new(): T; };
 
@@ -45,9 +48,9 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     }
 
     async get(_id: P) {
-        const r = await this.collection.findOne({ _id } as any as Filter<T>);
+        const r = await this.collection.findOne({ _id } as Filter<T>);
 
-        return r;
+        return r || undefined;
     }
 
     async count(query: Filter<T>, options?: CountDocumentsOptions) {
@@ -193,19 +196,21 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     async withTransaction<T>(func: WithTransactionCallback<T>, options?: ClientSessionOptions & {
         maxTries?: number;
         retryDelayMs?: number;
-    }) {
+    }): Promise<T> {
         const session = this.mongo.createSession(options);
-
-        let triesLeft = options?.maxTries ?? Infinity;
+        const maxTries = options?.maxTries ?? 100;
+        let triesLeft = maxTries;
         let lastError: Error | undefined;
         let firstTry = true;
+        let finalReturn: any;
+
         const patchedFunc = async function (this: unknown, ...args: Parameters<typeof func>) {
             if (triesLeft <= 0) {
                 if (lastError) {
-                    lastError.message = `${lastError.message} (after ${options!.maxTries} tries)`;
+                    lastError.message = `${lastError.message} (after ${maxTries} tries)`;
                     throw lastError;
                 }
-                throw new Error(`Transaction failed after ${options!.maxTries} tries`);
+                throw new Error(`Transaction failed after ${maxTries} tries`);
             }
             if (firstTry) {
                 firstTry = false;
@@ -216,7 +221,8 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
             triesLeft -= 1;
 
             try {
-                return await func.apply(this, args);
+                finalReturn = await func.apply(this, args);
+                return finalReturn;
             } catch (err: any) {
                 lastError = err;
                 throw err;
@@ -224,10 +230,9 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         };
 
         try {
+            await session.withTransaction(patchedFunc, options?.defaultTransactionOptions);
 
-            const r = await session.withTransaction(patchedFunc, options?.defaultTransactionOptions);
-
-            return r;
+            return finalReturn;
         } catch (err) {
             try {
                 await session.abortTransaction();
@@ -255,11 +260,14 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     }
 
     async save(data: Partial<T> & { _id: P; }, options?: FindOneAndUpdateOptions) {
-        const r = await this.collection.findOneAndUpdate({ _id: data._id } as any as Filter<T>, { $set: _.omit(data, '_id') as T }, {
-            upsert: true,
-            returnDocument: 'after',
-            ...options,
-        });
+        const r = await this.collection.findOneAndUpdate(
+            { _id: data._id } as Filter<T>,
+            { $set: _.omit(data, '_id') } as any as MatchKeysAndValues<T>,
+            {
+                upsert: true,
+                returnDocument: 'after',
+                ...options,
+            });
 
         if (!r.ok) {
             throw r.lastErrorObject;
@@ -267,6 +275,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
 
         return r.value! as T;
     }
+
 
     clear(_id: P) {
         return this.collection.deleteOne({ _id } as any as Filter<T>);
@@ -361,7 +370,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
 }
 
 
-export abstract class MongoCappedCollection<T extends object, P = ObjectId> extends MongoCollection<T, P> {
+export abstract class AbstractMongoCappedCollection<T extends object, P = ObjectId> extends AbstractMongoCollection<T, P> {
     abstract collectionSize: number;
 
     override async ensureCollection(options?: { session?: ClientSession; }) {

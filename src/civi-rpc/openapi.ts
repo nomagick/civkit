@@ -256,6 +256,9 @@ export class OpenAPIManager {
         const theMap = direction === 'input' ? this.classToSchemaMapInput : this.classToSchemaMapOutput;
         if (!theMap.has(inputClass)) {
             const schema = this.constructorToOpenAPISchema(inputClass, direction);
+            if (!schema) {
+                return undefined;
+            }
             if (this.primitiveSchemaMap.has(inputClass)) {
                 return {
                     ...this.primitiveSchemaMap.get(inputClass)

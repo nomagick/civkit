@@ -20,6 +20,8 @@ export { propertyInjectorFactory } from './property-injector';
 
 export { ensureDir, walkDirForSummary } from './filesystem';
 
+export { EventStream } from './event-stream';
+
 export {
     UnionToIntersection,
     ExtractParameters, ExtractRequestBody, Extract200JSONResponse,

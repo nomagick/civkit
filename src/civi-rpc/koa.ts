@@ -18,15 +18,15 @@ import {
 } from "../lib";
 import { RPCHost, RPC_CALL_ENVIROMENT } from "./base";
 import { ApplicationError, DataStreamBrokenError } from "./errors";
-import { extractMeta } from "./meta";
+import { extractMeta, extractTransferProtocolMeta } from "./meta";
 import { AbstractRPCRegistry } from "./registry";
 import { OpenAPIManager } from "./openapi";
 import http from "http";
 import { runOnce } from "decorators";
 import { createHook, executionAsyncResource } from "async_hooks";
-import { REQUEST_ID, ResourceInterface } from "lib/logger";
 import { humanReadableDataSize } from "utils/readability";
-import { v4 } from "uuid";
+import { randomUUID } from "crypto";
+import { TraceableInterface, TRACE_ID } from "../lib/logger";
 
 
 export type ParsedContext = Context & {
@@ -221,9 +221,12 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     }
 
     makeSuccResponse(result: any) {
+        const protocolMeta = extractTransferProtocolMeta(result);
         const data = {
-            code: 200,
-            status: 20000,
+            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+            code: protocolMeta?.code || 200,
+            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+            status: protocolMeta?.status || 20000,
             data: result,
             meta: extractMeta(result)
         };
@@ -232,12 +235,26 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     }
 
     makeErrResponse(err: Error) {
+
+        const protocolMeta = extractTransferProtocolMeta(err);
+
         if (err instanceof ApplicationError) {
+
             return {
                 code: err.code,
                 status: err.status, data: null,
                 message: `${err.name}: ${err.message}`,
                 readableMessage: err.readableMessage
+            };
+
+        } else if (protocolMeta) {
+            return {
+                // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+                code: protocolMeta.code || 500,
+                // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+                status: protocolMeta.status || 50000,
+                data: null,
+                message: `${err.name}: ${err.message}`,
             };
         }
 
@@ -720,18 +737,18 @@ export abstract class KoaServer extends AsyncService {
     @runOnce()
     insertAsyncHookMiddleware() {
         createHook({
-            init(_asyncId, _type, _triggerAsyncId, resource: ResourceInterface) {
-                const currentResource: ResourceInterface = executionAsyncResource();
+            init(_asyncId, _type, _triggerAsyncId, resource: TraceableInterface) {
+                const currentResource: TraceableInterface = executionAsyncResource();
                 if (currentResource) {
-                    resource[REQUEST_ID] = currentResource[REQUEST_ID];
+                    resource[TRACE_ID] = currentResource[TRACE_ID];
                 }
             }
         }).enable();
 
         const asyncHookMiddleware = async (ctx: Context, next: () => Promise<void>) => {
-            const currentResource: ResourceInterface = executionAsyncResource();
+            const currentResource: TraceableInterface = executionAsyncResource();
             if (currentResource) {
-                currentResource[REQUEST_ID] = ctx.get('x-request-id') || ctx.get('request-id') as string || v4();
+                currentResource[TRACE_ID] = ctx.get('x-request-id') || ctx.get('request-id') as string || randomUUID();
             }
 
             return next();

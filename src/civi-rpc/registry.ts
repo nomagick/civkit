@@ -27,7 +27,7 @@ export interface RPCOptions {
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
 
 export abstract class AbstractRPCRegistry extends AsyncService {
-    private __tick: number = 0;
+    private __tick: number = 1;
 
     abstract container: typeof DIContainer;
 
@@ -35,14 +35,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
     wrapped: Map<string, Function> = new Map();
 
-    constructor() {
-        super();
-        this.__tick = 1;
-
-        this.init();
-    }
-
-    override init() {
+    override async init() {
         setImmediate(() => {
             this.__tick++;
             try {

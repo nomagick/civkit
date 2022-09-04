@@ -30,7 +30,7 @@ export abstract class AbstractScheduleService extends AsyncService {
 
     schedule(name: string, schedule: ScheduleRule, func: JobCallback) {
         if (this.__tick === 1) {
-            // Dont do the wrapping in tick 1.
+            // Don't do the wrapping in tick 1.
             // Postpone it to tick 2.
             // Stuff could be not ready yet.
             setImmediate(() => {

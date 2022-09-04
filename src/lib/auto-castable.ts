@@ -24,8 +24,8 @@ export class AutoCastable {
     /**
      * Retrieve and verify an object based on the props (required, type, default and so on)
      */
-    static from<T>(input: object): T {
-        const instance = new this() as InstanceType<typeof this>;
+    static from<T extends AutoCastable = AutoCastable>(input: object) {
+        const instance = new this() as T;
 
         const entryVecs = chainEntries(this.prototype[AUTOCASTABLE_OPTIONS_SYMBOL] || {});
         for (const [prop, config] of entryVecs) {
@@ -46,7 +46,7 @@ export class AutoCastable {
             }
         }
 
-        return instance as any;
+        return instance as T;
     }
 }
 export class AutoCastingError extends Error {
@@ -76,7 +76,8 @@ export class AutoCastingError extends Error {
 }
 
 function makeAutoCastingErrorMessage(err: AutoCastingError) {
-    return `Casting failed for [${err.hostName || 'input'}(${err.path} => ${err.propName})]: ${err.reason[0]?.toLowerCase()}${err.reason.substring(1)}`;
+    const compPath = err.path && err.propName ? (err.path === err.propName ? `(${err.path})` : `(${err.path} => ${err.propName})`) : '';
+    return `At #${err.hostName || 'input'}${compPath}: ${err.reason[0]?.toUpperCase()}${err.reason.substring(1)}`;
 }
 
 export function castToType(ensureTypes: any[], inputProp: any) {
@@ -298,6 +299,13 @@ export function inputSingle<T>(
 
     if (inputProp === undefined) {
         if (config.default !== undefined) {
+            if (Array.isArray(config.default)) {
+                return [...config.default];
+            }
+            if (_.isPlainObject(config.default)) {
+                return { ...config.default };
+            }
+
             return config.default;
         }
         if ((typeof config.defaultFactory) === 'function') {
@@ -345,20 +353,20 @@ export function inputSingle<T>(
                 }
 
                 throw new AutoCastingError({
-                    reason: `Not of type [${typeNames.join('|')}].`,
+                    reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
                     path: `${accessText}[${i}]`,
                     hostName,
                     propName: makePropNameArr(undefined, propName, i),
                     value: x,
                     types: typeNames,
-                    error: err.toString(),
+                    error: err,
                     desc: config.desc,
                 });
             }
 
             if (elem === NOT_RESOLVED) {
                 throw new AutoCastingError({
-                    reason: `Not of type [${typeNames.join('|')}].`,
+                    reason: `Type casting failed [${typeNames.join('|')}].`,
                     path: `${accessText}[${i}]`,
                     hostName,
                     propName: makePropNameArr(undefined, propName, i),
@@ -461,20 +469,20 @@ export function inputSingle<T>(
                 }
 
                 throw new AutoCastingError({
-                    reason: `Not of type [${typeNames.join('|')}].`,
+                    reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
                     path: makePropName(undefined, accessText, k),
                     hostName,
                     propName: makePropName(undefined, propName, k),
                     value: v,
                     types: typeNames,
-                    error: err.toString(),
+                    error: err,
                     desc: config.desc,
                 });
             }
 
             if (elem === NOT_RESOLVED) {
                 throw new AutoCastingError({
-                    reason: `Not of type [${typeNames.join('|')}].`,
+                    reason: `Type casting failed [${typeNames.join('|')}].`,
                     path: makePropName(undefined, accessText, k),
                     hostName,
                     propName: makePropName(undefined, accessText, k),
@@ -564,13 +572,13 @@ export function inputSingle<T>(
         }
         if (inputProp !== undefined) {
             throw new AutoCastingError({
-                reason: `Not of type [${typeNames.join('|')}].`,
+                reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
                 path: `${accessText}`,
                 hostName,
                 propName,
                 value: inputProp,
                 types: typeNames,
-                error: err.toString(),
+                error: err,
                 desc: config.desc,
             });
         }
@@ -587,7 +595,7 @@ export function inputSingle<T>(
         if (config.required || inputProp !== undefined) {
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new AutoCastingError({
-                reason: `Not of type [${typeNames.join('|')}].`,
+                reason: `Type casting failed [${typeNames.join('|')}].`,
                 path: accessText,
                 hostName,
                 propName,

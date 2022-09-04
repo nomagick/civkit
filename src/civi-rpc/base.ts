@@ -7,7 +7,7 @@ import { AutoCastable, AutoCastingError } from '../lib/auto-castable';
 export const RPC_CALL_ENVIROMENT = Symbol('RPCEnv');
 
 export class RPCHost extends AsyncService {
-    setResultMeta(target: object, metaToSet: object) {
+    setResultMeta<T extends object, P extends object>(target: T, metaToSet: P) {
         assignMeta(target, metaToSet);
 
         return target;

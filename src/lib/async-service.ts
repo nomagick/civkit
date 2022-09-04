@@ -2,17 +2,19 @@ import { EventEmitter } from 'events';
 import type { InjectionToken } from 'tsyringe';
 import { Defer, TimeoutError } from './defer';
 
+const initFuncPatchTrack = new WeakSet();
+
 const nextTickFunc = process?.nextTick || setImmediate || setTimeout;
 export abstract class AsyncService extends EventEmitter {
     protected __serviceReady: Promise<this>;
 
     protected __dependencies: Set<AsyncService>;
 
-    protected __status: 'ready' | 'crippled' | 'pending';
+    protected __status: 'ready' | 'crippled' | 'pending' | 'init' | 'error';
 
     constructor(...argv: (AsyncService | InjectionToken)[]) {
         super();
-        this.__status = 'pending';
+        this.__status = 'init';
 
         this.__dependencies = new Set();
 
@@ -21,6 +23,8 @@ export abstract class AsyncService extends EventEmitter {
         const readyDeferred = Defer();
 
         this.__serviceReady = readyDeferred.promise;
+        readyDeferred.promise.catch(() => 'Not considered uncaught rejection');
+
         this.once('ready', () => {
             readyDeferred.resolve(this);
         });
@@ -29,9 +33,10 @@ export abstract class AsyncService extends EventEmitter {
             readyDeferred.reject(err);
         });
 
-        nextTickFunc(() => {
-            this.dependencyReady().catch((err) => this.emit('error', err));
+        this.on('error', () => {
+            this.__status = 'error';
         });
+
 
         this.on('crippled', () => {
             this.__status = 'crippled';
@@ -41,16 +46,39 @@ export abstract class AsyncService extends EventEmitter {
             this.__status = 'ready';
         });
 
+        if (this.constructor.prototype.hasOwnProperty('init') && !initFuncPatchTrack.has(this.constructor.prototype)) {
+            const origFunc: Function = this.init;
+            // eslint-disable-next-line no-inner-declarations
+            function patchedInit(this: AsyncService) {
+                if (this.__status !== 'ready') {
+                    this.__status = 'pending';
+                    this.emit('pending');
+                }
+
+                return origFunc.call(this, ...arguments);
+            }
+            this.constructor.prototype.init = patchedInit;
+            initFuncPatchTrack.add(this.constructor.prototype);
+        }
+
     }
 
     get serviceStatus() {
         return this.__status;
     }
 
-    init(): any {
-        // init is mainly for automatic re-ready after crippled.
-        // it's ok to omit if service never gets crippled.
+    init(..._args: any[]): any {
+        // init is for service initialization.
+        // Service should have status `pending` during init, and `ready` after init.
+        // It should declare ready using `this.emit('ready')` at some point.
         throw new Error('Not implemented');
+    }
+
+    standDown(): any {
+        // standDown is mainly for manual service suspension.
+        // Service should have status `init` after stand-down.
+        this.__status = 'init';
+        this.emit('stand-down');
     }
 
     dependsOn(...argv: any[]) {
@@ -62,7 +90,7 @@ export abstract class AsyncService extends EventEmitter {
     }
 
     serviceReady(): Promise<this> {
-        if (this.__status === 'crippled') {
+        if (this.__status === 'crippled' || this.__status === 'init') {
             this.__status = 'pending';
 
             this.__serviceReady = new Promise((_resolve, _reject) => {
@@ -115,6 +143,9 @@ export abstract class AsyncService extends EventEmitter {
 export interface AsyncService {
     on(event: 'ready', listener: () => void): this;
     on(event: 'crippled', listener: (err?: Error | any) => void): this;
+    on(event: 'pending', listener: (err: Error) => void): this;
+    on(event: 'stand-down', listener: (err: Error) => void): this;
+
     on(event: 'error', listener: (err: Error) => void): this;
     on(event: string | symbol, listener: (...args: any[]) => void): this;
 }
