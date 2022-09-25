@@ -360,7 +360,7 @@ export abstract class AbstractX509Manager extends AsyncService {
                 return;
             }
 
-            const certificates = await this.discoverCertificates(thePath, mode);
+            const certificates = await this.loadCertificatesFromSingleDirectory(thePath, mode);
             if (certificates.length) {
                 this.emit('update', certificates, thePath);
             }

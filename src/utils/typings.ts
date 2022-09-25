@@ -46,3 +46,10 @@ export type Extract200JSONResponse<T> = 'responses' extends keyof T
 export type OpenAPIJSONRequest<T, P extends keyof T, M extends keyof T[P]> = ExtractRequestBody<T[P][M]> &
     ExtractParameters<T[P][M]>;
 export type OpenAPI200JSONResponse<T, P extends keyof T, M extends keyof T[P]> = Extract200JSONResponse<T[P][M]>;
+
+
+export type JSONPatch =
+    | { op: 'add' | 'replace' | 'test', path: string, value: any; }
+    | { op: 'copy' | 'move', from: string, path: string; }
+    | { op: 'replace', path: string, value: any; }
+    | { op: 'remove', path: string; };

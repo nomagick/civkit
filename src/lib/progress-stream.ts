@@ -2,6 +2,8 @@ import { addAbortSignal, Duplex, Readable, ReadableOptions } from 'stream';
 import { marshalErrorLike } from '../utils/lang';
 
 export enum PROGRESS_TYPE {
+    KEEPALIVE = 'keepalive',
+
     INIT = 'init',
 
     START = 'start',
@@ -9,6 +11,7 @@ export enum PROGRESS_TYPE {
     PROGRESS = 'progress',
     DONE = 'done',
 
+    WARNING = 'warning',
     ERROR = 'error',
     COMPLETE = 'complete',
 
@@ -82,6 +85,8 @@ export class ProgressStream extends Duplex {
                 this.write({ type: PROGRESS_TYPE.PROGRESS, subject, payload: percentage, ...etc }),
             done: (payload?: any, etc?: object) =>
                 this.write({ type: PROGRESS_TYPE.DONE, subject, payload, ...etc }),
+            warning: (payload?: any, etc?: object) =>
+                this.write({ type: PROGRESS_TYPE.WARNING, subject, payload, ...etc}),
             error: (error: Error | string, etc?: object) => {
                 if (typeof error === 'string') {
                     error = new Error(error);

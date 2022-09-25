@@ -17,38 +17,61 @@ export type AdditionalPropOptions<T> = Pick<
     | 'ext'
 >;
 
-export class AutoCastable {
-    protected [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string]: PropOptions<unknown>; };
-    protected [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: AdditionalPropOptions<this>;
+type Constructor<T> = { new(...args: any[]): T; };
+type Constructed<T> = T extends Partial<infer U> ? U : T extends object ? T : object;
 
-    /**
-     * Retrieve and verify an object based on the props (required, type, default and so on)
-     */
-    static from<T extends AutoCastable = AutoCastable>(input: object) {
-        const instance = new this() as T;
-
-        const entryVecs = chainEntries(this.prototype[AUTOCASTABLE_OPTIONS_SYMBOL] || {});
-        for (const [prop, config] of entryVecs) {
-            const val = inputSingle(undefined, input, prop, config);
-            if (val === undefined) {
-                continue;
-            }
-            (instance as any)[prop] = val;
-        }
-
-        if (this.prototype[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
-            const additionalConf = this.prototype[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
-            if (additionalConf?.dictOf && _.isObjectLike(input)) {
-                const namedEntryKeys = entryVecs.map(([k]) => k);
-                const dict = inputSingle(undefined, _.omit(input, ...namedEntryKeys), undefined, additionalConf);
-
-                Object.assign(instance, dict);
-            }
-        }
-
-        return instance as T;
+export abstract class AutoCastableMetaClass {
+    static [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string]: PropOptions<unknown>; };
+    static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: AdditionalPropOptions<unknown>;
+    constructor(..._args: any[]) {
+        return this as any;
     }
 }
+
+/**
+ * Retrieve and verify an object based on the props (required, type, default and so on)
+ */
+export function autoConstructor<T extends AutoCastableMetaClass>(
+    this: Constructor<Partial<T>>, input: any, ...args: ConstructorParameters<typeof this>
+): T;
+export function autoConstructor<T, U extends Constructor<AutoCastableMetaClass>>(
+    this: U, input: T, ...args: ConstructorParameters<typeof this>
+): Constructed<T>;
+export function autoConstructor(
+    this: typeof AutoCastableMetaClass, input: object, ...args: unknown[]
+) {
+    const instance = new (this as any)(...args);
+
+    const entryVecs = chainEntries((this as typeof AutoCastableMetaClass)[AUTOCASTABLE_OPTIONS_SYMBOL] || {});
+
+    for (const [prop, config] of entryVecs) {
+        const val = inputSingle(undefined, input, prop, config);
+        if (val === undefined) {
+            continue;
+        }
+        (instance as any)[prop] = val;
+    }
+
+    if (this[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
+        const additionalConf = this[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+        if (additionalConf?.dictOf && _.isObjectLike(input)) {
+            const namedEntryKeys = entryVecs.map(([k]) => k);
+            const dict = inputSingle(undefined, _.omit(input, ...namedEntryKeys), undefined, additionalConf);
+
+            Object.assign(instance, dict);
+        }
+    }
+
+    return instance as any;
+}
+
+export class AutoCastable implements AutoCastableMetaClass {
+    static [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string]: PropOptions<unknown>; };
+    static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: AdditionalPropOptions<unknown>;
+
+    static from = autoConstructor;
+}
+
 export class AutoCastingError extends Error {
     path: string;
     desc?: string;
@@ -76,7 +99,11 @@ export class AutoCastingError extends Error {
 }
 
 function makeAutoCastingErrorMessage(err: AutoCastingError) {
-    const compPath = err.path && err.propName ? (err.path === err.propName ? `(${err.path})` : `(${err.path} => ${err.propName})`) : '';
+    const compPath = (err.path && err.propName) ?
+        (err.path === err.propName ?
+            `(${err.path})` :
+            `(${err.path} => ${err.propName})`) :
+        '';
     return `At #${err.hostName || 'input'}${compPath}: ${err.reason[0]?.toUpperCase()}${err.reason.substring(1)}`;
 }
 
@@ -94,9 +121,20 @@ export function castToType(ensureTypes: any[], inputProp: any) {
     theLoop:
     for (const typeShouldBe of ensureTypes) {
         // AutoCastable types
-        if (typeShouldBe.prototype instanceof AutoCastable) {
+        if (
+            typeShouldBe instanceof AutoCastable ||
+            (
+                (typeof typeShouldBe.from === 'function') &&
+                (typeShouldBe?.[AUTOCASTABLE_OPTIONS_SYMBOL] || typeShouldBe?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL])
+            )
+        ) {
+            if (inputProp instanceof typeShouldBe) {
+                val = inputProp;
+                break;
+            }
+
             try {
-                val = (typeShouldBe as typeof AutoCastable).from(inputProp);
+                val = typeShouldBe.from(inputProp);
             } catch (err) {
                 lastErr = err;
                 continue;
@@ -199,6 +237,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
 
                     break theLoop;
                 }
+
                 break theSwitch;
             }
         }
@@ -284,7 +323,12 @@ export function inputSingle<T>(
         isDict = true;
         types = Array.isArray(config.dictOf) ? config.dictOf : [config.dictOf];
     } else if (config.type) {
-        types = Array.isArray(config.type) ? config.type : [config.type];
+        if (config.type === Array) {
+            isArray = true;
+            types = [Object];
+        } else {
+            types = Array.isArray(config.type) ? config.type : [config.type];
+        }
     } else {
         throw new Error(`Type info not provided${accessText ? `: ${accessText}` : `: ${hostName}`}`);
     }
@@ -325,8 +369,12 @@ export function inputSingle<T>(
         return undefined;
     }
 
-    if (inputProp === null && config.nullable) {
-        return null;
+    if (inputProp === null) {
+        if (config.nullable) {
+            return null;
+        }
+
+        return undefined;
     }
 
     if (isArray) {
@@ -385,12 +433,12 @@ export function inputSingle<T>(
                         result = validator(elem, input);
                     } catch (err: any) {
                         throw new AutoCastingError({
-                            reason: `Validator '${config.validate.name}' has thrown an error: ${err.toString()}.`,
+                            reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
                             path: `${accessText}`,
                             hostName,
                             propName: makePropNameArr(undefined, propName, i),
                             value: inputProp,
-                            validator: config.validate.name,
+                            validator: describeAnonymousValidateFunction(validator),
                             desc: config.desc,
                             error: err,
                         });
@@ -398,12 +446,12 @@ export function inputSingle<T>(
 
                     if (!result) {
                         throw new AutoCastingError({
-                            reason: `Rejected by validator ${config.validate.name}.`,
+                            reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
                             path: `${accessText}`,
                             hostName,
                             propName: makePropNameArr(undefined, propName, i),
                             value: inputProp,
-                            validator: config.validate.name,
+                            validator: describeAnonymousValidateFunction(validator),
                             desc: config.desc,
                         });
                     }
@@ -501,12 +549,12 @@ export function inputSingle<T>(
                         result = validator(elem, input);
                     } catch (err: any) {
                         throw new AutoCastingError({
-                            reason: `Validator '${config.validate.name}' has thrown an error: ${err.toString()}.`,
+                            reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
                             path: accessText,
                             hostName,
                             propName: makePropName(undefined, accessText, k),
                             value: inputProp,
-                            validator: config.validate.name,
+                            validator: describeAnonymousValidateFunction(validator),
                             desc: config.desc,
                             error: err,
                         });
@@ -514,12 +562,12 @@ export function inputSingle<T>(
 
                     if (!result) {
                         throw new AutoCastingError({
-                            reason: `Rejected by validator ${config.validate.name}.`,
+                            reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
                             path: accessText,
                             hostName,
                             propName: makePropName(undefined, accessText, k),
                             value: inputProp,
-                            validator: config.validate.name,
+                            validator: describeAnonymousValidateFunction(validator),
                             desc: config.desc,
                         });
                     }
@@ -617,12 +665,12 @@ export function inputSingle<T>(
                 result = validator(item, input);
             } catch (err: any) {
                 throw new AutoCastingError({
-                    reason: `Validator '${config.validate.name}' has thrown an error: ${err.toString()}.`,
+                    reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
                     path: accessText,
                     hostName,
                     propName,
                     value: inputProp,
-                    validator: config.validate.name,
+                    validator: describeAnonymousValidateFunction(validator),
                     desc: config.desc,
                     error: err,
                 });
@@ -630,12 +678,12 @@ export function inputSingle<T>(
 
             if (!result) {
                 throw new AutoCastingError({
-                    reason: `Rejected by validator ${config.validate.name}.`,
+                    reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
                     path: accessText,
                     hostName,
                     propName,
                     value: inputProp,
-                    validator: config.validate.name,
+                    validator: describeAnonymousValidateFunction(validator),
                     desc: config.desc,
                 });
             }
@@ -705,6 +753,20 @@ function enumToString(this: Set<any>) {
     return `ENUM(${str.length > 128 ? str.substring(0, 128) + '...' : str})`;
 }
 
+function describeAnonymousValidateFunction(validator: Function) {
+    if (typeof validator !== 'function') {
+        return '';
+    }
+
+    if (validator.name && validator.name !== 'validate') {
+        return validator.name;
+    }
+
+    const funcStr = validator.toString();
+
+    return funcStr.replaceAll('\n', ' ').substring(0, 128);
+}
+
 export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, designType: any) {
 
     const typeAttrs = ['type', 'arrayOf', 'dictOf'] as ['type', 'arrayOf', 'dictOf'];
@@ -737,15 +799,16 @@ export function Prop<T = any>(options: PropOptions<T> | string = {}) {
     const _options = typeof options === 'string' ? { path: options } : options;
 
     return function RPCParamPropDecorator(
-        tgt: typeof AutoCastable.prototype, propName: string
+        tgt: typeof AutoCastableMetaClass.prototype, propName: string
     ) {
-        if (!tgt[AUTOCASTABLE_OPTIONS_SYMBOL]) {
-            tgt[AUTOCASTABLE_OPTIONS_SYMBOL] = {};
-        } else if (!tgt.hasOwnProperty(AUTOCASTABLE_OPTIONS_SYMBOL)) {
-            tgt[AUTOCASTABLE_OPTIONS_SYMBOL] = Object.create(tgt[AUTOCASTABLE_OPTIONS_SYMBOL]!);
+        const constructor = tgt.constructor as typeof AutoCastable;
+        if (!constructor[AUTOCASTABLE_OPTIONS_SYMBOL]) {
+            constructor[AUTOCASTABLE_OPTIONS_SYMBOL] = {};
+        } else if (!constructor.hasOwnProperty(AUTOCASTABLE_OPTIONS_SYMBOL)) {
+            constructor[AUTOCASTABLE_OPTIONS_SYMBOL] = Object.create(constructor[AUTOCASTABLE_OPTIONS_SYMBOL]!);
         }
 
-        const hostConfig = tgt[AUTOCASTABLE_OPTIONS_SYMBOL]!;
+        const hostConfig = constructor[AUTOCASTABLE_OPTIONS_SYMBOL]!;
 
         _options.path = _options.path || propName;
 
@@ -760,12 +823,12 @@ export function Prop<T = any>(options: PropOptions<T> | string = {}) {
     };
 }
 
-export function Also<T = any>(options: AdditionalPropOptions<T> & { [k: string]: any; } = {}) {
-
+export function Also<T = any>(
+    options: AdditionalPropOptions<T> & { [k: string]: any; } = {}
+) {
     return function RPCParamPropDecorator(
-        _tgt: { new(): any; }
+        tgt: typeof AutoCastableMetaClass
     ) {
-        const tgt = _tgt.prototype;
         if (!tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
             tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] = {};
         } else if (!tgt.hasOwnProperty(AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL)) {

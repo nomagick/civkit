@@ -35,11 +35,11 @@ export interface TransferProtocolMetadata {
 }
 
 function patchTransferProtocolMeta(meta: TransferProtocolMetadata) {
-    if (Number.isInteger(meta.code)) {
+    if (Number.isInteger(meta.code) && meta.status === undefined) {
         if (meta.code! >= 100 && meta.code! < 1000) {
             meta.status = meta.code! * 100;
         }
-    } else if (Number.isInteger(meta.status)) {
+    } else if (Number.isInteger(meta.status) && meta.code === undefined) {
         // eslint-disable-next-line @typescript-eslint/no-magic-numbers
         if (meta.status! >= 10000 && meta.status! < 100000) {
             meta.code = Math.floor(meta.status! / 100);

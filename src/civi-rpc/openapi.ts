@@ -2,7 +2,8 @@ import _ from 'lodash';
 import { Readable } from 'stream';
 import { inspect } from 'util';
 import {
-    AdditionalPropOptions, AutoCastable,
+    AdditionalPropOptions,
+    AutoCastable,
     AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL, AUTOCASTABLE_OPTIONS_SYMBOL,
     PropOptions
 } from '../lib/auto-castable';
@@ -230,8 +231,8 @@ export class OpenAPIManager {
             }
         }
 
-        if (inputClass?.prototype instanceof AutoCastable) {
-            const propOptions = inputClass.prototype[AUTOCASTABLE_OPTIONS_SYMBOL];
+        const propOptions = inputClass?.[AUTOCASTABLE_OPTIONS_SYMBOL];
+        if (propOptions) {
             for (const [k, v] of chainEntries(propOptions) as [string, PropOptions<unknown>][]) {
                 if (v.path !== k) {
                     return direction === 'input' ? `${name}-dto` : name;
@@ -370,18 +371,21 @@ export class OpenAPIManager {
         return inputSchema;
     }
 
-    constructorToOpenAPISchema(input: any = Object, direction: 'input' | 'output' = 'input') {
+    constructorToOpenAPISchema(
+        input: any = Object,
+        direction: 'input' | 'output' = 'input'
+    ) {
         let final: any = undefined;
 
         let additionalOptionsApplied = false;
         let shouldAddToPrimitives = false;
         do {
-            if (input?.prototype instanceof AutoCastable) {
-                const propOptions = input.prototype[AUTOCASTABLE_OPTIONS_SYMBOL];
+            const propOptions = (input as typeof AutoCastable)?.[AUTOCASTABLE_OPTIONS_SYMBOL];
+            if (propOptions) {
                 const properties: { [k: string]: any; } = {};
                 const requiredProperties: string[] = [];
                 for (const [k, v] of chainEntries(propOptions) as [string, PropOptions<unknown>][]) {
-                    const prop = direction === input ? v.path : k;
+                    const prop = direction === 'input' ? v.path : k;
                     if (typeof prop !== 'string') {
                         continue;
                     }
@@ -398,7 +402,7 @@ export class OpenAPIManager {
                 }
 
                 const additionalOptions: AdditionalPropOptions<unknown> | undefined =
-                    input.prototype[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+                    input[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
                 const openAPIDesc: any = {
                     type: 'object',
                     properties,
@@ -475,9 +479,9 @@ export class OpenAPIManager {
             }
         } while (false);
 
-        if (!additionalOptionsApplied && input?.prototype) {
+        if (!additionalOptionsApplied && input?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
             const additionalOptions: AdditionalPropOptions<unknown> | undefined =
-                input.prototype[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+                input[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
 
             if (additionalOptions) {
                 this.applyMeta(final, additionalOptions, 'schema');
@@ -530,7 +534,7 @@ export class OpenAPIManager {
         if (Array.isArray(input)) {
             for (const x of input) {
                 const additionalOptions: AdditionalPropOptions<unknown> | undefined =
-                    x?.prototype?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+                    x?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
 
                 const partial: any = {};
                 if (additionalOptions) {
@@ -550,7 +554,7 @@ export class OpenAPIManager {
         }
 
         const additionalOptions: AdditionalPropOptions<unknown> | undefined =
-            input?.prototype?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+            input?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
 
         if (additionalOptions) {
             scene ?

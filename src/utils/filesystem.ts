@@ -1,5 +1,25 @@
-import { promises as fsp } from 'fs';
+import fs, { promises as fsp } from 'fs';
 import * as fswalk from '@nodelib/fs.walk';
+
+export async function fileExists(path: string) {
+    try {
+        await fsp.access(path);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+export async function existsSimpleFile(path: string) {
+    try {
+        const fstat = await fsp.lstat(path);
+
+        return fstat.isFile() ? fstat : undefined;
+    } catch (_e) {
+
+        return undefined;
+    }
+}
 
 export async function ensureDir(dirPath: string) {
 
@@ -11,6 +31,18 @@ export async function ensureDir(dirPath: string) {
 
     return fsp.mkdir(dirPath, { recursive: true });
 }
+
+export async function ensureDirSync(dirPath: string) {
+
+    try {
+        return (fs.statSync(dirPath)).isDirectory();
+    } catch {
+        void 0;
+    }
+
+    return fs.mkdirSync(dirPath, { recursive: true });
+}
+
 
 export async function walkDirForSummary(dirPath: string) {
     const walkStream = fswalk.walkStream(dirPath, {

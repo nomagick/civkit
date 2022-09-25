@@ -21,7 +21,6 @@ export class RPCHost extends AsyncService {
 export class Dto<T = any> extends AutoCastable {
     protected [RPC_CALL_ENVIROMENT]?: T;
 
-    static override from<T = any>(input: object): T;
     static override from(input: object): any {
         try {
             const r = super.from(input) as Dto<unknown>;
@@ -36,7 +35,7 @@ export class Dto<T = any> extends AutoCastable {
                 throw err;
             }
             if (err instanceof AutoCastingError) {
-                throw new ParamValidationError({ err });
+                throw new ParamValidationError({ ...err, err });
             }
 
             throw err;

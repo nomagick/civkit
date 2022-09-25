@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import { inspect } from 'util';
 
 export function isConstructor(f: Function) {
@@ -119,4 +120,8 @@ export function marshalErrorLike(err: Error | { [k: string]: any; } | string | n
     }
 
     return { ...err, name: err.name, message: err.message };
+}
+
+export function sortObjectKeys(input: object) {
+    return _(input).toPairs().sortBy(0).fromPairs().value();
 }

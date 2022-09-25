@@ -1,4 +1,4 @@
-import { runOnce } from 'decorators';
+import { runOnce } from '../decorators/once';
 import type { DependencyContainer } from 'tsyringe';
 import { AsyncService } from './async-service';
 import type { LoggerInterface } from './logger';
@@ -72,6 +72,14 @@ export abstract class AbstractFinalizerService extends AsyncService {
             this.logger.warn('Process terminating');
         }
 
+        await this.teardown();
+
+        this.logger.info(`All done. Process exit.`);
+        process.exit(err ? 1 : 0);
+    }
+
+    @runOnce()
+    async teardown() {
         const totalFinalizers = this.processFinalizers.length;
         let i = totalFinalizers;
         const finalizers = this.processFinalizers.reverse();
@@ -88,9 +96,5 @@ export abstract class AbstractFinalizerService extends AsyncService {
                 i -= 1;
             }
         }
-
-        this.logger.info(`All done. Process exit.`);
-        process.exit(err ? 1 : 0);
     }
-
 }
