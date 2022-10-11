@@ -1,13 +1,15 @@
 export {
     Dto,
     RPCHost, RPCParam,
-    RPC_CALL_ENVIROMENT
+    RPC_CALL_ENVIROMENT,
+    rpcExport, RPCEnvelope,
+    IntegrityEnvelope
 } from './base';
 
 export {
     APPLICATION_ERROR,
     ApplicationError,
-    ParamValidationError, 
+    ParamValidationError,
     AuthenticationFailedError,
     AuthenticationRequiredError,
     RPCMethodNotFoundError,
@@ -19,8 +21,8 @@ export {
     DataStreamBrokenError,
     DownstreamServiceError,
     ServerSubprocessError,
-    ResourceNotFoundError, 
-    OperationNotAllowedError, 
+    ResourceNotFoundError,
+    OperationNotAllowedError,
     InternalServerError,
     NotImplementedError,
     IdentifierNamespaceOccupiedError,
@@ -31,8 +33,10 @@ export {
 } from './errors';
 
 export {
-    RPC_RESULT_META_SYMBOL,
-    assignMeta, extractMeta
+    RPC_RESULT_META_SYMBOL, RPC_MARSHALL, RPC_TRANSFER_PROTOCOL_META_SYMBOL,
+    assignMeta, extractMeta,
+    TPM, transferProtocolMetaDecorated, extractTransferProtocolMeta,
+    TransferProtocolMetadata, withTransferProtocolMeta, assignTransferProtocolMeta
 } from './meta';
 
 export {

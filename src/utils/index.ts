@@ -2,7 +2,7 @@ export { defuse, Defuse, defuseObj, SafeAwait, safeAwaitObj, awaitObj } from './
 
 export { downloadFile } from './download';
 
-export { isConstructor, chainKeys, chainEntries, formatDateUTC } from './lang';
+export { isConstructor, chainStringProps, chainSymbolProps, chainEntries, formatDateUTC } from './lang';
 
 export { urlPathToSystemPath, systemPathToUrl } from './path';
 

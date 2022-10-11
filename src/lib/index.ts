@@ -80,6 +80,9 @@ export {
     NOT_RESOLVED,
     castToType,
     inputSingle,
+    AutoCastableMetaClass,
+    autoConstructor,
+    Combine
 } from './auto-castable';
 
 export {

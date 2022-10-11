@@ -10,24 +10,60 @@ export function isConstructor(f: Function) {
     return true;
 }
 
-export function chainKeys(o: object) {
+export function chainStringProps(o: object) {
     const keySet = new Set<string>();
-
     let ptr = o;
+    const chain: Array<[string, any, PropertyDescriptor?]> = [];
 
     while (ptr) {
-        for (const x of Object.keys(ptr)) {
+        const keys = Object.getOwnPropertyNames(ptr);
+        for (const x of keys) {
+            if (keySet.has(x)) {
+                continue;
+            }
+            const desc = Object.getOwnPropertyDescriptor(ptr, x);
+            if (!(desc?.enumerable)) {
+                continue;
+            }
+            chain.push([x, Reflect.get(ptr, x), desc]);
             keySet.add(x);
         }
-
         ptr = Object.getPrototypeOf(ptr);
     }
 
-    return Array.from(keySet);
+    return chain;
 }
 
-export function chainEntries(o: object) {
-    return chainKeys(o).map((x) => [x, (o as any)[x]]);
+export function chainSymbolProps(o: object) {
+    const symbolSet = new Set<symbol>();
+    let ptr = o;
+    const chain: Array<[symbol, any, PropertyDescriptor?]> = [];
+
+    while (ptr) {
+        const symbols = Object.getOwnPropertySymbols(ptr);
+        for (const x of symbols) {
+            if (symbolSet.has(x)) {
+                continue;
+            }
+            const desc = Object.getOwnPropertyDescriptor(ptr, x);
+            if (!(desc?.enumerable)) {
+                continue;
+            }
+            chain.push([x, Reflect.get(ptr, x), desc]);
+            symbolSet.add(x);
+        }
+        ptr = Object.getPrototypeOf(ptr);
+    }
+
+    return chain;
+}
+
+export function chainEntries(o: object): Array<[string, any, PropertyDescriptor?]>;
+export function chainEntries(o: object, withSymbol: true | string): Array<[string | symbol, any, PropertyDescriptor?]>;
+export function chainEntries(o: object, withSymbol?: true | string) {
+    const r = chainStringProps(o) as Array<[string | symbol, any, PropertyDescriptor?]>;
+
+    return withSymbol ? r.concat(chainSymbolProps(o)) : r;
 }
 
 export const NATIVE_CLASS_PROTOTYPES = new Map();

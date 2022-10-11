@@ -1,4 +1,11 @@
 /* eslint-disable @typescript-eslint/no-magic-numbers */
+import {
+    AutoCastable, Prop, autoConstructor, Also
+} from '../lib/auto-castable';
+import {
+    assignTransferProtocolMeta, extractTransferProtocolMeta,
+    RPC_TRANSFER_PROTOCOL_META_SYMBOL, RPC_MARSHALL
+} from './meta';
 
 export enum APPLICATION_ERROR {
     UNKNOWN_ERROR = -1,
@@ -23,6 +30,9 @@ export enum APPLICATION_ERROR {
     INTERNAL_RESOURCE_METHOD_NOT_ALLOWED = 40501,
     INCOMPATIBLE_METHOD_ERROR = 40502,
 
+    TIMEOUT_EXPECTING_EVENT = 40801,
+    TIMEOUT_EXPECTING_TASK_COMPLETE = 40802,
+
     INTERNAL_RESOURCE_ID_CONFLICT = 40901,
     RESOURCE_POLICY_DENY = 40902,
 
@@ -41,15 +51,113 @@ export enum APPLICATION_ERROR {
     SANDBOX_BUILD_NOT_FOUND = 50004,
     NOT_IMPLEMENTED_ERROR = 50005,
     RESPONSE_STREAM_CLOSED = 50006,
+
+    NO_APPROPRIATE_X509_CERTIFICATE_ERROR = 50102,
 }
 
 const keyExcept = new Set(['status', 'stack', 'message', 'name', 'readableMessage']);
-export class ApplicationError extends Error {
-    code: string | number;
-    status: number;
+
+export function StatusCode(status: APPLICATION_ERROR | number) {
+    return function statusCodeDecorator<T extends typeof ApplicationError>(tgt: T) {
+        const code = (status) > 1000 ? parseInt(`${status}`.substring(0, 3), 10) : status;
+        Object.defineProperty(tgt.prototype, 'status', {
+            value: status,
+            writable: true,
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(tgt.prototype, 'code', {
+            value: code,
+            writable: true,
+            enumerable: true,
+            configurable: true
+        });
+
+        Prop({
+            type: String,
+            desc: 'Name of the error class',
+            default: tgt.constructor.name,
+            required: true,
+            openapi: { omitted: true }
+        })(tgt.prototype, 'name');
+
+        Prop({
+            type: Number,
+            desc: 'Expect HTTP response codes',
+            default: code,
+            required: true,
+        })(tgt.prototype, 'code');
+
+        Prop({
+            type: Number,
+            desc: 'Application status code for the error in extension to HTTP status codes',
+            default: status,
+            required: true,
+        })(tgt.prototype, 'status');
+
+        return;
+    };
+}
+
+@Also({
+    dictOf: Object
+})
+@StatusCode(500000)
+export class ApplicationError extends Error implements AutoCastable {
+    static from(input: string | object, status: number, detail?: any) {
+        let _input = input;
+        if (typeof input === 'string') {
+            _input = { message: input };
+        }
+        const instance = autoConstructor.call(this, _input, status, detail) as ApplicationError;
+
+        Error.captureStackTrace(instance, this.from);
+        instance._fixStack();
+
+        return instance;
+    }
+
+    get [RPC_TRANSFER_PROTOCOL_META_SYMBOL]() {
+        return {
+            code: this.code,
+            status: this.status,
+            contentType: 'application/json',
+        };
+    }
+
+    @Prop({
+        required: true
+    })
+    override name: string;
+
+    @Prop({
+        required: true
+    })
+    override message: string;
+
+    @Prop({
+        openapi: { omitted: true }
+    })
+    override stack!: string;
+
+    @Prop({
+        type: Number,
+        required: true
+    })
+    code!: string | number;
+
+    @Prop({
+        required: true
+    })
+    status!: number;
+
+    @Prop()
     readableMessage: string;
 
-    err?: Error;
+    @Prop({
+        openapi: { omitted: true }
+    })
+    cause?: Error;
 
     [k: string]: any;
 
@@ -61,13 +169,10 @@ export class ApplicationError extends Error {
         this.err = err;
     }
 
-    constructor(status: number, detail?: any) {
-        super(`ApplicationError: ${status}`);
+    constructor(detail?: any) {
+        super();
         this.name = Object.getPrototypeOf(this).constructor.name;
-        this.message = `${status}`;
-        this.readableMessage = `${this.constructor.name}: ${status}`;
-        this.status = status;
-        this.code = status > 1000 ? parseInt(`${status}`.substring(0, 3), 10) : status;
+        this.message = `${this.status}`;
 
         if (typeof detail === 'object') {
             if (detail instanceof Error) {
@@ -78,14 +183,23 @@ export class ApplicationError extends Error {
         } else if (typeof detail === 'string') {
             this.message = detail;
         }
-        if (this.err?.stack && this.stack) {
+
+        if (this.hasOwnProperty('status')) {
+            this.code = (this.status) > 1000 ? parseInt(`${this.status}`.substring(0, 3), 10) : this.status;
+        }
+
+        this.readableMessage = `${this.name}: ${this.message}`;
+
+        this._fixStack();
+    }
+
+    _fixStack() {
+        if (this.cause?.stack && this.stack) {
             const message_lines = (this.message.match(/\n/g) || []).length + 1;
             this.stack = this.stack.split('\n').slice(0, message_lines + 1).join('\n') +
                 '\n\nWhich was derived from:\n\n' +
                 this.err.stack;
         }
-
-        this.readableMessage = `${this.name}: ${this.message}`;
     }
 
     override toString() {
@@ -133,166 +247,112 @@ export class ApplicationError extends Error {
     toJSON() {
         return this.toObject();
     }
+
+    [RPC_MARSHALL]() {
+        const exportObj = this.toObject();
+        return assignTransferProtocolMeta(
+            {
+                data: null,
+                ...exportObj,
+                message: `${exportObj.name}: ${exportObj.message}`,
+            },
+            extractTransferProtocolMeta(this)
+        );
+    }
 }
 
+@StatusCode(APPLICATION_ERROR.PARAM_VALIDATION_ERROR)
 export class ParamValidationError extends ApplicationError {
     constructor(detail?: any) {
-        super(APPLICATION_ERROR.PARAM_VALIDATION_ERROR, detail);
+        super(detail);
         this.readableMessage = `ParamValidationError(${this.path}): ${this.message}`;
     }
 }
 
-export class AuthenticationFailedError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.AUTHENTICATION_FAILED, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.AUTHENTICATION_FAILED)
+export class AuthenticationFailedError extends ApplicationError { }
 
-export class AuthenticationRequiredError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.AUTHENTICATION_REQUIRED, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.AUTHENTICATION_REQUIRED)
+export class AuthenticationRequiredError extends ApplicationError { }
 
-export class ResourceNotFoundError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.INTERNAL_RESOURCE_NOT_FOUND, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.INTERNAL_RESOURCE_NOT_FOUND)
+export class ResourceNotFoundError extends ApplicationError { }
 
-export class RPCMethodNotFoundError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.RPC_METHOD_NOT_FOUND, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.RPC_METHOD_NOT_FOUND)
+export class RPCMethodNotFoundError extends ApplicationError { }
 
-export class RequestedEntityNotFoundError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.REQUESTED_ENTITY_NOT_FOUND, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.REQUESTED_ENTITY_NOT_FOUND)
+export class RequestedEntityNotFoundError extends ApplicationError { }
 
-export class ResourceMethodNotAllowedError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.INTERNAL_RESOURCE_METHOD_NOT_ALLOWED, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.INTERNAL_RESOURCE_METHOD_NOT_ALLOWED)
+export class ResourceMethodNotAllowedError extends ApplicationError { }
 
-export class IncompatibleMethodError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.INCOMPATIBLE_METHOD_ERROR, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.INCOMPATIBLE_METHOD_ERROR)
+export class IncompatibleMethodError extends ApplicationError { }
+
+@StatusCode(APPLICATION_ERROR.TIMEOUT_EXPECTING_EVENT)
+export class TimeoutExpectingEventError extends ApplicationError { }
+
+@StatusCode(APPLICATION_ERROR.TIMEOUT_EXPECTING_TASK_COMPLETE)
+export class TimeoutExpectingTaskCompleteError extends ApplicationError { }
 
 
-export class OperationNotAllowedError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.OPERATION_NOT_ALLOWED, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.OPERATION_NOT_ALLOWED)
+export class OperationNotAllowedError extends ApplicationError { }
 
-export class SSOSuperUserRequiredError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.SSO_SUPER_USER_REQUIRED, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.ASSERTION_FAILURE)
+export class AssertionFailureError extends ApplicationError { }
 
-export class AssertionFailureError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.ASSERTION_FAILURE, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.INTERNAL_RESOURCE_ID_CONFLICT)
+export class ResourceIdConflictError extends ApplicationError { }
 
-export class ResourceIdConflictError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.INTERNAL_RESOURCE_ID_CONFLICT, detail);
-    }
-}
-export class ResourcePolicyDenyError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.RESOURCE_POLICY_DENY, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.RESOURCE_POLICY_DENY)
+export class ResourcePolicyDenyError extends ApplicationError { }
 
-export class DataCorruptionError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.INTERNAL_DATA_CORRUPTION, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.INTERNAL_DATA_CORRUPTION)
+export class DataCorruptionError extends ApplicationError { }
 
-export class DataStreamBrokenError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.DATA_STREAM_BROKEN_ERROR, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.DATA_STREAM_BROKEN_ERROR)
+export class DataStreamBrokenError extends ApplicationError { }
 
-export class UnexpectedMimeTypeError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.UNEXPECTED_MIME_TYPE_ERROR, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.UNEXPECTED_MIME_TYPE_ERROR)
+export class UnexpectedMimeTypeError extends ApplicationError { }
 
-export class DownstreamServiceError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.DOWNSTREAM_SERVICE_ERROR, detail);
-    }
-}
-export class ServerSubprocessError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.SERVER_SUBPROCESS_ERROR, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.DOWNSTREAM_SERVICE_ERROR)
+export class DownstreamServiceError extends ApplicationError { }
 
-export class InternalServerError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.SERVER_INTERNAL_ERROR, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.SERVER_SUBPROCESS_ERROR)
+export class ServerSubprocessError extends ApplicationError { }
 
-export class NotImplementedError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.NOT_IMPLEMENTED_ERROR, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.SERVER_INTERNAL_ERROR)
+export class InternalServerError extends ApplicationError { }
 
-export class IdentifierNamespaceOccupiedError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.IDENTIFIER_NAMESPACE_OCCUPIED, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.NOT_IMPLEMENTED_ERROR)
+export class NotImplementedError extends ApplicationError { }
 
-export class ExternalServiceFailureError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.EXTERNAL_SERVICE_FAILURE, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.NO_APPROPRIATE_X509_CERTIFICATE_ERROR)
+export class NoAppropriateX509CertificateError extends ApplicationError { }
 
-export class DownstreamServiceFailureError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.DOWNSTREAM_SERVICE_FAILURE, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.IDENTIFIER_NAMESPACE_OCCUPIED)
+export class IdentifierNamespaceOccupiedError extends ApplicationError { }
 
-export class SubmittedDataMalformedError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.SUBMITTED_DATA_MALFORMED, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.EXTERNAL_SERVICE_FAILURE)
+export class ExternalServiceFailureError extends ApplicationError { }
 
-export class RequestPayloadTooLargeError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.REQUEST_PAYLOAD_TOO_LARGE, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.DOWNSTREAM_SERVICE_FAILURE)
+export class DownstreamServiceFailureError extends ApplicationError { }
 
-export class SandboxBuildNotFoundError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.SANDBOX_BUILD_NOT_FOUND, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.SUBMITTED_DATA_MALFORMED)
+export class SubmittedDataMalformedError extends ApplicationError { }
 
-export class ResponseStreamClosedError extends ApplicationError {
-    constructor(detail?: any) {
-        super(APPLICATION_ERROR.RESPONSE_STREAM_CLOSED, detail);
-    }
-}
+@StatusCode(APPLICATION_ERROR.REQUEST_PAYLOAD_TOO_LARGE)
+export class RequestPayloadTooLargeError extends ApplicationError { }
+
+@StatusCode(APPLICATION_ERROR.SANDBOX_BUILD_NOT_FOUND)
+export class SandboxBuildNotFoundError extends ApplicationError { }
+
+@StatusCode(APPLICATION_ERROR.RESPONSE_STREAM_CLOSED)
+export class ResponseStreamClosedError extends ApplicationError { }
+
+@StatusCode(APPLICATION_ERROR.SSO_SUPER_USER_REQUIRED)
+export class SSOSuperUserRequiredError extends ApplicationError { }

@@ -1,8 +1,8 @@
 import { Transform, TransformCallback, TransformOptions } from 'stream';
-import { TransferProtocolMetadata } from '../civi-rpc/meta';
+import { TPM } from '../civi-rpc/meta';
 
 
-@TransferProtocolMetadata({
+@TPM({
     contentType: 'application/x-ndjson; charset=UTF-8'
 })
 export class NDJsonStream extends Transform {

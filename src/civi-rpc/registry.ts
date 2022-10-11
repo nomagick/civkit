@@ -1,9 +1,13 @@
-import { RPCHost, RPC_CALL_ENVIROMENT } from './base';
+import { RPCEnvelope, RPCHost, RPC_CALL_ENVIROMENT } from './base';
 import { AsyncService } from '../lib/async-service';
 import { RPCMethodNotFoundError, ParamValidationError, ApplicationError } from './errors';
 import type { container as DIContainer } from 'tsyringe';
-import { AutoCastingError, inputSingle, PropOptions, __patchPropOptionsEnumToSet } from '../lib/auto-castable';
+import {
+    AutoCastableMetaClass,
+    AutoCastingError, inputSingle, PropOptions, __patchPropOptionsEnumToSet
+} from '../lib/auto-castable';
 import { RestParameters, shallowDetectRestParametersKeys } from './magic';
+import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 
 export interface RPCOptions {
     name: string | string[];
@@ -13,20 +17,27 @@ export interface RPCOptions {
     nameOnProto?: any;
     method?: Function;
     returnType?: Function | Function[];
+    returnCombinationOf?: (typeof AutoCastableMetaClass)[];
     returnArrayOf?: Function | Function[];
     returnDictOf?: Function | Function[];
-    returnMetaType?: Function | Function[];
+    returnMetaType?: (typeof AutoCastableMetaClass) | (typeof AutoCastableMetaClass)[];
     desc?: string;
     markdown?: string;
     ext?: { [k: string]: any; };
     deprecated?: boolean;
     tags?: string[];
+    throws?: Function | Function[];
+
+    envelope?: typeof RPCEnvelope | null;
+
     [k: string]: any;
 }
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
 
 export abstract class AbstractRPCRegistry extends AsyncService {
+    static envelope: typeof RPCEnvelope = RPCEnvelope;
+
     private __tick: number = 1;
 
     abstract container: typeof DIContainer;
@@ -51,7 +62,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         const name = Array.isArray(options.name) ? options.name.join('.') : options.name;
 
         if (!name) {
-            throw new Error('RPC name is required');
+            throw new ParamValidationError('RPC name is required');
         }
 
         if (this.conf.has(name)) {
@@ -174,6 +185,54 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         return func.call(conf.host, input);
     }
+
+    protected resolveEnvelopeClass<T extends typeof RPCEnvelope>(envelopeClass: T) {
+        if (this.container.isRegistered(envelopeClass)) {
+
+            return this.container.resolve(envelopeClass);
+        }
+
+        const instance = new envelopeClass();
+        this.container.register(envelopeClass, { useValue: instance });
+
+        return instance;
+    }
+
+    async call(name: string, input: object, overrideEnvelopeClass?: typeof RPCEnvelope): Promise<{
+        tpm?: TransferProtocolMetadata;
+        output: any,
+        succ: boolean,
+        err?: any;
+    }> {
+        const rpcDefinedEnvelope = this.conf.get(name)?.envelope;
+
+        let envelopeClass = overrideEnvelopeClass ||
+            (rpcDefinedEnvelope === null ? RPCEnvelope : rpcDefinedEnvelope) ||
+            (this.constructor as typeof AbstractRPCRegistry).envelope;
+        let envelopeInstance: RPCEnvelope = this.resolveEnvelopeClass(envelopeClass);
+        let result: any;
+        try {
+            result = await this.exec(name, input);
+
+            const tpm = extractTransferProtocolMeta(result);
+            if (!overrideEnvelopeClass && (tpm?.envelope || tpm?.envelope === null)) {
+                envelopeClass = tpm.envelope || RPCEnvelope;
+                envelopeInstance = this.resolveEnvelopeClass(envelopeClass);
+            }
+
+            return {
+                ...await envelopeInstance.wrap(result, extractMeta(result)),
+                succ: true
+            };
+        } catch (err) {
+            return {
+                ...await envelopeInstance.wrapError(err),
+                succ: false,
+                err
+            };
+        }
+    }
+
 
     host(name: string) {
         const conf = this.conf.get(name);

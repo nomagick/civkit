@@ -1,8 +1,19 @@
+/* eslint-disable @typescript-eslint/no-magic-numbers */
 import 'reflect-metadata';
 import { ParamValidationError, ApplicationError } from './errors';
 import { AsyncService } from '../lib/async-service';
-import { assignMeta, extractMeta } from './meta';
-import { AutoCastable, AutoCastingError } from '../lib/auto-castable';
+import {
+    assignMeta, extractMeta, extractTransferProtocolMeta,
+    RPC_MARSHALL,
+    RPC_TRANSFER_PROTOCOL_META_SYMBOL,
+    TransferProtocolMetadata,
+    TPM
+} from './meta';
+import { AutoCastable, AutoCastableMetaClass, AutoCastingError, Prop, PropOptions } from '../lib/auto-castable';
+import { marshalErrorLike } from '../utils/lang';
+import { Readable } from 'stream';
+import { RPCOptions } from './registry';
+import _ from 'lodash';
 
 export const RPC_CALL_ENVIROMENT = Symbol('RPCEnv');
 
@@ -20,6 +31,7 @@ export class RPCHost extends AsyncService {
 
 export class Dto<T = any> extends AutoCastable {
     protected [RPC_CALL_ENVIROMENT]?: T;
+    protected [RPC_MARSHALL]?: (...args: any[]) => any;
 
     static override from(input: object): any {
         try {
@@ -44,3 +56,242 @@ export class Dto<T = any> extends AutoCastable {
 }
 
 export const RPCParam = Dto;
+
+export async function rpcExport(sth: any, stackDepth = 0): Promise<any> {
+    if (stackDepth >= 10) {
+        throw new Error('Maximum rpc export stack depth reached');
+    }
+    if (typeof sth?.[RPC_MARSHALL] === 'function') {
+        return rpcExport(await sth[RPC_MARSHALL](), stackDepth + 1);
+    }
+
+    return sth;
+}
+
+export class RPCEnvelope {
+    async wrap(data: any, _meta?: object) {
+        const result = await rpcExport(data);
+
+        return {
+            tpm: {
+                code: 200,
+                ...(extractTransferProtocolMeta(result) || extractTransferProtocolMeta(data))
+            },
+            output: result,
+        } as { tpm?: TransferProtocolMetadata; output: any; };
+    }
+
+    async wrapError(err: any) {
+        const result = await rpcExport(err);
+
+        return {
+            tpm: {
+                code: 500,
+                ...(extractTransferProtocolMeta(result) || extractTransferProtocolMeta(err))
+            },
+            output: result,
+        } as { tpm?: TransferProtocolMetadata; output: any; };
+    }
+
+    describeWrap(rpcOptions: RPCOptions): Partial<RPCOptions> {
+        return rpcOptions;
+    }
+}
+
+export class IntegrityEnvelope extends RPCEnvelope {
+    override async wrap(data: any, meta?: object) {
+        let code = 200;
+        let status = 20000;
+        let wrapOutput = true;
+        const draft = await rpcExport(data);
+        const tpm = extractTransferProtocolMeta(draft) || extractTransferProtocolMeta(data);
+
+        if (tpm) {
+            code = tpm.code || code;
+            status = tpm.status || code;
+        }
+
+        if (
+            draft instanceof Readable ||
+            (typeof draft?.pipe === 'function') ||
+            Buffer.isBuffer(draft)
+        ) {
+            wrapOutput = false;
+        }
+
+        return {
+            tpm: {
+                code: 200,
+                status: 20000,
+                contentType: wrapOutput ? 'application/json' : undefined,
+                ...tpm
+            },
+            output: wrapOutput ? {
+                code,
+                status,
+                data: draft,
+                meta
+            } : draft
+        };
+    }
+
+    override describeWrap(rpcOptions: RPCOptions) {
+        const envelopeClassName = this.constructor.name;
+        const wrappedPropOptions: PropOptions<any> = {};
+        if (rpcOptions.returnArrayOf) {
+            wrappedPropOptions.arrayOf = rpcOptions.returnArrayOf;
+        } else if (rpcOptions.returnDictOf) {
+            wrappedPropOptions.dictOf = rpcOptions.returnDictOf;
+        } else if (rpcOptions.returnCombinationOf) {
+            wrappedPropOptions.combinationOf = rpcOptions.returnCombinationOf;
+        }
+
+        if (
+            wrappedPropOptions.arrayOf ||
+            wrappedPropOptions.dictOf ||
+            wrappedPropOptions.combinationOf
+        ) {
+            @TPM({
+                code: 200,
+                status: 20000,
+                contentType: 'application/json'
+            })
+            class WrappedOutput extends AutoCastableMetaClass {
+                @Prop({
+                    type: Number, default: 200, required: true,
+                    desc: 'Envelope code.\n\nMirror of HTTP status code',
+                    partOf: envelopeClassName,
+                })
+                code!: number;
+
+                @Prop({
+                    type: Number, default: 20000, required: true,
+                    desc: 'Envelope status.\n\nIn extension to HTTP status code',
+                    partOf: envelopeClassName,
+                })
+                status!: number;
+
+                @Prop({
+                    ..._.pick(wrappedPropOptions, ['arrayOf', 'dictOf', 'combinationOf']),
+                    desc: 'The result payload you expect',
+                    partOf: envelopeClassName,
+                })
+                data!: any;
+
+                @Prop({
+                    combinationOf: rpcOptions.returnMetaType,
+                    desc: 'The metadata that the payload sometimes came with',
+                    partOf: envelopeClassName,
+                })
+                meta?: any;
+            }
+
+            const types = wrappedPropOptions.arrayOf || wrappedPropOptions.dictOf || wrappedPropOptions.combinationOf;
+
+            const typeNames = Array.isArray(types) ? types.map((x) => x.name).filter(Boolean).join('And') : types.name;
+            const metaNames = Array.isArray(rpcOptions.returnMetaType) ?
+                rpcOptions.returnMetaType.map((x) => x.name).filter(Boolean).join('And') :
+                rpcOptions.returnMetaType?.name;
+
+            Object.defineProperty(WrappedOutput, 'name', {
+                value: `${this.constructor.name}WrappedOutputOf${typeNames}${metaNames ? `WithMeta${metaNames}` : ''}`,
+            });
+
+            return {
+                ..._.omit(rpcOptions, ['returnType', 'returnArrayOf', 'returnDictOf', 'returnCombinationOf']),
+                returnType: WrappedOutput as any
+            };
+        }
+        const types = Array.isArray(rpcOptions.returnType) ? rpcOptions.returnType : [rpcOptions.returnType];
+        const finalTypes = types.map((x) => {
+            if (
+                x === Readable ||
+                (x?.prototype instanceof Readable) ||
+                (typeof x?.prototype?.pipe) === 'function'
+            ) {
+                return x;
+            } else if (
+                x === Buffer ||
+                x?.prototype instanceof Buffer
+            ) {
+                return x;
+            }
+
+            class WrappedOutput extends AutoCastableMetaClass {
+
+                get [RPC_TRANSFER_PROTOCOL_META_SYMBOL]() {
+                    return {
+                        code: 200,
+                        status: 20000,
+                        contentType: 'application/json',
+                        ...x?.prototype?.[RPC_TRANSFER_PROTOCOL_META_SYMBOL],
+                    };
+                }
+
+                @Prop({
+                    type: Number, default: 200, required: true,
+                    partOf: envelopeClassName,
+                    desc: 'Envelope code.\n\nMirror of HTTP status code',
+                })
+                code!: number;
+
+                @Prop({
+                    type: Number, default: 20000, required: true,
+                    partOf: envelopeClassName,
+                    desc: 'Envelope status.\n\nIn extension to HTTP status code',
+                })
+                status!: number;
+
+                @Prop({
+                    type: x,
+                    partOf: envelopeClassName,
+                    desc: `The result payload you expect`,
+                })
+                data!: typeof x;
+
+                @Prop({
+                    combinationOf: rpcOptions.returnMetaType,
+                    partOf: envelopeClassName,
+                    desc: 'The metadata that the payload sometimes came with',
+                })
+                meta?: any;
+            }
+
+            const metaNames = Array.isArray(rpcOptions.returnMetaType) ?
+                rpcOptions.returnMetaType.map((x) => x.name).filter(Boolean).join('And') :
+                rpcOptions.returnMetaType?.name;
+
+            Object.defineProperty(WrappedOutput, 'name', {
+                value: `${this.constructor.name}WrappedOutputOf${x?.name}${metaNames ? `WithMeta${metaNames}` : ''}`,
+            });
+
+            return WrappedOutput;
+        });
+
+        return {
+            ..._.omit(rpcOptions, ['returnType', 'returnArrayOf', 'returnDictOf', 'returnCombinationOf']),
+            returnType: finalTypes as any[],
+        };
+    }
+
+
+    override async wrapError(err: any) {
+        let draft = await rpcExport(err);
+
+        if (err === draft) {
+            draft = marshalErrorLike(err);
+        }
+
+        const tpm = extractTransferProtocolMeta(err);
+
+        return {
+            tpm: {
+                code: 500,
+                status: 50000,
+                contentType: 'application/json',
+                ...tpm,
+            },
+            output: draft
+        };
+    }
+}

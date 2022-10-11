@@ -14,6 +14,7 @@ export type AdditionalPropOptions<T> = Pick<
     | 'validate'
     | 'validateCollection'
     | 'desc'
+    | 'openapi'
     | 'ext'
 >;
 
@@ -26,6 +27,84 @@ export abstract class AutoCastableMetaClass {
     constructor(..._args: any[]) {
         return this as any;
     }
+}
+
+export function Combine<T1 extends typeof AutoCastableMetaClass, T2 extends typeof AutoCastableMetaClass>(
+    t1: T1, t2: T2
+): Constructor<InstanceType<T1> & InstanceType<T2>>;
+export function Combine<
+    T1 extends typeof AutoCastableMetaClass,
+    T2 extends typeof AutoCastableMetaClass,
+    T3 extends typeof AutoCastableMetaClass
+>(
+    t1: T1, t2: T2, t3: T3
+): Constructor<InstanceType<T1> & InstanceType<T2> & InstanceType<T3>>;
+export function Combine<
+    T1 extends typeof AutoCastableMetaClass,
+    T2 extends typeof AutoCastableMetaClass,
+    T3 extends typeof AutoCastableMetaClass,
+    T4 extends typeof AutoCastableMetaClass,
+    >(
+        t1: T1, t2: T2, t3: T3, t4: T4
+    ): Constructor<InstanceType<T1> & InstanceType<T2> & InstanceType<T3> & InstanceType<T4>>;
+export function Combine(
+    ...autoCastableClasses: Function[]
+): Constructor<any>;
+export function Combine<T extends typeof AutoCastableMetaClass>(
+    ...autoCastableClasses: T[]
+) {
+    const argArr = Array.from(autoCastableClasses);
+    const arr = argArr.reverse();
+
+    const opts: { [k: string | symbol]: PropOptions<unknown>; } = {};
+    const extOpts: AdditionalPropOptions<unknown> = {};
+    class NaivelyMergedClass extends AutoCastableMetaClass {
+        static [AUTOCASTABLE_OPTIONS_SYMBOL] = opts;
+        static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] = extOpts;
+        constructor(...args: any[]) {
+            super();
+            for (const cls of arr) {
+                (cls as any).call(this, ...args);
+            }
+
+            return this as any;
+        }
+    }
+
+    for (const cls of arr) {
+        for (const [k, v] of chainEntries(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
+            opts[k] = { ...v, partOf: cls.name };
+        }
+        _.merge(extOpts, cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {});
+
+        for (const [k, v, desc] of chainEntries(cls.prototype, 'With Symbol')) {
+            Object.defineProperty(NaivelyMergedClass.prototype, k, desc || { value: v, enumerable: true });
+        }
+
+        for (const [k, v, desc] of chainEntries(cls, 'With Symbol')) {
+            Object.defineProperty(NaivelyMergedClass, k, desc || { value: v, enumerable: true });
+        }
+    }
+
+    if (argArr.includes(Object as any)) {
+        if (!extOpts.dictOf) {
+            extOpts.dictOf = Object;
+        } else if (Array.isArray(extOpts.dictOf) && !extOpts.dictOf.includes(Object)) {
+            extOpts.dictOf.push(Object);
+        }
+    }
+
+    Object.assign(NaivelyMergedClass, {
+        [AUTOCASTABLE_OPTIONS_SYMBOL]: opts,
+        [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]: extOpts,
+    });
+
+    Object.defineProperty(NaivelyMergedClass, 'name', {
+        value: `NaivelyMerged${argArr.map((x) => x.name).join('And')}`,
+        writable: false,
+    });
+
+    return NaivelyMergedClass as any;
 }
 
 /**
@@ -70,6 +149,10 @@ export class AutoCastable implements AutoCastableMetaClass {
     static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: AdditionalPropOptions<unknown>;
 
     static from = autoConstructor;
+
+    constructor(..._args: any[]) {
+        return this as any;
+    }
 }
 
 export class AutoCastingError extends Error {
@@ -122,7 +205,8 @@ export function castToType(ensureTypes: any[], inputProp: any) {
     for (const typeShouldBe of ensureTypes) {
         // AutoCastable types
         if (
-            typeShouldBe instanceof AutoCastable ||
+            typeShouldBe.prototype instanceof AutoCastable ||
+            typeShouldBe.prototype instanceof AutoCastableMetaClass ||
             (
                 (typeof typeShouldBe.from === 'function') &&
                 (typeShouldBe?.[AUTOCASTABLE_OPTIONS_SYMBOL] || typeShouldBe?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL])
@@ -134,7 +218,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
             }
 
             try {
-                val = typeShouldBe.from(inputProp);
+                val = typeShouldBe.from ? typeShouldBe.from(inputProp) : autoConstructor.call(typeShouldBe, inputProp);
             } catch (err) {
                 lastErr = err;
                 continue;
@@ -282,7 +366,7 @@ function makePropName(superName?: string, propName?: string | symbol, objIdx?: s
     }
 
     if (superName) {
-        p3 = `${p2 ? '.' : ''}${superName}`;
+        p3 = `${(p1 || p2) ? '.' : ''}${superName}`;
     }
 
     return `${p1}${p2}${p3}`;
@@ -322,6 +406,12 @@ export function inputSingle<T>(
     } else if (config.dictOf) {
         isDict = true;
         types = Array.isArray(config.dictOf) ? config.dictOf : [config.dictOf];
+    } else if (config.combinationOf) {
+        if (Array.isArray(config.combinationOf)) {
+            types = [Combine(...config.combinationOf)];
+        } else {
+            types = [config.combinationOf];
+        }
     } else if (config.type) {
         if (config.type === Array) {
             isArray = true;
@@ -391,7 +481,7 @@ export function inputSingle<T>(
             try {
                 elem = castToType(types, x);
             } catch (err: any) {
-                if (err.propName) {
+                if (err.propName || err.path) {
                     err.hostName = hostName;
                     err.propName = makePropNameArr(err.propName, propName, i);
                     err.path = makePropNameArr(err.path, accessText, i);
@@ -434,7 +524,7 @@ export function inputSingle<T>(
                     } catch (err: any) {
                         throw new AutoCastingError({
                             reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
-                            path: `${accessText}`,
+                            path: makePropNameArr(undefined, accessText, i),
                             hostName,
                             propName: makePropNameArr(undefined, propName, i),
                             value: inputProp,
@@ -447,7 +537,7 @@ export function inputSingle<T>(
                     if (!result) {
                         throw new AutoCastingError({
                             reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
-                            path: `${accessText}`,
+                            path: makePropNameArr(undefined, accessText, i),
                             hostName,
                             propName: makePropNameArr(undefined, propName, i),
                             value: inputProp,
@@ -470,16 +560,30 @@ export function inputSingle<T>(
                 config.validateCollection : [config.validateCollection];
 
             for (const validator of validators) {
-                const result = validator(values, input);
+                let result;
+                try {
+                    result = validator(values, input);
+                } catch (err: any) {
+                    throw new AutoCastingError({
+                        reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
+                        path: makePropNameArr(undefined, accessText),
+                        hostName,
+                        propName: makePropNameArr(undefined, propName),
+                        value: arrayInput,
+                        validator: describeAnonymousValidateFunction(validator),
+                        desc: config.desc,
+                        error: err,
+                    });
+                }
 
                 if (!result) {
                     throw new AutoCastingError({
-                        reason: `Rejected by collection validator ${config.validateCollection.name}.`,
-                        path: `${accessText}`,
+                        reason: `Rejected by collection validator ${describeAnonymousValidateFunction(validator)}.`,
+                        path: makePropNameArr(undefined, accessText),
                         hostName,
-                        propName,
+                        propName: makePropNameArr(undefined, propName),
                         value: arrayInput,
-                        validator: config.validateCollection.name,
+                        validator: describeAnonymousValidateFunction(validator),
                         desc: config.desc,
                     });
                 }
@@ -507,7 +611,7 @@ export function inputSingle<T>(
             try {
                 elem = castToType(types, v);
             } catch (err: any) {
-                if (err.propName) {
+                if (err.propName || err.path) {
                     err.hostName = hostName;
                     err.propName = makePropName(err.propName, propName, k);
                     err.path = makePropName(err.path, accessText, k);
@@ -550,9 +654,9 @@ export function inputSingle<T>(
                     } catch (err: any) {
                         throw new AutoCastingError({
                             reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
-                            path: accessText,
+                            path: makePropName(undefined, accessText, k),
                             hostName,
-                            propName: makePropName(undefined, accessText, k),
+                            propName: makePropName(undefined, propName, k),
                             value: inputProp,
                             validator: describeAnonymousValidateFunction(validator),
                             desc: config.desc,
@@ -563,9 +667,9 @@ export function inputSingle<T>(
                     if (!result) {
                         throw new AutoCastingError({
                             reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
-                            path: accessText,
+                            path: makePropName(undefined, accessText, k),
                             hostName,
-                            propName: makePropName(undefined, accessText, k),
+                            propName: makePropName(undefined, propName, k),
                             value: inputProp,
                             validator: describeAnonymousValidateFunction(validator),
                             desc: config.desc,
@@ -586,16 +690,30 @@ export function inputSingle<T>(
                 config.validateCollection : [config.validateCollection];
 
             for (const validator of validators) {
-                const result = validator(values, input);
+                let result;
+                try {
+                    result = validator(values, input);
+                } catch (err: any) {
+                    throw new AutoCastingError({
+                        reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
+                        path: makePropNameArr(undefined, accessText),
+                        hostName,
+                        propName: makePropNameArr(undefined, propName),
+                        value: dictInput,
+                        validator: describeAnonymousValidateFunction(validator),
+                        desc: config.desc,
+                        error: err,
+                    });
+                }
 
                 if (!result) {
                     throw new AutoCastingError({
-                        reason: `Rejected by collection validator ${config.validateCollection.name}.`,
-                        path: accessText,
+                        reason: `Rejected by collection validator ${describeAnonymousValidateFunction(validator)}.`,
+                        path: makePropNameArr(undefined, accessText),
                         hostName,
-                        propName,
+                        propName: makePropNameArr(undefined, propName),
                         value: dictInput,
-                        validator: config.validateCollection.name,
+                        validator: describeAnonymousValidateFunction(validator),
                         desc: config.desc,
                     });
                 }
@@ -610,7 +728,7 @@ export function inputSingle<T>(
     try {
         item = castToType(types, inputProp);
     } catch (err: any) {
-        if (err.propName) {
+        if (err.propName || err.path) {
             err.hostName = hostName;
             err.propName = makePropName(err.propName, propName);
             err.path = makePropName(err.path, accessText);
@@ -621,9 +739,9 @@ export function inputSingle<T>(
         if (inputProp !== undefined) {
             throw new AutoCastingError({
                 reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
-                path: `${accessText}`,
+                path: makePropNameArr(undefined, accessText),
                 hostName,
-                propName,
+                propName: makePropNameArr(undefined, propName),
                 value: inputProp,
                 types: typeNames,
                 error: err,
@@ -644,9 +762,9 @@ export function inputSingle<T>(
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new AutoCastingError({
                 reason: `Type casting failed [${typeNames.join('|')}].`,
-                path: accessText,
+                path: makePropNameArr(undefined, accessText),
                 hostName,
-                propName,
+                propName: makePropNameArr(undefined, propName),
                 value: inputProp,
                 types: typeNames,
                 desc: config.desc,
@@ -666,9 +784,9 @@ export function inputSingle<T>(
             } catch (err: any) {
                 throw new AutoCastingError({
                     reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
-                    path: accessText,
+                    path: makePropNameArr(undefined, accessText),
                     hostName,
-                    propName,
+                    propName: makePropNameArr(undefined, propName),
                     value: inputProp,
                     validator: describeAnonymousValidateFunction(validator),
                     desc: config.desc,
@@ -679,9 +797,9 @@ export function inputSingle<T>(
             if (!result) {
                 throw new AutoCastingError({
                     reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
-                    path: accessText,
+                    path: makePropNameArr(undefined, accessText),
                     hostName,
-                    propName,
+                    propName: makePropNameArr(undefined, propName),
                     value: inputProp,
                     validator: describeAnonymousValidateFunction(validator),
                     desc: config.desc,
@@ -697,9 +815,11 @@ export type Enum = Set<number | string> | { [k: string]: number | string;[w: num
 
 export interface PropOptions<T> {
     path?: string | symbol;
+
     type?: any | any[];
     arrayOf?: any | any[];
     dictOf?: any | any[];
+    combinationOf?: (typeof AutoCastableMetaClass) | (typeof AutoCastableMetaClass)[];
 
     validate?: T extends Array<infer P> ?
     (val: P, obj?: any) => boolean | Array<(val: P, obj?: any) => boolean> :
@@ -716,7 +836,9 @@ export interface PropOptions<T> {
 
     nullable?: boolean;
     deprecated?: boolean;
+    partOf?: string;
 
+    openapi?: { [k: string]: any; };
     ext?: { [k: string]: any; };
 }
 

@@ -1,7 +1,10 @@
 import _, { cloneDeep } from 'lodash';
 import { isConstructor } from '../utils';
+import { objHashMd5B64Of } from '../lib/hash';
+import type { RPCEnvelope } from './base';
 
 export const RPC_RESULT_META_SYMBOL = Symbol('RPC result metas');
+export const RPC_MARSHALL = Symbol('RPCMarshall');
 
 export function assignMeta<T extends object, P extends object>(target: T, meta: P): T {
     const curMeta = (target as any)[RPC_RESULT_META_SYMBOL];
@@ -30,6 +33,7 @@ export interface TransferProtocolMetadata {
     status?: number;
     contentType?: string;
     headers?: { [k: string]: string; };
+    envelope?: typeof RPCEnvelope | null;
 
     [k: string]: any;
 }
@@ -47,9 +51,19 @@ function patchTransferProtocolMeta(meta: TransferProtocolMetadata) {
     }
 }
 
-export function assignTransferProtocolMeta<T extends object, P extends TransferProtocolMetadata>(
-    target: T, meta: P
+export function assignTransferProtocolMeta<T extends any, P extends TransferProtocolMetadata>(
+    inputTarget: T, meta?: P
 ): T {
+    if (!meta) {
+        return inputTarget;
+    }
+
+    const target: any = (typeof inputTarget === 'object' || typeof inputTarget === 'function') ? inputTarget : {
+        [RPC_MARSHALL]() {
+            return inputTarget as any;
+        }
+    };
+
     const curMeta = (target as any)[RPC_TRANSFER_PROTOCOL_META_SYMBOL];
     if (!curMeta) {
         patchTransferProtocolMeta(meta);
@@ -68,8 +82,8 @@ export function assignTransferProtocolMeta<T extends object, P extends TransferP
     return target;
 }
 
-export function extractTransferProtocolMeta(target: object): TransferProtocolMetadata | undefined {
-    if (typeof target !== 'object' || !target) {
+export function extractTransferProtocolMeta(target?: object): TransferProtocolMetadata | undefined {
+    if ((typeof target !== 'object' && typeof target !== 'function') || !target) {
         return;
     }
     return (target as any)[RPC_TRANSFER_PROTOCOL_META_SYMBOL];
@@ -86,7 +100,21 @@ export function transferProtocolMetaDecorated<T extends TransferProtocolMetadata
     return assignTransferProtocolMeta(tgt, meta);
 }
 
-export function TransferProtocolMetadata(meta: TransferProtocolMetadata) {
+export function MixTPM<T extends { new(...args: any[]): any; }>(
+    meta: TransferProtocolMetadata, tgt: T
+) {
+    @TPM(meta)
+    class TPMDecorated extends tgt { }
+
+    Object.defineProperty(TPMDecorated, 'name', {
+        value: `${tgt.name}WithTPM:${objHashMd5B64Of(meta).replaceAll('=', '')}`,
+        writable: false,
+    });
+
+    return TPMDecorated as T;
+}
+
+export function TPM(meta: TransferProtocolMetadata) {
     return function transferProtocolMetaDecorator<T extends { new(..._args: any[]): any; }>(target: T) {
         transferProtocolMetaDecorated(meta, target);
     };
