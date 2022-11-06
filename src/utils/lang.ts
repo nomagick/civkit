@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import { inspect } from 'util';
 
-export function isConstructor(f: Function) {
+export function isConstructor(f: any) {
     try {
         Reflect.construct(String, [], f);
     } catch (e) {
@@ -10,19 +10,34 @@ export function isConstructor(f: Function) {
     return true;
 }
 
+export const NATIVE_CLASS_PROTOTYPES = new Map();
+
+Object.getOwnPropertyNames(global).forEach((k) => {
+    const v = Reflect.get(global, k);
+    if (isConstructor(v)) {
+        NATIVE_CLASS_PROTOTYPES.set(v.prototype, v);
+    }
+});
+
+const sampleClass = class _sample { };
+
 export function chainStringProps(o: object) {
     const keySet = new Set<string>();
     let ptr = o;
     const chain: Array<[string, any, PropertyDescriptor?]> = [];
 
     while (ptr) {
+        if (NATIVE_CLASS_PROTOTYPES.has(ptr)) {
+            break;
+        }
+        const ptrIsConstructor = isConstructor(ptr);
         const keys = Object.getOwnPropertyNames(ptr);
         for (const x of keys) {
             if (keySet.has(x)) {
                 continue;
             }
             const desc = Object.getOwnPropertyDescriptor(ptr, x);
-            if (!(desc?.enumerable)) {
+            if ((!(desc?.enumerable) && !ptrIsConstructor) || (ptrIsConstructor && sampleClass.hasOwnProperty(x))) {
                 continue;
             }
             chain.push([x, Reflect.get(ptr, x), desc]);
@@ -66,14 +81,28 @@ export function chainEntries(o: object, withSymbol?: true | string) {
     return withSymbol ? r.concat(chainSymbolProps(o)) : r;
 }
 
-export const NATIVE_CLASS_PROTOTYPES = new Map();
+export function chainEntriesSimple(o: object) {
+    const keySet = new Set<string>();
+    let ptr = o;
+    const chain: Array<[string, any, PropertyDescriptor]> = [];
 
-Object.getOwnPropertyNames(global).forEach((k) => {
-    const v = Reflect.get(global, k);
-    if (isConstructor(v)) {
-        NATIVE_CLASS_PROTOTYPES.set(v.prototype, v);
+    while (ptr) {
+        const descs = Object.getOwnPropertyDescriptors(ptr);
+        for (const [k, v] of Object.entries(descs)) {
+            if (keySet.has(k)) {
+                continue;
+            }
+            if (typeof k === 'symbol' || !v.enumerable) {
+                continue;
+            }
+            chain.push([k, Reflect.get(ptr, k), v]);
+            keySet.add(k);
+        }
+        ptr = Object.getPrototypeOf(ptr);
     }
-});
+
+    return chain;
+}
 
 export function topLevelConstructorOf(o: object) {
 
@@ -161,3 +190,8 @@ export function marshalErrorLike(err: Error | { [k: string]: any; } | string | n
 export function sortObjectKeys(input: object) {
     return _(input).toPairs().sortBy(0).fromPairs().value();
 }
+
+export function reverseObjectKeys(input: object) {
+    return _(input).toPairs().reverse().fromPairs().value();
+}
+

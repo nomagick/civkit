@@ -216,7 +216,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                         url: this.logoUrl || `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
                     }
                 }
-            }, ctx.request.query);
+            }, (this.constructor as typeof AbstractRPCRegistry).envelope, ctx.request.query);
         }));
     }
 

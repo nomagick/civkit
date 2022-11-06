@@ -47,7 +47,10 @@ export class Dto<T = any> extends AutoCastable {
                 throw err;
             }
             if (err instanceof AutoCastingError) {
-                throw new ParamValidationError({ ...err, err });
+                throw new ParamValidationError({
+                    ...err,
+                    readableMessage: err.cause?.message || err.reason,
+                });
             }
 
             throw err;

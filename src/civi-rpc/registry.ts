@@ -1,21 +1,34 @@
 import { RPCEnvelope, RPCHost, RPC_CALL_ENVIROMENT } from './base';
 import { AsyncService } from '../lib/async-service';
-import { RPCMethodNotFoundError, ParamValidationError, ApplicationError } from './errors';
+import {
+    RPCMethodNotFoundError,
+    ParamValidationError,
+    ApplicationError,
+} from './errors';
 import type { container as DIContainer } from 'tsyringe';
 import {
-    AutoCastableMetaClass,
-    AutoCastingError, inputSingle, PropOptions, __patchPropOptionsEnumToSet
+    AutoCastableMetaClass, AutoCastingError,
+    inputSingle, isAutoCastableClass, PropOptions, __patchPropOptionsEnumToSet
 } from '../lib/auto-castable';
 import { RestParameters, shallowDetectRestParametersKeys } from './magic';
 import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 
+const REMOVE_COMMENTS_REGEXP = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/gm;
+export function getParamNames(func: Function): string[] {
+    const fnStr = func.toString().replace(REMOVE_COMMENTS_REGEXP, '');
+    const result = fnStr
+        .slice(fnStr.indexOf('(') + 1, fnStr.indexOf(')'))
+        .split(',')
+        .map(content => {
+            return content.trim().replace(/\s?=.*$/, '');
+        })
+        .filter(Boolean);
+
+    return result;
+}
+
 export interface RPCOptions {
     name: string | string[];
-    paramTypes?: Array<any>;
-    host?: any;
-    hostProto?: any;
-    nameOnProto?: any;
-    method?: Function;
     returnType?: Function | Function[];
     returnCombinationOf?: (typeof AutoCastableMetaClass)[];
     returnArrayOf?: Function | Function[];
@@ -32,6 +45,14 @@ export interface RPCOptions {
 
     [k: string]: any;
 }
+export interface InternalRPCOptions extends RPCOptions {
+    paramTypes?: Array<any>;
+    paramNames?: Array<string>;
+    host?: any;
+    hostProto?: any;
+    nameOnProto?: any;
+    method?: Function;
+}
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
 
@@ -42,7 +63,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
     abstract container: typeof DIContainer;
 
-    conf: Map<string, RPCOptions & { paramOptions: PropOptions<unknown>[]; }> = new Map();
+    conf: Map<string, InternalRPCOptions & { paramOptions: PropOptions<unknown>[]; }> = new Map();
 
     wrapped: Map<string, Function> = new Map();
 
@@ -79,7 +100,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         (options as any).paramOptions = [];
 
-        this.conf.set(name, options as RPCOptions & { paramOptions: PropOptions<unknown>[]; });
+        this.conf.set(name, options as InternalRPCOptions & { paramOptions: PropOptions<unknown>[]; });
 
         if (this.__tick === 1) {
             // Dont do the wrapping in tick 1.
@@ -109,9 +130,30 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         const func: Function = conf.method || conf.hostProto[conf.nameOnProto]!;
         const paramTypes = conf.paramTypes || [];
+        const paramNames = conf.paramNames || [];
 
         const paramPickerMeta = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, conf.hostProto);
         const paramPickerConf = paramPickerMeta ? paramPickerMeta[conf.nameOnProto] : undefined;
+
+        // At wrap time we preload the param options so at runtime it's faster.
+        for (const [i, t] of paramTypes.entries()) {
+            const propOps = paramPickerConf?.[i];
+            const propName = paramNames[i];
+
+            if (!propOps) {
+                const paramOptions: PropOptions<unknown> = { type: t };
+
+                conf.paramOptions[i] = paramOptions;
+
+                if (!isAutoCastableClass(t) && propName) {
+                    paramOptions.path = propName;
+                }
+
+                continue;
+            }
+
+            conf.paramOptions[i] = { type: t, ...propOps };
+        }
 
         const detectEtc = paramTypes.find((x) => (x?.prototype instanceof RestParameters || x === RestParameters));
 
@@ -120,29 +162,20 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             const etcDetectKit = detectEtc ? shallowDetectRestParametersKeys(input) : undefined;
             const patchedInput = etcDetectKit?.proxy || input;
             try {
-                params = paramTypes.map((t, i) => {
-                    const propOps = paramPickerConf?.[i];
 
-                    if (!propOps) {
-                        const paramOptions = { type: t };
-
-                        conf!.paramOptions[i] = paramOptions;
-
-                        return inputSingle(
-                            'Input', patchedInput, undefined, { type: t }
-                        );
-                    }
-
-                    conf!.paramOptions[i] = { type: t, ...propOps };
-
-                    return inputSingle('Input', patchedInput, propOps.path, { type: t, ...propOps });
+                params = conf!.paramOptions.map((paramOption) => {
+                    return inputSingle('Input', patchedInput, paramOption.path, paramOption);
                 });
+
             } catch (err) {
                 if (err instanceof ApplicationError) {
                     throw err;
                 }
                 if (err instanceof AutoCastingError) {
-                    throw new ParamValidationError({ ...err, err, message: err.message });
+                    throw new ParamValidationError({
+                        ...err,
+                        readableMessage: err.cause?.message || err.reason,
+                    });
                 }
 
                 throw err;
@@ -172,7 +205,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     dump() {
         return Array.from(this.conf.keys()).map((x) => {
             return [x, this.wrapRPCMethod(x), this.conf.get(x)];
-        }) as [string, Function, RPCOptions][];
+        }) as [string, Function, InternalRPCOptions][];
     }
 
     exec(name: string, input: object) {
@@ -247,15 +280,27 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     RPCMethod(options: Partial<RPCOptions> | string = {}) {
         const _options = typeof options === 'string' ? { name: options } : options;
 
-        const RPCDecorator = (tgt: typeof RPCHost.prototype, methodName: string) => {
-            const finalOps: RPCOptions = {
+        const RPCDecorator = (tgt: typeof RPCHost.prototype, methodName: string, desc: PropertyDescriptor) => {
+            if (!desc.value || (typeof desc.value !== 'function')) {
+                throw new Error(`RPCMethod decorator can only be used on simple method.`);
+            }
+            const finalOps: InternalRPCOptions = {
                 ..._options,
                 name: _options.name || methodName,
                 paramTypes: _options.paramTypes || Reflect.getMetadata('design:paramtypes', tgt, methodName),
+                paramNames: _options.paramNames || getParamNames(desc.value),
                 returnType: _options.returnType || Reflect.getMetadata('design:returntype', tgt, methodName),
                 hostProto: tgt,
                 nameOnProto: methodName,
             };
+
+            const paramNames = [...(finalOps.paramNames || [])];
+
+            if (paramNames[paramNames.length - 1]?.startsWith('...')) {
+                // This fixes the extra parameter caused by reset parameters.
+                finalOps.paramNames?.pop();
+                finalOps.paramTypes?.pop();
+            }
 
             this.register(finalOps);
         };

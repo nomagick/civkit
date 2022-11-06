@@ -389,12 +389,8 @@ export abstract class AbstractX509Manager extends AsyncService {
             return this.dirWatchers.get(dir);
         }
 
-        const discoveryRoutine = async (filename: string) => {
-            const thePath = path.resolve(dir, filename);
-            const fstat = await fsp.stat(thePath).catch(() => undefined);
-            if (!fstat?.isFile()) {
-                return;
-            }
+        const thePath = path.resolve(dir);
+        const discoveryRoutine = async () => {
             const certs = await this.loadCertificatesFromSingleDirectory(dir, mode);
             this.emit('discovery', certs);
             this.emit('update', certs, thePath);
@@ -403,11 +399,11 @@ export abstract class AbstractX509Manager extends AsyncService {
         const dirWatcher = fs.watch(dir, { encoding: 'utf-8', persistent: false });
         let debounceTimeout: NodeJS.Timeout | undefined;
 
-        dirWatcher.on('change', (_eventType, filename: string) => {
+        dirWatcher.on('change', (_eventType, _filename: string) => {
             if (debounceTimeout) {
                 clearTimeout(debounceTimeout);
             }
-            debounceTimeout = setTimeout(discoveryRoutine, 1000, filename);
+            debounceTimeout = setTimeout(discoveryRoutine, 1000);
         });
 
         this.dirWatchers.set(dir, dirWatcher);
@@ -536,6 +532,7 @@ export abstract class AbstractX509CertificateAuthority extends AbstractX509Manag
     async createCertificate(
         draftCertificate: Partial<X509CertificateCreateParams>,
         ca: Certificate | string[] = [],
+        profileName?: keyof this['keyGenProfiles'],
     ) {
         const caCert = Array.isArray(ca) ? this.getCACertificateForSigning(...ca) : ca as Certificate | undefined;
 
@@ -543,7 +540,8 @@ export abstract class AbstractX509CertificateAuthority extends AbstractX509Manag
             throw new Error('No CA certificate matched');
         }
 
-        const selectedProfile = this.selectAlgorithm(caCert.key!);
+        const selectedProfile = Reflect.get(this.keyGenProfiles, profileName || 'default') ||
+            this.selectAlgorithm(caCert.key!);
         const webCryptoCaKey = await webcrypto.subtle.importKey(
             'pkcs8',
             caCert.key!.export({ type: 'pkcs8', format: 'der' }) as Buffer,

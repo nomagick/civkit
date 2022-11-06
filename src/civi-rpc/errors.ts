@@ -102,7 +102,7 @@ export function StatusCode(status: APPLICATION_ERROR | number) {
 @Also({
     dictOf: Object
 })
-@StatusCode(500000)
+@StatusCode(50000)
 export class ApplicationError extends Error implements AutoCastable {
     static from(input: string | object, status: number, detail?: any) {
         let _input = input;
@@ -188,7 +188,11 @@ export class ApplicationError extends Error implements AutoCastable {
             this.code = (this.status) > 1000 ? parseInt(`${this.status}`.substring(0, 3), 10) : this.status;
         }
 
-        this.readableMessage = `${this.name}: ${this.message}`;
+        if (typeof detail === 'object' && detail.readableMessage) {
+            this.readableMessage = `${this.name}: ${detail.readableMessage}`;
+        } else {
+            this.readableMessage = `${this.name}: ${this.message}`;
+        }
 
         this._fixStack();
     }
@@ -265,7 +269,11 @@ export class ApplicationError extends Error implements AutoCastable {
 export class ParamValidationError extends ApplicationError {
     constructor(detail?: any) {
         super(detail);
-        this.readableMessage = `ParamValidationError(${this.path}): ${this.message}`;
+        if (detail.readableMessage) {
+            this.readableMessage = `${this.name}(${this.path}): ${detail.readableMessage}`;
+        } else {
+            this.readableMessage = `${this.name}(${this.path}): ${this.message}`;
+        }
     }
 }
 

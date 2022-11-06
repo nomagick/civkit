@@ -68,7 +68,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     async findOneAndDelete(
         query: Filter<T>,
         options?: FindOneAndDeleteOptions & { bypassDocumentValidation?: boolean | undefined; }
-    ) {
+    ): Promise<T | undefined> {
         const r = await this.collection.findOneAndDelete(query, options!);
 
         return (r.value as T) || undefined;
@@ -77,7 +77,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     async simpleFind(query: Filter<T>, options?: FindOptions<T>) {
         const r = await this.collection.find(query, options as FindOptions<T>).toArray();
 
-        return r;
+        return r as T[];
     }
 
     async simpleAggregate<M = any>(pipeline?: object[], options?: AggregateOptions) {
@@ -198,19 +198,24 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         retryDelayMs?: number;
     }): Promise<T> {
         const session = this.mongo.createSession(options);
-        const maxTries = options?.maxTries ?? 100;
+        const maxTries = options?.maxTries ?? 30;
         let triesLeft = maxTries;
         let lastError: Error | undefined;
         let firstTry = true;
         let finalReturn: any;
+        let finalThrow: any;
 
         const patchedFunc = async function (this: unknown, ...args: Parameters<typeof func>) {
             if (triesLeft <= 0) {
                 if (lastError) {
                     lastError.message = `${lastError.message} (after ${maxTries} tries)`;
-                    throw lastError;
+                    finalThrow = lastError;
+
+                    return;
                 }
-                throw new Error(`Transaction failed after ${maxTries} tries`);
+                finalThrow = new Error(`Transaction failed after ${maxTries} tries`);
+
+                return;
             }
             if (firstTry) {
                 firstTry = false;
@@ -230,7 +235,12 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         };
 
         try {
+            // Mongo's withTransaction is stupid and going to retry indefinitely if it doesn't recognize the error? wtf?
             await session.withTransaction(patchedFunc, options?.defaultTransactionOptions);
+
+            if (finalThrow) {
+                throw finalThrow;
+            }
 
             return finalReturn;
         } catch (err) {

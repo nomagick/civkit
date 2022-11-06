@@ -53,9 +53,9 @@ function patchTransferProtocolMeta(meta: TransferProtocolMetadata) {
 
 export function assignTransferProtocolMeta<T extends any, P extends TransferProtocolMetadata>(
     inputTarget: T, meta?: P
-): T {
+): T extends object ? T : P extends object ? object : T {
     if (!meta) {
-        return inputTarget;
+        return inputTarget as any;
     }
 
     const target: any = (typeof inputTarget === 'object' || typeof inputTarget === 'function') ? inputTarget : {

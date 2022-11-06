@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { isConstructor, chainEntries } from '../utils/lang';
+import { isConstructor, chainEntries, reverseObjectKeys, chainEntriesSimple } from '../utils/lang';
 
 import _ from 'lodash';
 
@@ -31,14 +31,14 @@ export abstract class AutoCastableMetaClass {
 
 export function Combine<T1 extends typeof AutoCastableMetaClass, T2 extends typeof AutoCastableMetaClass>(
     t1: T1, t2: T2
-): Constructor<InstanceType<T1> & InstanceType<T2>>;
+): Constructor<InstanceType<T1> & InstanceType<T2>> & T1 & T2;
 export function Combine<
     T1 extends typeof AutoCastableMetaClass,
     T2 extends typeof AutoCastableMetaClass,
     T3 extends typeof AutoCastableMetaClass
 >(
     t1: T1, t2: T2, t3: T3
-): Constructor<InstanceType<T1> & InstanceType<T2> & InstanceType<T3>>;
+): Constructor<InstanceType<T1> & InstanceType<T2> & InstanceType<T3>> & T1 & T2 & T3;
 export function Combine<
     T1 extends typeof AutoCastableMetaClass,
     T2 extends typeof AutoCastableMetaClass,
@@ -46,7 +46,7 @@ export function Combine<
     T4 extends typeof AutoCastableMetaClass,
     >(
         t1: T1, t2: T2, t3: T3, t4: T4
-    ): Constructor<InstanceType<T1> & InstanceType<T2> & InstanceType<T3> & InstanceType<T4>>;
+    ): Constructor<InstanceType<T1> & InstanceType<T2> & InstanceType<T3> & InstanceType<T4>> & T1 & T2 & T3 & T4;
 export function Combine(
     ...autoCastableClasses: Function[]
 ): Constructor<any>;
@@ -64,7 +64,7 @@ export function Combine<T extends typeof AutoCastableMetaClass>(
         constructor(...args: any[]) {
             super();
             for (const cls of arr) {
-                (cls as any).call(this, ...args);
+                cls.constructor.call(this, ...args);
             }
 
             return this as any;
@@ -72,9 +72,11 @@ export function Combine<T extends typeof AutoCastableMetaClass>(
     }
 
     for (const cls of arr) {
+        const partialOpts: any = {};
         for (const [k, v] of chainEntries(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
-            opts[k] = { ...v, partOf: cls.name };
+            partialOpts[k] = { ...v, partOf: cls.name };
         }
+        Object.assign(opts, reverseObjectKeys(partialOpts));
         _.merge(extOpts, cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {});
 
         for (const [k, v, desc] of chainEntries(cls.prototype, 'With Symbol')) {
@@ -82,6 +84,9 @@ export function Combine<T extends typeof AutoCastableMetaClass>(
         }
 
         for (const [k, v, desc] of chainEntries(cls, 'With Symbol')) {
+            if ((k === AUTOCASTABLE_OPTIONS_SYMBOL) || (k === AUTOCASTABLE_OPTIONS_SYMBOL)) {
+                continue;
+            }
             Object.defineProperty(NaivelyMergedClass, k, desc || { value: v, enumerable: true });
         }
     }
@@ -94,13 +99,14 @@ export function Combine<T extends typeof AutoCastableMetaClass>(
         }
     }
 
+
     Object.assign(NaivelyMergedClass, {
-        [AUTOCASTABLE_OPTIONS_SYMBOL]: opts,
-        [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]: extOpts,
+        [AUTOCASTABLE_OPTIONS_SYMBOL]: reverseObjectKeys(opts),
+        [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]: reverseObjectKeys(extOpts),
     });
 
     Object.defineProperty(NaivelyMergedClass, 'name', {
-        value: `NaivelyMerged${argArr.map((x) => x.name).join('And')}`,
+        value: `${argArr.map((x) => x.name).join('&')}`,
         writable: false,
     });
 
@@ -121,7 +127,7 @@ export function autoConstructor(
 ) {
     const instance = new (this as any)(...args);
 
-    const entryVecs = chainEntries((this as typeof AutoCastableMetaClass)[AUTOCASTABLE_OPTIONS_SYMBOL] || {});
+    const entryVecs = chainEntriesSimple((this as typeof AutoCastableMetaClass)[AUTOCASTABLE_OPTIONS_SYMBOL] || {});
 
     for (const [prop, config] of entryVecs) {
         const val = inputSingle(undefined, input, prop, config);
@@ -155,15 +161,42 @@ export class AutoCastable implements AutoCastableMetaClass {
     }
 }
 
+export function isAutoCastableClass(cls: any): boolean {
+    if (!cls) {
+        return false;
+    }
+
+    if (
+        cls.prototype instanceof AutoCastable ||
+        cls.prototype instanceof AutoCastableMetaClass ||
+        (
+            (typeof (cls as any).from === 'function') &&
+            (cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL])
+        )
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
 export class AutoCastingError extends Error {
     path: string;
     desc?: string;
     value: any;
     types: string[];
-    error?: Error;
     hostName?: string;
     propName: string;
     reason: string;
+
+    cause?: Error;
+
+    get error() {
+        return this.cause;
+    }
+    set error(input: Error | undefined) {
+        this.cause = input;
+    }
 
     constructor(detail: { [k: string]: any; }) {
         super('AutocastingError');
@@ -204,14 +237,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
     theLoop:
     for (const typeShouldBe of ensureTypes) {
         // AutoCastable types
-        if (
-            typeShouldBe.prototype instanceof AutoCastable ||
-            typeShouldBe.prototype instanceof AutoCastableMetaClass ||
-            (
-                (typeof typeShouldBe.from === 'function') &&
-                (typeShouldBe?.[AUTOCASTABLE_OPTIONS_SYMBOL] || typeShouldBe?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL])
-            )
-        ) {
+        if (isAutoCastableClass(typeShouldBe)) {
             if (inputProp instanceof typeShouldBe) {
                 val = inputProp;
                 break;
@@ -497,7 +523,7 @@ export function inputSingle<T>(
                     propName: makePropNameArr(undefined, propName, i),
                     value: x,
                     types: typeNames,
-                    error: err,
+                    cause: err,
                     desc: config.desc,
                 });
             }
@@ -523,14 +549,27 @@ export function inputSingle<T>(
                         result = validator(elem, input);
                     } catch (err: any) {
                         throw new AutoCastingError({
-                            reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
+                            reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                             path: makePropNameArr(undefined, accessText, i),
                             hostName,
                             propName: makePropNameArr(undefined, propName, i),
                             value: inputProp,
                             validator: describeAnonymousValidateFunction(validator),
                             desc: config.desc,
-                            error: err,
+                            cause: err,
+                        });
+                    }
+
+                    if (result instanceof Error) {
+                        throw new AutoCastingError({
+                            reason: `Rejected by validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
+                            path: makePropNameArr(undefined, accessText, i),
+                            hostName,
+                            propName: makePropNameArr(undefined, propName, i),
+                            value: inputProp,
+                            validator: describeAnonymousValidateFunction(validator),
+                            desc: config.desc,
+                            cause: result,
                         });
                     }
 
@@ -565,14 +604,27 @@ export function inputSingle<T>(
                     result = validator(values, input);
                 } catch (err: any) {
                     throw new AutoCastingError({
-                        reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
+                        reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                         path: makePropNameArr(undefined, accessText),
                         hostName,
                         propName: makePropNameArr(undefined, propName),
                         value: arrayInput,
                         validator: describeAnonymousValidateFunction(validator),
                         desc: config.desc,
-                        error: err,
+                        cause: err,
+                    });
+                }
+
+                if (result instanceof Error) {
+                    throw new AutoCastingError({
+                        reason: `Rejected by collection validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
+                        path: makePropNameArr(undefined, accessText),
+                        hostName,
+                        propName: makePropNameArr(undefined, propName),
+                        value: arrayInput,
+                        validator: describeAnonymousValidateFunction(validator),
+                        desc: config.desc,
+                        cause: result,
                     });
                 }
 
@@ -627,7 +679,7 @@ export function inputSingle<T>(
                     propName: makePropName(undefined, propName, k),
                     value: v,
                     types: typeNames,
-                    error: err,
+                    cause: err,
                     desc: config.desc,
                 });
             }
@@ -653,14 +705,27 @@ export function inputSingle<T>(
                         result = validator(elem, input);
                     } catch (err: any) {
                         throw new AutoCastingError({
-                            reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
+                            reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                             path: makePropName(undefined, accessText, k),
                             hostName,
                             propName: makePropName(undefined, propName, k),
                             value: inputProp,
                             validator: describeAnonymousValidateFunction(validator),
                             desc: config.desc,
-                            error: err,
+                            cause: err,
+                        });
+                    }
+
+                    if (result instanceof Error) {
+                        throw new AutoCastingError({
+                            reason: `Rejected by validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
+                            path: makePropName(undefined, accessText, k),
+                            hostName,
+                            propName: makePropName(undefined, propName, k),
+                            value: inputProp,
+                            validator: describeAnonymousValidateFunction(validator),
+                            desc: config.desc,
+                            cause: result,
                         });
                     }
 
@@ -695,14 +760,27 @@ export function inputSingle<T>(
                     result = validator(values, input);
                 } catch (err: any) {
                     throw new AutoCastingError({
-                        reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
+                        reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                         path: makePropNameArr(undefined, accessText),
                         hostName,
                         propName: makePropNameArr(undefined, propName),
                         value: dictInput,
                         validator: describeAnonymousValidateFunction(validator),
                         desc: config.desc,
-                        error: err,
+                        cause: err,
+                    });
+                }
+
+                if (result instanceof Error) {
+                    throw new AutoCastingError({
+                        reason: `Rejected by collection validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
+                        path: makePropNameArr(undefined, accessText),
+                        hostName,
+                        propName: makePropNameArr(undefined, propName),
+                        value: dictInput,
+                        validator: describeAnonymousValidateFunction(validator),
+                        desc: config.desc,
+                        cause: result,
                     });
                 }
 
@@ -744,7 +822,7 @@ export function inputSingle<T>(
                 propName: makePropNameArr(undefined, propName),
                 value: inputProp,
                 types: typeNames,
-                error: err,
+                cause: err,
                 desc: config.desc,
             });
         }
@@ -783,14 +861,15 @@ export function inputSingle<T>(
                 result = validator(item, input);
             } catch (err: any) {
                 throw new AutoCastingError({
-                    reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${err.toString()}.`,
+                    reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                     path: makePropNameArr(undefined, accessText),
                     hostName,
                     propName: makePropNameArr(undefined, propName),
                     value: inputProp,
                     validator: describeAnonymousValidateFunction(validator),
                     desc: config.desc,
-                    error: err,
+                    cause: err,
+                    readableMessage: err.message,
                 });
             }
 
@@ -822,11 +901,11 @@ export interface PropOptions<T> {
     combinationOf?: (typeof AutoCastableMetaClass) | (typeof AutoCastableMetaClass)[];
 
     validate?: T extends Array<infer P> ?
-    (val: P, obj?: any) => boolean | Array<(val: P, obj?: any) => boolean> :
-    (val: T, obj?: any) => boolean | Array<(val: T, obj?: any) => boolean>;
+    (val: P, obj?: any) => Error | boolean | Array<(val: P, obj?: any) => Error | boolean> :
+    (val: T, obj?: any) => Error | boolean | Array<(val: T, obj?: any) => Error | boolean>;
 
     validateCollection?: T extends Array<any> ?
-    (val: T, obj?: any) => boolean | Array<(val: T, obj?: any) => boolean> : any;
+    (val: T, obj?: any) => Error | boolean | Array<(val: T, obj?: any) => Error | boolean> : any;
 
     required?: boolean;
     default?: T extends Array<infer P> ? P[] : T;
@@ -887,6 +966,18 @@ function describeAnonymousValidateFunction(validator: Function) {
     const funcStr = validator.toString();
 
     return funcStr.replaceAll('\n', ' ').substring(0, 128);
+}
+
+function errorMessageOf(err: Error) {
+    if (typeof err !== 'object' || err === null) {
+        return `${err}`;
+    }
+
+    if (err.constructor === Error) {
+        return err.message;
+    }
+
+    return err.toString();
 }
 
 export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, designType: any) {
