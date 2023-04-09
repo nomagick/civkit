@@ -1,9 +1,8 @@
 let i = 1;
 
-export function throttle(cap: number = 1) {
+export function throttle(waitMs: number = 1000) {
     return function throttleDecorator(_target: any, _propName: string | symbol, propDesc: PropertyDescriptor) {
         const throttleSymbol = Symbol(`THROTTLE:${i++}`);
-
         const func: Function = propDesc.value;
 
         if (typeof func !== 'function') {
@@ -13,34 +12,32 @@ export function throttle(cap: number = 1) {
         function newFunc(this: any, ...argv: any[]) {
             if (!this[throttleSymbol]) {
                 this[throttleSymbol] = {
-                    s: 0,
-                    lastPromise: undefined,
+                    lastRunAt: 0,
+                    resultPromise: undefined,
                 };
             }
             const conf = this[throttleSymbol];
-            if (conf.s >= cap) {
-                return conf.lastPromise;
+            if ((conf.lastRunAt + waitMs) >= Date.now()) {
+                return conf.resultPromise;
             }
-            conf.s += 1;
+            conf.lastRunAt = Date.now();
+            conf.resultPromise = new Promise((resolve, reject) => {
+                try {
+                    const r = func.apply(this, argv);
+                    resolve(r);
 
-            try {
-                const r = func.apply(this, argv);
-                if (r.then && typeof r.then === 'function') {
-                    r.then(
-                        () => (conf.s -= 1),
-                        () => (conf.s -= 1)
-                    );
-                    conf.lastPromise = r;
-                } else {
-                    conf.s -= 1;
+                    return r;
+                } catch (err) {
+                    reject(err);
                 }
+            });
 
-                return r;
-            } catch (err) {
-                conf.s -= 1;
-                throw err;
-            }
+            return conf.resultPromise;
         }
+
+        Object.defineProperty(newFunc, 'name',
+            { value: `throttleDecorated${(func.name[0] || '').toUpperCase()}${func.name.slice(1)}`, writable: false, enumerable: false, configurable: true }
+        );
 
         propDesc.value = newFunc;
 

@@ -41,6 +41,10 @@ export function perTick() {
             }
         }
 
+        Object.defineProperty(newFunc, 'name',
+            { value: `perTickDecorated${(func.name[0] || '').toUpperCase()}${func.name.slice(1)}`, writable: false, enumerable: false, configurable: true }
+        );
+
         propDesc.value = newFunc;
 
         return propDesc;
@@ -82,6 +86,10 @@ export function perNextTick() {
         }
 
         propDesc.value = newFunc;
+
+        Object.defineProperty(newFunc, 'name',
+            { value: `perNextTickDecorated${(func.name[0] || '').toUpperCase()}${func.name.slice(1)}`, writable: false, enumerable: false, configurable: true }
+        );
 
         return propDesc;
     };

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-magic-numbers */
+import { get } from 'lodash';
 import {
     AutoCastable, Prop, autoConstructor, Also
 } from '../lib/auto-castable';
@@ -22,6 +23,8 @@ export enum APPLICATION_ERROR {
 
     OPERATION_NOT_ALLOWED = 40301,
     SSO_SUPER_USER_REQUIRED = 40302,
+    SECURITY_INSPECTION_REQUIRED = 40303,
+    ACCOUNT_SUSPENDED = 40304,
 
     INTERNAL_RESOURCE_NOT_FOUND = 40401,
     RPC_METHOD_NOT_FOUND = 40402,
@@ -44,6 +47,9 @@ export enum APPLICATION_ERROR {
     EXTERNAL_SERVICE_FAILURE = 42204,
     DOWNSTREAM_SERVICE_FAILURE = 42205,
     ASSERTION_FAILURE = 42206,
+
+    TOO_MANY_REQUESTS = 42901,
+    TOO_MANY_TRIES = 42902,
 
     SERVER_INTERNAL_ERROR = 50001,
     DOWNSTREAM_SERVICE_ERROR = 50002,
@@ -117,7 +123,7 @@ export class ApplicationError extends Error implements AutoCastable {
         return instance;
     }
 
-    get [RPC_TRANSFER_PROTOCOL_META_SYMBOL]() {
+    protected get [RPC_TRANSFER_PROTOCOL_META_SYMBOL]() {
         return {
             code: this.code,
             status: this.status,
@@ -157,7 +163,7 @@ export class ApplicationError extends Error implements AutoCastable {
     @Prop({
         openapi: { omitted: true }
     })
-    cause?: Error;
+    override cause?: unknown;
 
     [k: string]: any;
 
@@ -198,7 +204,7 @@ export class ApplicationError extends Error implements AutoCastable {
     }
 
     _fixStack() {
-        if (this.cause?.stack && this.stack) {
+        if ((typeof get(this.cause, 'stack') === 'string') && this.stack) {
             const message_lines = (this.message.match(/\n/g) || []).length + 1;
             this.stack = this.stack.split('\n').slice(0, message_lines + 1).join('\n') +
                 '\n\nWhich was derived from:\n\n' +
@@ -308,8 +314,20 @@ export class TimeoutExpectingTaskCompleteError extends ApplicationError { }
 @StatusCode(APPLICATION_ERROR.OPERATION_NOT_ALLOWED)
 export class OperationNotAllowedError extends ApplicationError { }
 
+@StatusCode(APPLICATION_ERROR.SECURITY_INSPECTION_REQUIRED)
+export class SecurityInspectionRequiredError extends ApplicationError { }
+
+@StatusCode(APPLICATION_ERROR.ACCOUNT_SUSPENDED)
+export class AccountSuspendedError extends ApplicationError { }
+
 @StatusCode(APPLICATION_ERROR.ASSERTION_FAILURE)
 export class AssertionFailureError extends ApplicationError { }
+
+@StatusCode(APPLICATION_ERROR.TOO_MANY_REQUESTS)
+export class TooManyRequestsError extends ApplicationError { }
+
+@StatusCode(APPLICATION_ERROR.TOO_MANY_TRIES)
+export class TooManyTriesError extends ApplicationError { }
 
 @StatusCode(APPLICATION_ERROR.INTERNAL_RESOURCE_ID_CONFLICT)
 export class ResourceIdConflictError extends ApplicationError { }

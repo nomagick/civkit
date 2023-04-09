@@ -13,9 +13,15 @@ export function isConstructor(f: any) {
 export const NATIVE_CLASS_PROTOTYPES = new Map();
 
 Object.getOwnPropertyNames(global).forEach((k) => {
-    const v = Reflect.get(global, k);
-    if (isConstructor(v)) {
-        NATIVE_CLASS_PROTOTYPES.set(v.prototype, v);
+    try {
+        const v = Reflect.get(global, k);
+        if (isConstructor(v)) {
+            NATIVE_CLASS_PROTOTYPES.set(v.prototype, v);
+        }
+    } catch (_err) {
+        // ignore
+        // As of node 18.12 `wasi` is a dead trap in global.
+        // Looks like Node.js bug.
     }
 });
 
@@ -104,59 +110,50 @@ export function chainEntriesSimple(o: object) {
     return chain;
 }
 
-export function topLevelConstructorOf(o: object) {
+export function digConstructablePrototype(o: object) {
+    if (typeof o !== 'object' || o === null) {
+        return undefined;
+    }
 
-    switch (typeof o) {
-        case 'function': {
-            return Function;
-        }
-        case 'undefined': {
-            return undefined;
-        }
-        case 'number': {
-            return Number;
-        }
-        case 'string': {
-            return String;
-        }
-        case 'symbol': {
-            return Symbol;
-        }
-        case 'boolean': {
-            return Boolean;
-        }
-        case 'object': {
-            let ptr = o;
+    let ptr = o;
 
-            while (ptr) {
-                ptr = Object.getPrototypeOf(ptr);
-
-                if (ptr === null) {
-                    return null;
-                }
-                if (!ptr) {
-                    return undefined;
-                }
-                if (NATIVE_CLASS_PROTOTYPES.has(ptr)) {
-                    return ptr.constructor;
-                }
-            }
+    while (ptr) {
+        ptr = Object.getPrototypeOf(ptr);
+        if (typeof ptr.constructor === 'function') {
             break;
-        }
-
-        default: {
-            return undefined;
         }
     }
 
-    return undefined;
+    return ptr;
 }
 
-export function formatDateUTC(date: Date) {
-    return `${date.getUTCFullYear()}${(date.getUTCMonth() + 1).toString().padStart(2, '0')}${date
-        .getUTCDate()
-        .toString()
-        .padStart(2, '0')}`;
+const PRIMITIVE_TYPES = new Set([String, Number, Boolean, Symbol, BigInt, Object, null, undefined]);
+export function isPrimitiveType(t: any) {
+    return PRIMITIVE_TYPES.has(t);
+}
+
+export function isPrimitiveLike(o: any, ...primitivePrototypeSets: Array<Set<object>>) {
+    const constructablePrototype = digConstructablePrototype(o);
+
+    if (!constructablePrototype) {
+        return true;
+    }
+
+    if (constructablePrototype === Object.prototype || constructablePrototype === Array.prototype) {
+        return false;
+    }
+
+    if (NATIVE_CLASS_PROTOTYPES.has(constructablePrototype)) {
+        return true;
+    }
+
+    for (const set of primitivePrototypeSets) {
+        if (set.has(constructablePrototype)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 export function stringifyErrorLike(err: Error | { [k: string]: any; } | string | null | undefined) {
@@ -195,3 +192,10 @@ export function reverseObjectKeys(input: object) {
     return _(input).toPairs().reverse().fromPairs().value();
 }
 
+export function parseUrl(input: string) {
+    try {
+        return new URL(input);
+    } catch (err) {
+        return undefined;
+    }
+}

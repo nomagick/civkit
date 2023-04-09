@@ -53,9 +53,15 @@ export function patchRetry<T extends Function>(func: T, maxTries: number, delayI
 
 export function retry(maxTries: number, delayInMs: number = 0) {
     return function retryDecorator(_target: any, _propertyKey: string, descriptor: PropertyDescriptor) {
-        const originalFunc = descriptor.value;
+        const func = descriptor.value;
 
-        descriptor.value = patchRetry(originalFunc, maxTries, delayInMs);
+        const newFunc = patchRetry(func, maxTries, delayInMs);
+
+        Object.defineProperty(newFunc, 'name',
+            { value: `retryDecorated${(func.name[0] || '').toUpperCase()}${func.name.slice(1)}`, writable: false, enumerable: false, configurable: true }
+        );
+
+        descriptor.value = newFunc;
 
         return descriptor;
     };

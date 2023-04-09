@@ -1,33 +1,6 @@
 import _, { isArray, isPlainObject } from 'lodash';
 import { EventEmitter } from 'events';
-
-export function isNative(obj: any) {
-    if (typeof obj !== 'object') {
-        return false;
-    }
-
-    if (obj instanceof Promise) {
-        return true;
-    }
-
-    if (obj instanceof Date) {
-        return true;
-    }
-
-    if (obj instanceof RegExp) {
-        return true;
-    }
-
-    if (obj instanceof Map) {
-        return true;
-    }
-
-    if (obj instanceof Set) {
-        return true;
-    }
-
-    return false;
-}
+import { isPrimitiveLike } from '../utils';
 
 const nextTickFunc = process?.nextTick || setImmediate || setTimeout;
 
@@ -127,7 +100,7 @@ export function routedNestedProxy<T extends { [k: string]: any }>(
     const modifiedHandlers: ProxyHandler<T> = {};
 
     let detachAttach: boolean = false;
-    const tickdetached = new Set<T>();
+    const tickDetached = new Set<T>();
     const tickAttached = new Set<T>();
 
     function detachAttachRoutine() {
@@ -140,10 +113,10 @@ export function routedNestedProxy<T extends { [k: string]: any }>(
         nextTickFunc(() => {
             detachAttach = false;
             const actuallyAttached = new Set<T>();
-            const actuallydetached = new Set<T>(tickdetached);
+            const actuallyDetached = new Set<T>(tickDetached);
             for (const x of tickAttached.values()) {
-                if (tickdetached.has(x)) {
-                    actuallydetached.delete(x);
+                if (tickDetached.has(x)) {
+                    actuallyDetached.delete(x);
 
                     continue;
                 }
@@ -152,7 +125,7 @@ export function routedNestedProxy<T extends { [k: string]: any }>(
 
 
             tickAttached.clear();
-            tickdetached.clear();
+            tickDetached.clear();
 
             for (const x of actuallyAttached) {
                 if (!routeTrack.has(x)) {
@@ -165,7 +138,7 @@ export function routedNestedProxy<T extends { [k: string]: any }>(
                 });
             }
 
-            for (const x of actuallydetached) {
+            for (const x of actuallyDetached) {
                 if (!routeTrack.has(x)) {
                     continue;
                 }
@@ -208,7 +181,7 @@ export function routedNestedProxy<T extends { [k: string]: any }>(
             }
         }
         if (routeSet.size === 0) {
-            tickdetached.add(bareTgt);
+            tickDetached.add(bareTgt);
             detachAttachRoutine();
         }
     }
@@ -290,7 +263,7 @@ export function routedNestedProxy<T extends { [k: string]: any }>(
         }
         // const propDesc = Object.getOwnPropertyDescriptor(bareTgt, key);
 
-        if (isNative(orig)) {
+        if (isPrimitiveLike(orig)) {
             return orig;
         }
 
@@ -462,7 +435,7 @@ export function routedNestedProxy<T extends { [k: string]: any }>(
     function wrap(bareObj: object, bareParent?: object, wrapKey: string = '', recever?: any) {
         const parentRouteSet = bareParent ? routeTrack.get(bareParent) : new Set<string>(['']);
         if (!parentRouteSet) {
-            throw new Error('Unable to finde routeset for parentObj');
+            throw new Error('Unable to find routeSet for parentObj');
         }
         const parentRoutes = Array.from(parentRouteSet);
 

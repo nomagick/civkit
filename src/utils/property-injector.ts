@@ -12,3 +12,21 @@ export function propertyInjectorFactory(container: typeof DIContainer) {
         };
     };
 }
+
+export function DefineProperty(desc: PropertyDescriptor) {
+    return function definePropertyDecorator(
+        tgt: any, key: string | symbol, originalDescriptor?: PropertyDescriptor
+    ) {
+        if (originalDescriptor) {
+            throw new Error('Invalid use of DefineProperty decorator: it cannot be used on a method or getter/setter.');
+        }
+
+        Object.defineProperty(tgt, key, desc);
+
+        return;
+    };
+}
+
+export function SetOnPrototype(value: any) {
+    return DefineProperty({ value, enumerable: true, writable: true, configurable: true });
+}

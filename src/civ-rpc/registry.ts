@@ -174,7 +174,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 if (err instanceof AutoCastingError) {
                     throw new ParamValidationError({
                         ...err,
-                        readableMessage: err.cause?.message || err.reason,
+                        readableMessage: (err.cause as any)?.message || err.reason,
                     });
                 }
 

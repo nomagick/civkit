@@ -35,6 +35,10 @@ export function runOnce() {
 
         propDesc.value = newFunc;
 
+        Object.defineProperty(newFunc, 'name',
+            { value: `runOnceDecorated${(func.name[0] || '').toUpperCase()}${func.name.slice(1)}`, writable: false, enumerable: false, configurable: true }
+        );
+
         return propDesc;
     };
 }

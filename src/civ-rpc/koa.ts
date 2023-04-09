@@ -13,16 +13,16 @@ import KoaRouter from '@koa/router';
 import bodyParser from "koa-bodyparser";
 import {
     AbstractTempFileManger, AsyncService, Defer, FancyFile,
-    LoggerInterface, mimeOf, MIMEVec, parseContentType,
+    LoggerInterface, mimeOf, MIMEVec, NDJsonStream, parseContentType,
     restoreContentType, TimeoutError
 } from "../lib";
 import { RPCHost, RPC_CALL_ENVIROMENT } from "./base";
 import { ApplicationError, DataStreamBrokenError } from "./errors";
-import { extractMeta, extractTransferProtocolMeta } from "./meta";
+import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from "./meta";
 import { AbstractRPCRegistry } from "./registry";
 import { OpenAPIManager } from "./openapi";
-import http from "http";
-import { runOnce } from "decorators";
+import http, { IncomingHttpHeaders } from "http";
+import { runOnce } from "../decorators";
 import { createHook, executionAsyncResource } from "async_hooks";
 import { humanReadableDataSize } from "utils/readability";
 import { randomUUID } from "crypto";
@@ -220,6 +220,25 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         }));
     }
 
+    protected applyTransferProtocolMeta(ctx: Context, protocolMeta?: TransferProtocolMetadata) {
+        if (protocolMeta) {
+            if (Number.isInteger(protocolMeta.code)) {
+                ctx.status = protocolMeta.code!;
+            }
+            if (protocolMeta.contentType) {
+                ctx.set('content-type', protocolMeta.contentType);
+            }
+            if (protocolMeta.headers) {
+                for (const [key, value] of Object.entries(protocolMeta.headers)) {
+                    if (value === undefined) {
+                        continue;
+                    }
+                    ctx.set(key, value);
+                }
+            }
+        }
+    }
+
     makeSuccResponse(result: any) {
         const protocolMeta = extractTransferProtocolMeta(result);
         const data = {
@@ -282,7 +301,6 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             const keepAliveTimer = setTimeout(() => {
                 ctx.socket.setKeepAlive(true, 2 * 1000);
             }, 2 * 1000);
-
             try {
                 if (hostIsAsyncService && rpcHost.serviceStatus !== 'ready') {
                     // RPC host may be crippled, if this is the case, assert its back up again.
@@ -291,59 +309,73 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     this.logger.info(`${rpcHost.constructor.name} recovered successfully`);
                 }
 
-                const result = await this.exec(methodName, jointInput);
+                const result = await this.call(methodName, jointInput);
+                const output = result.output;
                 clearTimeout(keepAliveTimer);
 
                 // eslint-disable-next-line @typescript-eslint/no-magic-numbers
                 if (ctx.status === 404) {
                     ctx.status = 200;
                 }
-                if (result instanceof FancyFile) {
-                    ctx.socket.setKeepAlive(true, 1000);
-                    const resolvedFile = await result.resolve();
-                    ctx.respond = false;
-                    ctx.type = await result.mimeType;
-                    ctx.set('content-length', (await result.size).toString());
-                    ctx.set('content-disposition', `attachment; filename="${await result.fileName}"`);
-                    resolvedFile.createReadStream().pipe(ctx.res);
-                } else if (result instanceof Readable || (typeof result?.pipe) === 'function') {
+
+                if (output instanceof Readable || (typeof output?.pipe) === 'function') {
                     ctx.socket.setKeepAlive(true, 1000);
                     ctx.respond = false;
-                    const meta = extractMeta(result);
-                    const contentType = meta?.contentType || meta?.mimeType || 'application/octet-stream';
-                    ctx.set('content-type', contentType);
-                    (result as Readable).pipe(ctx.res);
+
+                    this.applyTransferProtocolMeta(ctx, result.tpm);
+                    if (output.readableObjectMode) {
+                        const transformStream = new NDJsonStream();
+                        this.applyTransferProtocolMeta(ctx, extractTransferProtocolMeta(transformStream));
+                        output.pipe(transformStream, { end: true });
+                        transformStream.pipe(ctx.res, { end: true });
+                    } else {
+                        output.pipe(ctx.res);
+                    }
                     ctx.res.once('close', () => {
-                        if (!(result as Readable).readableEnded) {
-                            (result as Readable).destroy(new Error('Downstream socket closed'));
+                        if (!output.readableEnded) {
+                            this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`, {
+                                traceId: Reflect.get(ctx, TRACE_ID)
+                            });
+                            output.once('error', (err: any) => {
+                                this.logger.warn(`Error occurred in response stream: ${err}`, {
+                                    traceId: Reflect.get(ctx, TRACE_ID),
+                                    err
+                                });
+                            });
+                            output.destroy(new Error('Downstream socket closed'));
                         }
                     });
-                } else if (Buffer.isBuffer(result)) {
-                    const mimeVec = await mimeOf(result);
-                    const meta = extractMeta(result);
-                    const contentType = meta?.contentType || meta?.mimeType || restoreContentType(mimeVec);
-                    ctx.set('content-type', contentType);
-                    ctx.body = result;
-                } else {
-                    const content = this.makeSuccResponse(result);
-                    if (typeof content === 'object' && content !== null) {
-                        ctx.set('content-type', 'application/json; charset=UTF-8');
+                } else if (Buffer.isBuffer(output)) {
+                    if (!(result.tpm?.contentType)) {
+                        const contentType = restoreContentType(await mimeOf(output));
+                        ctx.set('content-type', contentType);
                     }
-
-                    ctx.body = content;
+                    this.applyTransferProtocolMeta(ctx, result.tpm);
+                    ctx.body = output;
+                } else if (typeof output === 'string') {
+                    ctx.set('content-type', 'text/plain');
+                    this.applyTransferProtocolMeta(ctx, result.tpm);
+                    ctx.body = output;
+                } else {
+                    ctx.set('content-type', 'application/json');
+                    this.applyTransferProtocolMeta(ctx, result.tpm);
+                    ctx.body = output;
                 }
 
+                if (!result.succ) {
+                    this.logger.warn(`Error serving incoming request`, { brief: this.briefKoaRequest(ctx), err: result.err });
+                    if (result.err?.stack) {
+                        this.logger.warn(`Stacktrace: \n`, result.err?.stack);
+                    }
+                }
             } catch (err: any) {
+                // Note that the shim controller doesn't suppose to throw any error.
                 clearTimeout(keepAliveTimer);
-                const resp = this.makeErrResponse(err) as any;
-                ctx.body = resp;
-                // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-                ctx.status = resp.statusCode || resp.code || 500;
-
                 this.logger.warn(`Error serving incoming request`, { brief: this.briefKoaRequest(ctx), err });
                 if (err?.stack) {
-                    this.logger.warn(`Stacktrace: \n`, err.stack);
+                    this.logger.warn(`Stacktrace: \n`, err?.stack);
                 }
+                return next(err);
             }
 
             return next();
@@ -352,6 +384,31 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
     wipeBehindKoaRouter(...middlewares: Middleware[]) {
         return compose(middlewares);
+    }
+
+    briefHeaders(headers: IncomingHttpHeaders) {
+        const result: Record<string, string> = {};
+        for (const [key, value] of Object.entries(headers)) {
+            if (typeof value === 'string') {
+                result[key] = value;
+            } else if (Array.isArray(value)) {
+                result[key] = value.join(',');
+            } else {
+                result[key] = `${value}`;
+            }
+        }
+
+        if (result.authorization) {
+            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+            result.authorization = `[REDACTED ${result.authorization.length} characters ends with ${result.authorization.slice(-4)}]`;
+        }
+
+        if (result.cookie) {
+            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+            result.cookie = `[REDACTED ${result.cookie.length} characters]`;
+        }
+
+        return result;
     }
 
     briefKoaRequest(ctx: Context) {
@@ -364,7 +421,8 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             host: ctx.host,
             method: ctx.method,
             url: ctx.request.originalUrl,
-            headers: ctx.request.headers,
+            headers: this.briefHeaders(ctx.request.headers),
+            traceId: Reflect.get(ctx, TRACE_ID)
         };
     }
 
@@ -596,6 +654,57 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
         return next();
     }
+
+    async registerParticularRoute(
+        rpcMethod: string,
+        koaRouter: KoaRouter,
+        qPath: string,
+    ) {
+        const methodConfig = this.conf.get(rpcMethod);
+        if (!methodConfig) {
+            throw new Error(`No such rpc method: ${rpcMethod}`);
+        }
+        const httpConfig: {
+            action?: string | string[];
+            path?: string;
+        } | undefined = methodConfig.ext?.http;
+
+        let methods = ['post'];
+        if (httpConfig?.action) {
+            if (typeof httpConfig.action === 'string') {
+                methods.push(httpConfig.action);
+            } else if (Array.isArray(httpConfig.action)) {
+                methods.push(...httpConfig.action);
+            }
+        }
+        methods = _(methods).uniq().compact().map((x) => x.toLowerCase()).value();
+
+        koaRouter.register(
+            qPath,
+            methods,
+            this.wipeBehindKoaRouter(
+                ...this.koaMiddlewares,
+                this.makeKoaShimController(rpcMethod)
+            )
+        );
+
+        const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
+
+        if (methodsToFillNoop.length) {
+            koaRouter.register(
+                qPath,
+                methodsToFillNoop,
+                this.wipeBehindKoaRouter(
+                    ...this.koaMiddlewares,
+                    this.__noop
+                )
+            );
+        }
+        this.logger.debug(
+            `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${qPath} => rpc(${rpcMethod})`,
+            { httpConfig }
+        );
+    }
 }
 
 export interface RPCRegistry {
@@ -626,6 +735,8 @@ export abstract class KoaServer extends AsyncService {
     koaRootRouter: KoaRouter = new KoaRouter();
 
     httpServer!: http.Server;
+
+    listening = false;
 
     constructor() {
         super(...arguments);
@@ -691,6 +802,8 @@ export abstract class KoaServer extends AsyncService {
         await this.serviceReady();
         // eslint-disable-next-line @typescript-eslint/no-magic-numbers
         this.httpServer.listen(port, () => {
+
+            this.listening = true;
             this.logger.info(`Server listening on port ${port}`);
         });
     }
@@ -810,5 +923,34 @@ export abstract class KoaServer extends AsyncService {
         };
 
         this.koaApp.use(healthCheck);
+    }
+
+    override async standDown() {
+        if (this.listening) {
+            this.logger.info('Server closing...');
+            this.httpServer.closeIdleConnections();
+            await new Promise<void>((resolve, reject) => {
+                const timer = setInterval(async () => {
+                    this.httpServer.closeIdleConnections();
+                    const connsLeft = await new Promise((resolve) => this.httpServer.getConnections((err, c) => {
+                        if (err) { return resolve(undefined); }
+                        return resolve(c);
+                    }));
+                    this.logger.warn(`Waiting for ${connsLeft} remaining connections`);
+                }, 1000).unref();
+
+                this.httpServer.close((err) => {
+                    if (err) {
+                        return reject(err);
+                    }
+                    clearInterval(timer);
+                    resolve();
+                });
+
+            });
+
+            this.listening = false;
+        }
+        super.standDown();
     }
 }

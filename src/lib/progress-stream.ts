@@ -1,5 +1,5 @@
 import { addAbortSignal, Duplex, Readable, ReadableOptions } from 'stream';
-import { marshalErrorLike } from '../utils/lang';
+import { marshalErrorLike } from '../utils';
 
 export enum PROGRESS_TYPE {
     KEEPALIVE = 'keepalive',
@@ -60,6 +60,10 @@ export class ProgressStream extends Duplex {
         callback(null);
     }
 
+    override _final() {
+        this.push(null);
+    }
+
     assertMayContinue(): true {
         if (this.writable) {
             return true;
@@ -86,7 +90,7 @@ export class ProgressStream extends Duplex {
             done: (payload?: any, etc?: object) =>
                 this.write({ type: PROGRESS_TYPE.DONE, subject, payload, ...etc }),
             warning: (payload?: any, etc?: object) =>
-                this.write({ type: PROGRESS_TYPE.WARNING, subject, payload, ...etc}),
+                this.write({ type: PROGRESS_TYPE.WARNING, subject, payload, ...etc }),
             error: (error: Error | string, etc?: object) => {
                 if (typeof error === 'string') {
                     error = new Error(error);
@@ -106,7 +110,7 @@ export class ProgressStream extends Duplex {
 
 
 export interface ProgressStream {
-    push(chunk: ProgressEvent): boolean;
+    push(chunk: ProgressEvent | null): boolean;
     write(chunk: ProgressEvent, callback?: (error: Error | null | undefined) => void): boolean;
     write(
         chunk: ProgressEvent,

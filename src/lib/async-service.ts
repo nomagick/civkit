@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { errorMonitor, EventEmitter } from 'events';
 import type { InjectionToken } from 'tsyringe';
 import { Defer, TimeoutError } from './defer';
 
@@ -29,11 +29,11 @@ export abstract class AsyncService extends EventEmitter {
             readyDeferred.resolve(this);
         });
 
-        this.once('error', (err) => {
+        this.once(errorMonitor, (err) => {
             readyDeferred.reject(err);
         });
 
-        this.on('error', () => {
+        this.on(errorMonitor, () => {
             this.__status = 'error';
         });
 
@@ -145,7 +145,6 @@ export interface AsyncService {
     on(event: 'crippled', listener: (err?: Error | any) => void): this;
     on(event: 'pending', listener: (err: Error) => void): this;
     on(event: 'stand-down', listener: (err: Error) => void): this;
-
     on(event: 'error', listener: (err: Error) => void): this;
     on(event: string | symbol, listener: (...args: any[]) => void): this;
 }

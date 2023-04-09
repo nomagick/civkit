@@ -1,6 +1,19 @@
 import _ from 'lodash';
+import {
+    ObjectId, Timestamp, UUID, Binary, BSONRegExp, BSONSymbol,
+    Code, DBRef, Decimal128, Double, Int32, Long, MaxKey, MinKey
+} from 'bson';
+import nodeObjectHash from 'node-object-hash';
 
-import { chainEntries, topLevelConstructorOf } from './lang';
+import {
+    chainEntriesSimple as chainEntries, isPrimitiveLike,
+} from './lang';
+
+const BSON_TYPES = [
+    ObjectId, Timestamp, UUID, Binary, BSONRegExp, BSONSymbol,
+    Code, DBRef, Decimal128, Double, Int32, Long, MaxKey, MinKey
+];
+const BSON_PROTOTYPES = new Set(BSON_TYPES.map((x) => x.prototype));
 
 function _vectorize(obj: object, stack: string[] = []) {
     const vectors: Array<[string, any]> = [];
@@ -26,7 +39,9 @@ export function vectorize(obj: object) {
     return _.fromPairs(_vectorize(obj)) as { [k: string]: any; };
 }
 
-function _vectorize2(obj: object, stack: string[] = [], mode: 'array' | 'inherited' = 'inherited') {
+export function _vectorize2(
+    obj: object, stack: string[] = [], mode: 'array' | 'inherited' = 'inherited'
+): [string, any][] {
     const vectors: Array<[string, any]> = [];
     for (const [k, v] of chainEntries(obj)) {
         if (mode === 'array') {
@@ -42,7 +57,12 @@ function _vectorize2(obj: object, stack: string[] = [], mode: 'array' | 'inherit
         }
 
         if (obj.hasOwnProperty(k)) {
-            if (_.isPlainObject(v) || Array.isArray(v)) {
+            // Fall back to simple object whenever key contains dot or $
+            // MongoDB cannot query keys with dot or $
+            if (k.includes('.') || k.includes('$')) {
+                return [[stack.join('.'), deepSurface(obj)]];
+            }
+            if (Array.isArray(v)) {
                 vectors.push([stack.concat(k).join('.'), deepSurface(v)]);
                 continue;
             }
@@ -50,14 +70,14 @@ function _vectorize2(obj: object, stack: string[] = [], mode: 'array' | 'inherit
                 typeof v === 'object' &&
                 v !== null
             ) {
-                const topLevelConstructor = topLevelConstructorOf(v);
-                if (topLevelConstructor === Object) {
-                    vectors.push(..._vectorize2(v, stack.concat(k)));
-                } else if (topLevelConstructor === Array) {
+                if (v instanceof Array) {
                     vectors.push(..._vectorize2(v, stack.concat(k), 'array'));
-                } else if (topLevelConstructor) {
+                } else if (isPrimitiveLike(v, BSON_PROTOTYPES)) {
                     vectors.push([stack.concat(k).join('.'), v]);
+                } else {
+                    vectors.push(..._vectorize2(v, stack.concat(k)));
                 }
+
                 continue;
             }
 
@@ -68,13 +88,12 @@ function _vectorize2(obj: object, stack: string[] = [], mode: 'array' | 'inherit
         if (
             typeof v === 'object' && v !== null
         ) {
-            const topLevelConstructor = topLevelConstructorOf(v);
-            if (topLevelConstructor === Object) {
-                vectors.push(..._vectorize2(v, stack.concat(k)));
-            } else if (topLevelConstructor === Array) {
+            if (v instanceof Array) {
                 vectors.push(..._vectorize2(v, stack.concat(k), 'array'));
-            } else if (topLevelConstructor) {
+            } else if (isPrimitiveLike(v, BSON_PROTOTYPES)) {
                 vectors.push([stack.concat(k).join('.'), v]);
+            } else {
+                vectors.push(..._vectorize2(v, stack.concat(k)));
             }
 
             continue;
@@ -85,7 +104,22 @@ function _vectorize2(obj: object, stack: string[] = [], mode: 'array' | 'inherit
 }
 
 export function vectorize2(obj: object) {
-    return _.fromPairs(_vectorize2(obj)) as { [k: string]: any; };
+    const vecs = _vectorize2(obj);
+
+    if (vecs.length > 1) {
+        return _.fromPairs(vecs);
+    }
+
+    if (!vecs.length) {
+        return {};
+    }
+
+    const [k, v] = vecs[0];
+    if (k) {
+        return { [k]: v };
+    }
+
+    return v;
 }
 
 export function specialDeepVectorize(obj: object, stack: string[] = [], refStack: Set<any> = new Set()) {
@@ -145,13 +179,18 @@ export function parseJSONText(text?: string) {
     }
 }
 
+
 export function deepCreate(source: object): any {
-    const clone: any = Array.isArray(source) ? [...source] : { ...source };
+    const isArray = Array.isArray(source);
+    const clone: any = isArray ? [...source] : { ...source };
 
     for (const [k, v] of Object.entries(source)) {
-        if (_.isObjectLike(v)) {
-            clone[k] = deepCreate(v);
+        if (isPrimitiveLike(v, BSON_PROTOTYPES)) {
+            clone[k] = v;
+            continue;
         }
+
+        clone[k] = deepCreate(v);
     }
 
     const result = Object.create(clone);
@@ -164,12 +203,11 @@ export function deepSurface(source: any): any {
         return source;
     }
 
-    const topLevelConstructor = topLevelConstructorOf(source);
-    if (topLevelConstructor === Array) {
+    if (source instanceof Array) {
         return (source as Array<any>).map((x) => (_.isPlainObject(x) ? x : deepSurface(x)));
     }
 
-    if (topLevelConstructor !== Object) {
+    if (isPrimitiveLike(source, BSON_PROTOTYPES)) {
         return source;
     }
 
@@ -182,7 +220,7 @@ export function deepSurface(source: any): any {
     return clone;
 }
 
-export function deepClean<T>(object: T): Partial<T> {
+export function deepClean<T extends object>(object: T): Partial<T> {
     for (const [k, v] of Object.entries(object)) {
         if (v === null || v === undefined) {
             delete (object as any)[k];
@@ -198,4 +236,10 @@ export function deepClean<T>(object: T): Partial<T> {
     }
 
     return object as any;
+}
+
+const objHasher = nodeObjectHash();
+
+export function objHashMd5B64Of(obj: any, options?: nodeObjectHash.HasherOptions) {
+    return objHasher.hash(obj, { enc: 'base64', alg: 'md5', ...options });
 }

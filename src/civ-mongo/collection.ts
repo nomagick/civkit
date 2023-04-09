@@ -1,20 +1,21 @@
-import _ from 'lodash';
 import {
-    AggregateOptions, ChangeStream, ChangeStreamDocument, ChangeStreamOptions,
-    ClientSession, ClientSessionOptions, Collection, CountDocumentsOptions,
-    DeleteOptions, Filter, FindOneAndDeleteOptions, FindOneAndReplaceOptions, FindOneAndUpdateOptions,
-    FindOptions, InsertOneOptions, ObjectId, OptionalId, UpdateFilter, UpdateOptions,
-    WithTransactionCallback, CreateIndexesOptions, CreateCollectionOptions, MatchKeysAndValues, CollectionInfo
+    ObjectId, AggregateOptions, BulkWriteOptions,
+    ChangeStream, ChangeStreamDocument, ChangeStreamOptions,
+    ClientSession, ClientSessionOptions, Collection,
+    CountDocumentsOptions, DeleteOptions, Document, Filter,
+    FindOneAndDeleteOptions, FindOneAndReplaceOptions, FindOneAndUpdateOptions,
+    FindOptions, InsertOneOptions, MatchKeysAndValues,
+    OptionalId, UpdateFilter, UpdateOptions, WithTransactionCallback, WithoutId, CollectionInfo
 } from 'mongodb';
-import { delay } from '../utils/timeout';
-import { deepCreate, vectorize2 } from '../utils/vectorize';
 
 import { AsyncService } from '../lib/async-service';
 import { AbstractMongoDB } from './client';
-import { LoggerInterface } from '../lib/logger';
+import _ from 'lodash';
+import { deepCreate, vectorize2, delay } from '../utils';
+import { LoggerInterface } from '../lib';
 import { PassThrough, Readable } from 'stream';
 
-export abstract class AbstractMongoCollection<T extends object, P = ObjectId> extends AsyncService {
+export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> extends AsyncService {
 
     abstract collectionName: string;
     abstract mongo: AbstractMongoDB;
@@ -27,14 +28,42 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     constructor(...whatever: any[]) {
         super(...whatever);
 
+
         // mongo should come from prototype, thus accessible from constructor.
         this.dependsOn((this as any).mongo);
     }
 
     override async init() {
-        this.mongo.on('crippled', () => this.emit('crippled'));
         await this.dependencyReady();
-        this.collection = this.mongo.db.collection(this.collectionName);
+        // Cripple only once because init function could be called multiple times.
+        // One cripple per ready.
+        this.mongo.once('crippled', () => this.emit('crippled'));
+        this.collection = this.mongo.db.collection<T>(this.collectionName);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async createIndexes(_options?: { session?: ClientSession; }) {
+        this.logger.warn(`CreateIndexes for ${this.constructor.name}(${this.collectionName}) is not implemented`);
+    }
+
+    async ensureCollection(options?: { session?: ClientSession; }) {
+        this.logger.info(`Ensuring collection ${this.constructor.name}(${this.collectionName})...`);
+        const r = await this.mongo.db.listCollections(
+            { name: this.collectionName },
+            { nameOnly: true, session: options?.session }
+        ).toArray();
+
+        if (r.length) {
+            this.logger.info(`Looks like collection ${this.constructor.name}(${this.collectionName}) already exists`);
+            return;
+        }
+
+        if (r.length <= 0) {
+            this.logger.warn(`Creating collection ${this.constructor.name}(${this.collectionName})...`);
+            await this.mongo.db.createCollection(this.collectionName);
+
+            this.logger.info(`Collection created: ${this.constructor.name}(${this.collectionName})`);
+        }
     }
 
     async getForModification(_id: P) {
@@ -97,7 +126,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
             throw r.lastErrorObject;
         }
 
-        return r.value || undefined;
+        return (r.value as T | null) || undefined;
     }
 
     async updateMany(
@@ -134,7 +163,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     ) {
         const r = await this.collection.findOneAndReplace(
             filter,
-            replace,
+            _.omit(replace, '_id') as WithoutId<T>,
             { upsert: true, returnDocument: 'after', ...options });
 
         if (!r.ok) {
@@ -160,6 +189,24 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         return doc as T;
     }
 
+    async insertMany(
+        docs: Array<OptionalId<T>>,
+        options?: BulkWriteOptions,
+    ) {
+        const r = await this.collection.insertMany(
+            docs as any,
+            options!
+        );
+
+        if (r.insertedIds) {
+            for (const [i, id] of Object.entries(r.insertedIds)) {
+                docs[Number(i)]._id = id;
+            }
+        }
+
+        return docs as T[];
+    }
+
     async create(data: Partial<T>, options?: InsertOneOptions) {
         const now = new Date();
         const doc: any = { ...data, createdAt: now, updatedAt: now };
@@ -170,7 +217,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     async set(_id: P, data: Partial<T>, options?: FindOneAndUpdateOptions) {
         const now = new Date();
         const r = await this.collection.findOneAndUpdate(
-            { _id } as any as Filter<T>,
+            { _id } as Filter<T>,
             { $set: vectorize2({ ...data, updatedAt: now }), $setOnInsert: { createdAt: now } } as any,
             { upsert: true, returnDocument: 'after', ...options }
         );
@@ -183,7 +230,7 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
     async simpleSet(_id: P, data: Partial<T>, options?: FindOneAndUpdateOptions) {
         const now = new Date();
         const r = await this.collection.findOneAndUpdate(
-            { _id } as any as Filter<T>,
+            { _id } as Filter<T>,
             { $set: { ..._.omit(data, '_id'), updatedAt: now }, $setOnInsert: { createdAt: now } } as any,
             { upsert: true, returnDocument: 'after', ...options }
         );
@@ -286,13 +333,12 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
         return r.value! as T;
     }
 
-
     clear(_id: P) {
-        return this.collection.deleteOne({ _id } as any as Filter<T>);
+        return this.collection.deleteOne({ _id } as Filter<T>);
     }
 
     del(_id: P) {
-        return this.collection.deleteOne({ _id } as any as Filter<T>);
+        return this.collection.deleteOne({ _id } as Filter<T>);
     }
 
     async deleteOne(
@@ -357,26 +403,6 @@ export abstract class AbstractMongoCollection<T extends object, P = ObjectId> ex
 
         return changeStream;
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async createIndexes(_options?: CreateIndexesOptions) {
-        return;
-    }
-
-    async ensureCollection(options?: CreateCollectionOptions) {
-        const r = await this.mongo.db.listCollections(
-            { name: this.collectionName },
-            { nameOnly: true, ...options }
-        ).toArray();
-
-        if (r.length) {
-            return;
-        }
-
-        if (r.length <= 0) {
-            await this.mongo.db.createCollection(this.collectionName, options);
-        }
-    }
 }
 
 
@@ -412,7 +438,9 @@ export abstract class AbstractMongoCappedCollection<T extends object, P = Object
     }
 
     async simpleTail(query: Filter<T>, options?: FindOptions<T>) {
-        const throughStream = new PassThrough({ objectMode: true, decodeStrings: false });
+        const throughStream = new PassThrough({
+            writableObjectMode: true, readableObjectMode: true, decodeStrings: false
+        });
         let cursorStream: Readable | undefined;
         let lastId: P | undefined;
         let stop: boolean = false;

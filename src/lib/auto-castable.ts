@@ -1,8 +1,9 @@
 import 'reflect-metadata';
-import { isConstructor, chainEntries, reverseObjectKeys, chainEntriesSimple } from '../utils/lang';
+import { isConstructor, chainEntriesSimple } from '../utils/lang';
 
 import _ from 'lodash';
 
+export const AUTO_CONSTRUCTOR_SYMBOL = Symbol('AutoConstructor');
 export const AUTOCASTABLE_OPTIONS_SYMBOL = Symbol('AutoCastable options');
 export const AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL = Symbol('AutoCastable additional options');
 
@@ -18,104 +19,32 @@ export type AdditionalPropOptions<T> = Pick<
     | 'ext'
 >;
 
-type Constructor<T> = { new(...args: any[]): T; };
-type Constructed<T> = T extends Partial<infer U> ? U : T extends object ? T : object;
+export type InternalAdditionalPropOptions<T> = AdditionalPropOptions<T> & Pick<PropOptions<T>,
+    | 'type'
+    | 'arrayOf'
+>;
 
-export abstract class AutoCastableMetaClass {
-    static [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string]: PropOptions<unknown>; };
-    static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: AdditionalPropOptions<unknown>;
+export type Constructor<T> = { new(...args: any[]): T; };
+export type Constructed<T> = T extends Partial<infer U> ? U : T extends object ? T : object;
+
+export class AutoCastableMetaClass {
+    static [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string | symbol]: PropOptions<unknown>; };
+    static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: InternalAdditionalPropOptions<unknown>;
+
     constructor(..._args: any[]) {
         return this as any;
     }
 }
 
-export function Combine<T1 extends typeof AutoCastableMetaClass, T2 extends typeof AutoCastableMetaClass>(
-    t1: T1, t2: T2
-): Constructor<InstanceType<T1> & InstanceType<T2>> & T1 & T2;
-export function Combine<
-    T1 extends typeof AutoCastableMetaClass,
-    T2 extends typeof AutoCastableMetaClass,
-    T3 extends typeof AutoCastableMetaClass
->(
-    t1: T1, t2: T2, t3: T3
-): Constructor<InstanceType<T1> & InstanceType<T2> & InstanceType<T3>> & T1 & T2 & T3;
-export function Combine<
-    T1 extends typeof AutoCastableMetaClass,
-    T2 extends typeof AutoCastableMetaClass,
-    T3 extends typeof AutoCastableMetaClass,
-    T4 extends typeof AutoCastableMetaClass,
-    >(
-        t1: T1, t2: T2, t3: T3, t4: T4
-    ): Constructor<InstanceType<T1> & InstanceType<T2> & InstanceType<T3> & InstanceType<T4>> & T1 & T2 & T3 & T4;
-export function Combine(
-    ...autoCastableClasses: Function[]
-): Constructor<any>;
-export function Combine<T extends typeof AutoCastableMetaClass>(
-    ...autoCastableClasses: T[]
-) {
-    const argArr = Array.from(autoCastableClasses);
-    const arr = argArr.reverse();
-
-    const opts: { [k: string | symbol]: PropOptions<unknown>; } = {};
-    const extOpts: AdditionalPropOptions<unknown> = {};
-    class NaivelyMergedClass extends AutoCastableMetaClass {
-        static [AUTOCASTABLE_OPTIONS_SYMBOL] = opts;
-        static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] = extOpts;
-        constructor(...args: any[]) {
-            super();
-            for (const cls of arr) {
-                cls.constructor.call(this, ...args);
-            }
-
-            return this as any;
-        }
-    }
-
-    for (const cls of arr) {
-        const partialOpts: any = {};
-        for (const [k, v] of chainEntries(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
-            partialOpts[k] = { ...v, partOf: cls.name };
-        }
-        Object.assign(opts, reverseObjectKeys(partialOpts));
-        _.merge(extOpts, cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {});
-
-        for (const [k, v, desc] of chainEntries(cls.prototype, 'With Symbol')) {
-            Object.defineProperty(NaivelyMergedClass.prototype, k, desc || { value: v, enumerable: true });
-        }
-
-        for (const [k, v, desc] of chainEntries(cls, 'With Symbol')) {
-            if ((k === AUTOCASTABLE_OPTIONS_SYMBOL) || (k === AUTOCASTABLE_OPTIONS_SYMBOL)) {
-                continue;
-            }
-            Object.defineProperty(NaivelyMergedClass, k, desc || { value: v, enumerable: true });
-        }
-    }
-
-    if (argArr.includes(Object as any)) {
-        if (!extOpts.dictOf) {
-            extOpts.dictOf = Object;
-        } else if (Array.isArray(extOpts.dictOf) && !extOpts.dictOf.includes(Object)) {
-            extOpts.dictOf.push(Object);
-        }
-    }
-
-
-    Object.assign(NaivelyMergedClass, {
-        [AUTOCASTABLE_OPTIONS_SYMBOL]: reverseObjectKeys(opts),
-        [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]: reverseObjectKeys(extOpts),
-    });
-
-    Object.defineProperty(NaivelyMergedClass, 'name', {
-        value: `${argArr.map((x) => x.name).join('&')}`,
-        writable: false,
-    });
-
-    return NaivelyMergedClass as any;
-}
+export type AutoConstructorType<T extends Constructor<unknown>> =
+    (this: T, input: any, ...args: ConstructorParameters<T>) => InstanceType<T>;
 
 /**
  * Retrieve and verify an object based on the props (required, type, default and so on)
  */
+export function autoConstructor<T extends AutoCastableMetaClass>(
+    this: Constructor<T>, input: any, ...args: ConstructorParameters<typeof this>
+): T;
 export function autoConstructor<T extends AutoCastableMetaClass>(
     this: Constructor<Partial<T>>, input: any, ...args: ConstructorParameters<typeof this>
 ): T;
@@ -151,14 +80,44 @@ export function autoConstructor(
 }
 
 export class AutoCastable implements AutoCastableMetaClass {
-    static [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string]: PropOptions<unknown>; };
-    static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: AdditionalPropOptions<unknown>;
+    static [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string | symbol]: PropOptions<unknown>; };
+    static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: InternalAdditionalPropOptions<unknown>;
 
+    @AutoConstructor
     static from = autoConstructor;
 
     constructor(..._args: any[]) {
         return this as any;
     }
+}
+
+export function isAutoConstructable(cls: any): boolean {
+    if (!cls) {
+        return false;
+    }
+    const autoConstructorIdentifier = Reflect.get(cls, AUTO_CONSTRUCTOR_SYMBOL);
+    const autoConstructorFunc = Reflect.get(cls, autoConstructorIdentifier);
+
+    if (typeof autoConstructorFunc === 'function') {
+        return true;
+    }
+
+    return false;
+}
+
+export function autoConstruct<T extends Constructor<unknown>>(cls: T, input: any, ...args: ConstructorParameters<T>[]) {
+    const autoConstructorIdentifier = Reflect.get(cls, AUTO_CONSTRUCTOR_SYMBOL) as string | symbol;
+    const autoConstructorFunc = (Reflect.get(cls, autoConstructorIdentifier) || autoConstructor) as Function;
+
+    return autoConstructorFunc.call(cls, input, ...args) as InstanceType<T>;
+}
+
+export function AutoConstructor<T extends Constructor<any>>(tgt: T, propName: string | symbol) {
+    Object.defineProperty(
+        tgt,
+        AUTO_CONSTRUCTOR_SYMBOL,
+        { value: propName, enumerable: false, configurable: true, writable: false }
+    );
 }
 
 export function isAutoCastableClass(cls: any): boolean {
@@ -169,10 +128,8 @@ export function isAutoCastableClass(cls: any): boolean {
     if (
         cls.prototype instanceof AutoCastable ||
         cls.prototype instanceof AutoCastableMetaClass ||
-        (
-            (typeof (cls as any).from === 'function') &&
-            (cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL])
-        )
+        isAutoConstructable(cls) ||
+        (cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL])
     ) {
         return true;
     }
@@ -189,12 +146,10 @@ export class AutoCastingError extends Error {
     propName: string;
     reason: string;
 
-    cause?: Error;
-
     get error() {
         return this.cause;
     }
-    set error(input: Error | undefined) {
+    set error(input: unknown) {
         this.cause = input;
     }
 
@@ -244,16 +199,13 @@ export function castToType(ensureTypes: any[], inputProp: any) {
             }
 
             try {
-                val = typeShouldBe.from ? typeShouldBe.from(inputProp) : autoConstructor.call(typeShouldBe, inputProp);
+                val = autoConstruct(typeShouldBe, inputProp);
+                break;
             } catch (err) {
                 lastErr = err;
                 continue;
             }
 
-            if (val instanceof typeShouldBe) {
-                break;
-            }
-            continue;
         } else if (typeShouldBe instanceof Set) {
             // Enums would end up here
             if (!typeShouldBe.has(inputProp)) {
@@ -432,12 +384,6 @@ export function inputSingle<T>(
     } else if (config.dictOf) {
         isDict = true;
         types = Array.isArray(config.dictOf) ? config.dictOf : [config.dictOf];
-    } else if (config.combinationOf) {
-        if (Array.isArray(config.combinationOf)) {
-            types = [Combine(...config.combinationOf)];
-        } else {
-            types = [config.combinationOf];
-        }
     } else if (config.type) {
         if (config.type === Array) {
             isArray = true;
@@ -898,7 +844,6 @@ export interface PropOptions<T> {
     type?: any | any[];
     arrayOf?: any | any[];
     dictOf?: any | any[];
-    combinationOf?: (typeof AutoCastableMetaClass) | (typeof AutoCastableMetaClass)[];
 
     validate?: T extends Array<infer P> ?
     (val: P, obj?: any) => Error | boolean | Array<(val: P, obj?: any) => Error | boolean> :
@@ -921,8 +866,14 @@ export interface PropOptions<T> {
     ext?: { [k: string]: any; };
 }
 
-function enumToSet(enumObj: any, designType?: any) {
-    const result = new Set<string | number>();
+const ENUM_TO_SET_MAP = new WeakMap<object, Set<string> | Set<number>>();
+
+export function enumToSet(enumObj: object, designType?: any) {
+    if (ENUM_TO_SET_MAP.has(enumObj)) {
+        return ENUM_TO_SET_MAP.get(enumObj)!;
+    }
+
+    const result = new Set<any>();
     if (designType === String) {
         for (const x of Object.values(enumObj as any)) {
             if (typeof x === 'string') {
@@ -941,20 +892,29 @@ function enumToSet(enumObj: any, designType?: any) {
         }
     }
 
-    result.toString = function () {
-        return `ENUM(${Array.from(this.values()).join('|')})`;
-    };
+    result.toString = enumToString;
+
+    ENUM_TO_SET_MAP.set(enumObj, result);
 
     return result;
 }
 
 function enumToString(this: Set<any>) {
-    const str = Array.from(this.values()).join('|');
+    const members = Array.from(this.values());
+    if (!members.length) {
+        return 'Ø';
+    }
+    const str = members.map((x) => {
+        if (typeof x === 'string') {
+            return `"${x}"`;
+        }
+        return x;
+    }).join(' | ');
 
-    return `ENUM(${str.length > 128 ? str.substring(0, 128) + '...' : str})`;
+    return `${str.length > 128 ? str.substring(0, 128) + '...' : str}`;
 }
 
-function describeAnonymousValidateFunction(validator: Function) {
+export function describeAnonymousValidateFunction(validator: Function) {
     if (typeof validator !== 'function') {
         return '';
     }
@@ -980,9 +940,22 @@ function errorMessageOf(err: Error) {
     return err.toString();
 }
 
-export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, designType: any) {
+export function __patchTypesEnumToSet(classes: any[]) {
+    return classes.map((x) => {
+        if (_.isPlainObject(x)) {
+            // Its enum.
+            return enumToSet(x);
+        } else if (x instanceof Set) {
+            x.toString = enumToString;
+        }
 
-    const typeAttrs = ['type', 'arrayOf', 'dictOf'] as ['type', 'arrayOf', 'dictOf'];
+        return x;
+    });
+}
+
+export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, designType?: any) {
+
+    const typeAttrs = ['type', 'arrayOf', 'dictOf'] as const;
 
     for (const attr of typeAttrs) {
         const attrVal = options[attr];
@@ -990,7 +963,7 @@ export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, de
             options[attr] = attrVal.map((x: unknown) => {
                 if (_.isPlainObject(x)) {
                     // Its enum.
-                    return enumToSet(x);
+                    return enumToSet(x as object);
                 } else if (x instanceof Set) {
                     x.toString = enumToString;
                 }
@@ -1008,17 +981,30 @@ export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, de
     return options;
 }
 
-export function Prop<T = any>(options: PropOptions<T> | string = {}) {
+export function Prop<
+    U = any,
+    T extends typeof AutoCastableMetaClass = typeof AutoCastableMetaClass
+>(options: PropOptions<U> | string = {}) {
     const _options = typeof options === 'string' ? { path: options } : options;
 
     return function RPCParamPropDecorator(
-        tgt: typeof AutoCastableMetaClass.prototype, propName: string
+        tgt: T['prototype'], propName: string | symbol
     ) {
         const constructor = tgt.constructor as typeof AutoCastable;
         if (!constructor[AUTOCASTABLE_OPTIONS_SYMBOL]) {
-            constructor[AUTOCASTABLE_OPTIONS_SYMBOL] = {};
+            Object.defineProperty(constructor, AUTOCASTABLE_OPTIONS_SYMBOL, {
+                value: {},
+                configurable: true,
+                enumerable: false,
+                writable: false,
+            });
         } else if (!constructor.hasOwnProperty(AUTOCASTABLE_OPTIONS_SYMBOL)) {
-            constructor[AUTOCASTABLE_OPTIONS_SYMBOL] = Object.create(constructor[AUTOCASTABLE_OPTIONS_SYMBOL]!);
+            Object.defineProperty(constructor, AUTOCASTABLE_OPTIONS_SYMBOL, {
+                value: Object.create(constructor[AUTOCASTABLE_OPTIONS_SYMBOL]!),
+                configurable: true,
+                enumerable: false,
+                writable: false,
+            });
         }
 
         const hostConfig = constructor[AUTOCASTABLE_OPTIONS_SYMBOL]!;
@@ -1043,12 +1029,22 @@ export function Also<T = any>(
         tgt: typeof AutoCastableMetaClass
     ) {
         if (!tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
-            tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] = {};
+            Object.defineProperty(tgt, AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL, {
+                value: {},
+                configurable: true,
+                enumerable: false,
+                writable: false,
+            });
         } else if (!tgt.hasOwnProperty(AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL)) {
-            tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] = Object.create(tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]!);
+            Object.defineProperty(tgt, AUTOCASTABLE_OPTIONS_SYMBOL, {
+                value: Object.create(tgt[AUTOCASTABLE_OPTIONS_SYMBOL]!),
+                configurable: true,
+                enumerable: false,
+                writable: false,
+            });
         }
 
         const hostConfig = tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]!;
-        Object.assign(hostConfig, __patchPropOptionsEnumToSet(options, hostConfig.dictOf));
+        Object.assign(hostConfig, __patchPropOptionsEnumToSet(options));
     };
 }

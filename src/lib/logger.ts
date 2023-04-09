@@ -102,6 +102,12 @@ export abstract class AbstractLogger extends AsyncService {
         Object.defineProperty(childLogger, 'logger', {
             get: () => this.logger
         });
+        Object.defineProperty(childLogger, 'child', {
+            value: (bindings: object) => this.child(bindings)
+        });
+        Object.defineProperty(childLogger, 'flush', {
+            value: () => this.logger.flush()
+        });
 
         for (const level of Object.values(logLevels)) {
             childLogger[level] = wipeBehindPinoFunction(level, bindings);

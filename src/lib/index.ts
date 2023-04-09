@@ -25,19 +25,11 @@ export {
 } from './hash';
 
 export {
-    FetchError, PromiseWithCancel,
-    Request, Response, RequestInit, Headers,
+    PromiseWithCancel,
 
     HTTPServiceRequestOptions, HTTPServiceConfig,
     HTTPServiceError, HTTPService,
     HTTPServiceResponse,
-
-    SimpleCookie, InertMemoryCookieStore,
-    parseSimpleCookie,
-
-    CookieAwareHTTPServiceRequestOptions,
-    CookieAwareHTTPServiceConfig,
-    CookieAwareHTTPService
 
 } from './httpService';
 
@@ -53,7 +45,7 @@ export {
 } from './mime';
 
 export {
-    isNative, RoutedProxyHandler,
+    RoutedProxyHandler,
     UpdateEvent, DropEvent, AttachEvent, DetachEvent,
     ProxyEventEmitter,
     routeJoin,
@@ -61,7 +53,7 @@ export {
     routedNestedProxy
 } from './routed-nested-proxy';
 
-export { CustomSpawnOptions, SubProcessRoutine } from './subprocess';
+export { CustomSpawnOptions, SubProcessRoutine } from './sub-process';
 
 export { PromiseThrottle } from './throttle';
 
@@ -82,8 +74,17 @@ export {
     inputSingle,
     AutoCastableMetaClass,
     autoConstructor,
-    Combine
 } from './auto-castable';
+
+export {
+    MangledConstructor,
+    Combine,
+    CombineEnum,
+    Partial, Required, Omit, Pick,
+    Literal, ArrayOf, DictOf, OneOf,
+    describeType
+} from './auto-castable-utils';
+
 
 export {
     PROGRESS_TYPE, ProgressStream
@@ -103,3 +104,5 @@ export {
     randomPick,
     randomMultiPick
 } from './random';
+
+export * from './constants';

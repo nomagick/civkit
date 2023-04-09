@@ -1,5 +1,5 @@
 import { Transform, TransformCallback, TransformOptions } from 'stream';
-import { TPM } from '../civi-rpc/meta';
+import { TPM } from '../civ-rpc/meta';
 
 
 @TPM({

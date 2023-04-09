@@ -26,10 +26,10 @@ export class SubProcessRoutine extends EventEmitter {
         super();
         this.cmd = cmd;
         this.args = args || [];
-        this.spawnOptions = spawnOptions;
+        this.spawnOptions = { ...spawnOptions };
         // dont crash the parent process
         this.on('error', () => 0);
-        this.emit('init', { cmd, args, spawnOptions });
+        this.emit('init', { cmd, args, spawnOptions: this.spawnOptions });
     }
 
     get pid() {
@@ -76,7 +76,8 @@ export class SubProcessRoutine extends EventEmitter {
         if (this.currentState === 'pending') {
             throw new Error('Overlapping process start');
         }
-        this.childProcess = spawn(this.cmd, this.args, this.spawnOptions as SpawnOptions);
+        // Note that spawnOptions is shallow cloned to avoid `env` being set to the object.
+        this.childProcess = spawn(this.cmd, this.args, { ...this.spawnOptions } as SpawnOptions);
         this.currentState = 'pending';
         this.emit('start', {
             cmd: this.cmd,

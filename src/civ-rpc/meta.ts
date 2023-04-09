@@ -1,7 +1,7 @@
 import _, { cloneDeep } from 'lodash';
 import { isConstructor } from '../utils';
-import { objHashMd5B64Of } from '../lib/hash';
 import type { RPCEnvelope } from './base';
+import { objHashMd5B64Of } from '../lib/hash';
 
 export const RPC_RESULT_META_SYMBOL = Symbol('RPC result metas');
 export const RPC_MARSHALL = Symbol('RPCMarshall');
@@ -32,7 +32,7 @@ export interface TransferProtocolMetadata {
     code?: number;
     status?: number;
     contentType?: string;
-    headers?: { [k: string]: string; };
+    headers?: { [k: string]: string | string[] | undefined; };
     envelope?: typeof RPCEnvelope | null;
 
     [k: string]: any;
@@ -107,7 +107,7 @@ export function MixTPM<T extends { new(...args: any[]): any; }>(
     class TPMDecorated extends tgt { }
 
     Object.defineProperty(TPMDecorated, 'name', {
-        value: `${tgt.name}WithTPM:${objHashMd5B64Of(meta).replaceAll('=', '')}`,
+        value: `${tgt.name}WithTPM-${objHashMd5B64Of(meta, { enc: 'base64url' })}`,
         writable: false,
     });
 

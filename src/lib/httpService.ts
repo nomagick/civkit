@@ -1,64 +1,43 @@
-// tslint:disable: no-magic-numbers
 import { Agent as HTTPAgent } from 'http';
 import { Agent as HTTPSAgent } from 'https';
 
 import { URL, URLSearchParams } from 'url';
 
-import { Cookie, CookieJar, MemoryCookieStore } from 'tough-cookie';
-
-import FormData from 'form-data';
-
 import _ from 'lodash';
 import { EventEmitter } from 'events';
 import { stringify as formDataStringify } from 'querystring';
-import { Defer, TimeoutError } from './defer';
-import fetch, { RequestInit, Response, FetchError, Headers } from 'node-fetch';
 
-export { FetchError, Request, Response, Headers, RequestInit } from 'node-fetch';
-
+import { Defer } from './defer';
 import { stringifyErrorLike } from '../utils/lang';
 
-export function timeout<T>(promise: Promise<T>, ttl: number): Promise<T> {
+import type { RequestInit, Response, File } from 'undici';
 
-    const deferred = Defer();
-    promise.then(deferred.resolve, deferred.reject);
-
-    setTimeout(() => {
-        promise.catch(() => 0);
-        deferred.reject(new TimeoutError(`Operation timedout after ${ttl}ms.`));
-        if (typeof (promise as any).cancel === 'function') {
-            (promise as any).cancel();
-        }
-    }, ttl);
-
-    return deferred.promise;
-}
-
-
-export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void };
-
+export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void; };
 
 export interface HTTPServiceRequestOptions extends RequestInit {
     url?: string;
     raw?: boolean;
-    responseType?: 'json' | 'stream' | 'text' | 'buffer';
+    responseType?: 'json' | 'stream' | 'text' | 'buffer' | 'blob';
+    timeout?: number;
 }
 
 function getAgent(protocol: 'https'): HTTPSAgent;
 function getAgent(protocol: 'http'): HTTPAgent;
 function getAgent(protocol: 'http' | 'https') {
-    return protocol === 'http' ? new HTTPAgent({
-        keepAlive: true,
+    return protocol === 'http'
+        ? new HTTPAgent({
+            keepAlive: true,
 
-        keepAliveMsecs: 20 * 1000,
-        maxSockets: 100,
-        maxFreeSockets: 5
-    }) : new HTTPSAgent({
-        keepAlive: true,
-        keepAliveMsecs: 20 * 1000,
-        maxSockets: 100,
-        maxFreeSockets: 5
-    });
+            keepAliveMsecs: 2 * 10 * 1000,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+        })
+        : new HTTPSAgent({
+            keepAlive: true,
+            keepAliveMsecs: 2 * 10 * 1000,
+            maxSockets: 100,
+            maxFreeSockets: 5,
+        });
 }
 
 export interface HTTPServiceConfig {
@@ -72,17 +51,26 @@ export interface HTTPServiceConfig {
 
     baseParams?: { [k: string]: string | string[]; };
     baseHeaders?: { [k: string]: string | string[]; };
-    initialCookies?: SimpleCookie;
 }
 
 export class HTTPServiceError<T extends HTTPServiceRequestOptions = HTTPServiceRequestOptions> extends Error {
-    err?: Error | FetchError | { [k: string]: any; } | null;
     serial: number;
     status?: string | number;
     config?: T;
     response?: Response;
+
+    override cause?: Error | { [k: string]: any; } | null;
+
+    get err() {
+        return this.cause as Error | { [k: string]: any; } | null;
+    }
+
+    set err(input: Error | { [k: string]: any; } | null) {
+        this.cause = input;
+    }
+
     constructor(serial: number, options?: {
-        err?: Error | FetchError;
+        err?: Error;
         status?: string | number;
         config?: T;
         response?: Response;
@@ -113,7 +101,7 @@ type FetchPatch<To> = {
 export abstract class HTTPService<
     Tc extends HTTPServiceConfig = HTTPServiceConfig,
     To extends HTTPServiceRequestOptions = HTTPServiceRequestOptions
-    > extends EventEmitter {
+> extends EventEmitter {
     config: Tc;
 
     protected baseUrl: string;
@@ -139,7 +127,6 @@ export abstract class HTTPService<
             requestOptions: {},
             baseParams: {},
             baseHeaders: {},
-            initialCookies: {},
         });
 
         this.baseUrl = baseUrl;
@@ -182,7 +169,7 @@ export abstract class HTTPService<
         const url = new URL(pString ? `${pathName}?${pString}` : pathName, this.baseUrl);
 
         if (url.origin === this.baseURL.origin) {
-            url.pathname = `${this.baseURL.pathname}${url.pathname}`.replace(/^\/+/, '/');
+            url.pathname = `${this.baseURL.pathname}${url.pathname}`.replace(/\/+/g, '/');
         }
 
         return url.toString();
@@ -239,6 +226,12 @@ export abstract class HTTPService<
         const serial = this.counter++;
         const config = { ...options, url };
         this.emit('request', config, serial);
+        let timeoutTimer: NodeJS.Timer;
+        if (options.timeout) {
+            timeoutTimer = setTimeout(() => {
+                (abortCtrl as any).abort(`Timeout of ${options.timeout}ms exceeded`);
+            }, options.timeout);
+        }
         fetch(url, options).then(
             async (r) => {
                 Object.defineProperties(r, {
@@ -280,11 +273,19 @@ export abstract class HTTPService<
                 this.emit('exception', newErr, undefined, serial);
                 deferred.reject(newErr);
             }
-        );
+        ).finally(() => {
+            if (timeoutTimer) {
+                clearTimeout(timeoutTimer);
+            }
+        });
+        if (options.timeout) {
+            setTimeout(() => {
+                (abortCtrl as any).abort(`Timeout of ${options.timeout}ms exceeded`);
+            }, options.timeout);
+        }
 
         return deferred.promise as any;
     }
-
 
     async __processResponse(options: HTTPServiceRequestOptions, r: Response) {
         const contentType = r.headers.get('Content-Type');
@@ -300,14 +301,23 @@ export abstract class HTTPService<
                 bodyParsed = await r.text();
                 break;
             } else if (options.responseType === 'buffer') {
-                bodyParsed = r.buffer();
+                bodyParsed = r.arrayBuffer().then((x) => Buffer.from(x));
+                break;
+            } else if (options.responseType === 'blob') {
+                bodyParsed = r.blob();
                 break;
             } else if (options.responseType === 'stream') {
                 bodyParsed = r.body;
                 break;
             }
             if (contentType?.startsWith('application/json')) {
-                bodyParsed = await r.json();
+                bodyParsed = await r.text();
+                try {
+                    bodyParsed = JSON.parse(bodyParsed);
+                } catch (err) {
+                    // Invalid response
+                    void 0;
+                }
             } else if (contentType?.startsWith('text/')) {
                 bodyParsed = await r.text();
             }
@@ -351,7 +361,7 @@ export abstract class HTTPService<
     postMultipartWithSearchParams<T = any>(
         uri: string,
         searchParams: any = {},
-        multipart: Array<[string, any, FormData.AppendOptions?]> = [],
+        multipart: Array<[string, File | Blob | string, string?]> = [],
         options?: To
     ) {
         const form = new FormData();
@@ -364,13 +374,13 @@ export abstract class HTTPService<
             'POST',
             uri,
             searchParams,
-            { body: form, headers: { ...form.getHeaders() } } as any,
+            { body: form } as any,
             options
         );
     }
     postMultipart<T = any>(
         uri: string,
-        multipart: Array<[string, any, FormData.AppendOptions?]> = [],
+        multipart: Array<[string, File | Blob | string, string?]> = [],
         options?: To
     ) {
         return this.postMultipartWithSearchParams<T>(uri, undefined, multipart, options);
@@ -399,6 +409,18 @@ export abstract class HTTPService<
     delete<T = any>(uri: string, options?: To) {
         return this.deleteWithSearchParams<T>(uri, undefined, options);
     }
+    setupCookieEvents() {
+        this.on('response', (resp, serial) => {
+            const setCookieHeader = resp.headers.get('set-cookie');
+            if (Array.isArray(setCookieHeader)) {
+                for (const x of setCookieHeader) {
+                    this.emit('set-cookie', x, resp, serial);
+                }
+            } else if (setCookieHeader) {
+                this.emit('set-cookie', setCookieHeader, resp, serial);
+            }
+        });
+    }
 }
 // eslint-disable max-len
 export interface HTTPService {
@@ -426,177 +448,6 @@ export interface HTTPService {
     ): this;
     on(event: string | symbol, listener: (...args: any[]) => void): this;
 }
-
-export type SimpleCookie = Cookie.Properties[] | { [key: string]: string } | string[];
-export class InertMemoryCookieStore extends MemoryCookieStore {
-    protected _muted: boolean = false;
-    protected _locked: boolean = false;
-    // tslint:disable-next-line: variable-name
-    protected __lockedError = new Error('Operation Refused: Inert cookie is in locked state.');
-
-    lock() {
-        this._locked = true;
-
-        return this;
-    }
-
-    unlock() {
-        this._locked = false;
-
-        return this;
-    }
-
-    mute() {
-        this._muted = true;
-
-        return this;
-    }
-
-    unmute() {
-        this._muted = false;
-
-        return this;
-    }
-
-    removeCookie(domain: string, path: string, key: string, cb: (err: Error | null) => void) {
-        if (this._locked) {
-            this._muted ? cb(null) : cb(this.__lockedError);
-
-            return;
-        }
-
-        return super.removeCookie(domain, path, key, cb);
-    }
-    removeCookies(domain: string, path: string, cb: (err: Error | null) => void) {
-        if (this._locked) {
-            this._muted ? cb(null) : cb(this.__lockedError);
-
-            return;
-        }
-
-        return super.removeCookies(domain, path, cb);
-    }
-
-    updateCookie(oldCookie: Cookie, newCookie: Cookie, cb: (err: Error | null) => void) {
-        if (this._locked) {
-            this._muted ? cb(null) : cb(this.__lockedError);
-
-            return;
-        }
-
-        return super.updateCookie(oldCookie, newCookie, cb);
-    }
-
-    putCookie(cookie: Cookie, cb: (err: Error | null) => void) {
-        if (this._locked) {
-            this._muted ? cb(null) : cb(this.__lockedError);
-
-            return;
-        }
-
-        return super.putCookie(cookie, cb);
-    }
-}
-
-
-function patchCookieJar(jar: CookieJar, store: InertMemoryCookieStore) {
-    (jar as any).lock = store.lock.bind(store);
-    (jar as any).unlock = store.unlock.bind(store);
-}
-
-export function parseSimpleCookie(sc: SimpleCookie): Cookie[] {
-    const cookies: Cookie[] = [];
-    if (Array.isArray(sc)) {
-        for (const c of sc) {
-            let cookie;
-            if (typeof c === 'string') {
-                cookie = Cookie.parse(c);
-            } else if (c instanceof Object) {
-                cookie = new Cookie(c);
-            }
-            if (cookie) {
-                cookies.push(cookie);
-            }
-        }
-    } else if (sc instanceof Object) {
-        for (const [k, v] of Object.entries(sc)) {
-            cookies.push(new Cookie({ key: k, value: v }));
-        }
-    } else {
-        throw new Error('Invlid Simple Cookie.');
-    }
-
-    return cookies;
-}
-
-export interface CookieAwareHTTPServiceRequestOptions extends HTTPServiceRequestOptions {
-    cookie?: SimpleCookie;
-    jar?: CookieJar;
-}
-
-export interface CookieAwareHTTPServiceConfig extends HTTPServiceConfig {
-    initialCookies?: SimpleCookie;
-    lockCookiesAfterInit?: boolean;
-}
-
-export abstract class CookieAwareHTTPService extends HTTPService<CookieAwareHTTPServiceConfig, CookieAwareHTTPServiceRequestOptions> {
-    cookieJar: CookieJar & {
-        unlock: () => InertMemoryCookieStore; lock: () => InertMemoryCookieStore;
-    };
-
-    constructor(baseUrl: string, config: CookieAwareHTTPServiceConfig = {}) {
-        super(baseUrl, config);
-
-        const inertStore = new InertMemoryCookieStore();
-        const newJar = new CookieJar(inertStore);
-        patchCookieJar(newJar, inertStore);
-        this.cookieJar = newJar as any;
-
-        this.cookieJar.unlock().mute();
-        for (const x of parseSimpleCookie(this.config.initialCookies!)) {
-            this.cookieJar.setCookie(x, this.baseUrl).catch();
-        }
-
-        if (this.config.lockCookiesAfterInit) {
-            this.cookieJar.lock();
-        }
-
-        this.baseOptions.jar = this.cookieJar;
-
-        this.on('response', (resp, serial) => {
-            const setCookieHeader = resp.headers.raw()['set-cookie'];
-            if (Array.isArray(setCookieHeader)) {
-                for (const x of setCookieHeader) {
-                    this.emit('set-cookie', x, resp, serial);
-                }
-            } else if (setCookieHeader) {
-                this.emit('set-cookie', setCookieHeader, resp, serial);
-            }
-        });
-    }
-
-    dumpCookieJar() {
-        return this.cookieJar.serializeSync();
-    }
-
-    breakAndReplaceCookieJar(source?: any) {
-        const inertStore = new InertMemoryCookieStore();
-        const newJar = source ? CookieJar.deserializeSync(source, inertStore) : new CookieJar(inertStore, { looseMode: true });
-        patchCookieJar(newJar, inertStore);
-        this.cookieJar = newJar as any;
-    }
-}
-
-export interface CookieAwareHTTPService {
-
-    on(name: 'request', listener: (config: CookieAwareHTTPServiceRequestOptions, serial: number) => void): this;
-    on(name: 'response', listener: (response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions>, serial: number) => void): this;
-    on(name: 'exception', listener: (error: HTTPServiceError, response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions> | undefined, serial: number) => void): this;
-    on(name: 'parsed', listener: (parsed: any, response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions> & { data: any }, serial: number) => void): this;
-
-    on(name: 'set-cookie', listener: (headerContent: string, response: Response & FetchPatch<CookieAwareHTTPServiceRequestOptions>, serial: number) => void): this;
-    on(event: string | symbol, listener: (...args: any[]) => void): this;
-
-}
+// eslint-enable max-len
 
 export type HTTPServiceResponse<T> = Response & { data: T; };

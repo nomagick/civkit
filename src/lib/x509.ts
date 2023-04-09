@@ -16,6 +16,8 @@ import {
     X509CertificateGenerator, X509ChainBuilder, cryptoProvider
 } from '@peculiar/x509';
 import { PromiseThrottle } from './throttle';
+import { HashManager } from './hash';
+import { isIP } from 'net';
 export * as x509 from '@peculiar/x509';
 
 cryptoProvider.set(webcrypto as any);
@@ -31,6 +33,8 @@ export interface CertificateFile {
 export interface Certificate {
     name: string,
     cert: crypto.X509Certificate,
+    x5t: string;
+    'x5t#S256': string;
     certRaw: Buffer | string,
     key?: crypto.KeyObject,
     keyRaw?: Buffer | string;
@@ -58,6 +62,9 @@ export function parsePEM(text: string) {
 export function recoverPEM(section: string, content: string) {
     return `-----BEGIN ${section.toUpperCase()}-----\n${content}\n-----END ${section.toUpperCase()}-----`;
 }
+
+const sha1Hasher = new HashManager('sha1', 'base64url');
+const sha256Hasher = new HashManager('sha256', 'base64url');
 
 export abstract class AbstractX509Manager extends AsyncService {
 
@@ -114,6 +121,8 @@ export abstract class AbstractX509Manager extends AsyncService {
                 return {
                     name,
                     cert,
+                    x5t: sha1Hasher.hash(cert.raw),
+                    'x5t#S256': sha256Hasher.hash(cert.raw),
                     certRaw: certContent,
                     key,
                     keyRaw: keyContent
@@ -170,7 +179,8 @@ export abstract class AbstractX509Manager extends AsyncService {
         const wildcardHostname = vec.join('.');
         const certs = this.getCertificates(
             `DNS:${hostname}`, `CN=${hostname}`,
-            `DNS:${wildcardHostname}`, `CN=${wildcardHostname}`
+            `DNS:${wildcardHostname}`, `CN=${wildcardHostname}`,
+            ...isIP(hostname) ? [`IP Address:${hostname}`, `CN=${hostname}`] : []
         );
 
         if (keyRequired) {
@@ -461,18 +471,18 @@ function specialExtensionMerger(a?: Extension[], b?: Extension[]) {
 
 export abstract class AbstractX509CertificateAuthority extends AbstractX509Manager {
 
-    keyGenProfiles: { [key: string]: RsaHashedKeyGenParams | EcdsaParams; } = {
+    keyGenProfiles: { [key: string]: webcrypto.RsaHashedKeyGenParams | webcrypto.EcdsaParams; } = {
         'rsa-2048': {
             name: 'RSASSA-PKCS1-v1_5',
             hash: 'SHA-256',
             modulusLength: 2048,
             publicExponent: new Uint8Array([1, 0, 1])
-        } as RsaHashedKeyGenParams,
+        } as webcrypto.RsaHashedKeyGenParams,
         'ec-256': {
             name: 'ECDSA',
             hash: 'SHA-256',
             namedCurve: 'P-256'
-        } as EcdsaParams,
+        } as webcrypto.EcdsaParams,
     };
 
     getCACertificateForSigning(...claims: string[]) {
@@ -485,7 +495,8 @@ export abstract class AbstractX509CertificateAuthority extends AbstractX509Manag
         profile: keyof this['keyGenProfiles'] = 'rsa-2048',
     ) {
         const keyGenProfile = this.keyGenProfiles[profile as string];
-        const keyPair = await webcrypto.subtle.generateKey(keyGenProfile, true, ['sign', 'verify']) as CryptoKeyPair;
+        const keyPair = await webcrypto.subtle.generateKey(
+            keyGenProfile, true, ['sign', 'verify']) as webcrypto.CryptoKeyPair;
 
         const finalOptions = {
             signingAlgorithm: keyGenProfile,
@@ -550,7 +561,8 @@ export abstract class AbstractX509CertificateAuthority extends AbstractX509Manag
             ['sign'],
         );
 
-        const keyPair = await webcrypto.subtle.generateKey(selectedProfile, true, ['sign', 'verify']) as CryptoKeyPair;
+        const keyPair = await webcrypto.subtle.generateKey(
+            selectedProfile, true, ['sign', 'verify']) as webcrypto.CryptoKeyPair;
 
         const issuerCert = new X509Certificate(caCert.certRaw);
 

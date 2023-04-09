@@ -3,26 +3,41 @@ import { Readable } from 'stream';
 import { inspect } from 'util';
 import { STATUS_CODES } from 'http';
 import {
-    AdditionalPropOptions,
-    AutoCastable,
-    AutoCastableMetaClass,
+    InternalAdditionalPropOptions,
     AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL, AUTOCASTABLE_OPTIONS_SYMBOL,
     isAutoCastableClass,
-    PropOptions
+    PropOptions,
+    describeAnonymousValidateFunction
 } from '../lib/auto-castable';
 import {
-    chainEntriesSimple as chainEntries, isConstructor
+    chainEntriesSimple as chainEntries, htmlEscape, isConstructor, isPrimitiveType
 } from '../utils';
 import { PICK_RPC_PARAM_DECORATION_META_KEY, InternalRPCOptions } from './registry';
-import { extractTransferProtocolMeta } from './meta';
+import { extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 import { RPCEnvelope } from './base';
+import { describeType } from '../lib/auto-castable-utils';
 
-type PropOptionsLike = Partial<PropOptions<any>> & Partial<InternalRPCOptions>;
+type PropOptionsLike = Partial<PropOptions<any>> & Partial<InternalRPCOptions> & {
+    paramOf?: string;
+};
 
-function describeTypes(inputTypes: Function | Function[], joinText = 'Or') {
+function describeTypes(inputTypes: Function | Function[], joinText = '|') {
     const types = Array.isArray(inputTypes) ? inputTypes : [inputTypes];
 
-    return types.map((x) => `${x?.name || 'Unknown'}`).join(joinText);
+    return types.map((x: any) => {
+        if (typeof x === 'function') {
+            if (isPrimitiveType(x)) {
+                return x.name.toLowerCase();
+            }
+
+            return x.name;
+        }
+        if (x instanceof Set) {
+            return `${x}`;
+        }
+
+        return describeType(x);
+    }).join(joinText);
 }
 
 export class OpenAPIManager {
@@ -71,11 +86,13 @@ export class OpenAPIManager {
         incompatibleProp: [
             'incompatibles',
             'partOf',
-            'primitive'
+            'primitive',
+            'paramOf',
+            'typeDescription'
         ]
     };
 
-    applySceneMeta(schema: any, meta: PropOptionsLike, scene?: string | string[]) {
+    protected applySceneMeta(schema: any, meta: PropOptionsLike, scene?: string | string[]) {
         if (!(schema && meta)) {
             return;
         }
@@ -97,7 +114,7 @@ export class OpenAPIManager {
         return schema;
     }
 
-    applyMeta(schema: any, meta: PropOptionsLike, special?: string | string[]) {
+    protected applyMeta(schema: any, meta: PropOptionsLike, special?: string | string[]) {
         if (!(schema && meta)) {
             return;
         }
@@ -115,8 +132,14 @@ export class OpenAPIManager {
         if (meta.markdown) {
             schema.description = meta.markdown;
         }
+        if (meta.paramOf) {
+            incompatibleMeta.paramOf = meta.paramOf;
+        }
         if (meta.partOf) {
             incompatibleMeta.partOf = meta.partOf;
+        }
+        if (meta.paramOf || meta.partOf) {
+            incompatibleMeta.typeDescription = this.describeType(meta);
         }
         if (meta.required) {
             schema.required = true;
@@ -166,7 +189,7 @@ export class OpenAPIManager {
         return schema;
     }
 
-    consumeIncompatibles(schema: any) {
+    protected consumeIncompatibles(schema: any) {
         if (!schema.incompatibles) {
             return;
         }
@@ -183,31 +206,39 @@ export class OpenAPIManager {
         if (schema.description) {
             descVecs.push(schema.description);
         }
+
+        if (incompatibles.typeDescription) {
+            descVecs.push(htmlEscape`- Cast to: < **${incompatibles.typeDescription}** >`);
+        }
+        if (incompatibles.paramOf) {
+            descVecs.push(htmlEscape`- Endpoint parameter of *${incompatibles.paramOf}*`);
+        }
         if (incompatibles.partOf) {
-            descVecs.push(`- Member of {${incompatibles.partOf}}.`);
+            descVecs.push(htmlEscape`- Member of <${incompatibles.partOf}>`);
         }
 
         if (incompatibles.validate) {
             const validatorNames = (Array.isArray(incompatibles.validate) ?
-                incompatibles.validate : [incompatibles.validate]).map((x) => x.name).filter(Boolean);
+                incompatibles.validate : [incompatibles.validate])
+                .map(describeAnonymousValidateFunction).filter(Boolean);
 
-            descVecs.push(`- Some validators will be applied on value(s): ${validatorNames}`);
+            descVecs.push(htmlEscape`- Some validators will be applied on value(s): ${validatorNames}`);
         }
 
         if (incompatibles.validateCollection) {
             const validatorNames = (Array.isArray(incompatibles.validateCollection) ?
                 incompatibles.validateCollection : [incompatibles.validateCollection])
-                .map((x) => x.name).filter(Boolean);
+                .map(describeAnonymousValidateFunction).filter(Boolean);
 
-            descVecs.push(`- Some validators will be applied on the collection: ${validatorNames}`);
+            descVecs.push(htmlEscape`- Some validators will be applied on the collection: ${validatorNames}`);
         }
 
         if (incompatibles.default) {
-            descVecs.push(`- Defaults to: ${inspect(incompatibles.default, { depth: 6 })}`);
+            descVecs.push(htmlEscape`- Defaults to: ${inspect(incompatibles.default, { depth: 6 })}`);
         }
         if (incompatibles.defaultFactory) {
             if (incompatibles.defaultFactory.name) {
-                descVecs.push(`- A dynamic default value will be provided on server side based on: ${incompatibles.defaultFactory.name}`);
+                descVecs.push(htmlEscape`- A dynamic default value will be provided on server side based on: ${incompatibles.defaultFactory.name}`);
             } else {
                 descVecs.push(`- A dynamic default value will be provided on server side`);
             }
@@ -224,29 +255,14 @@ export class OpenAPIManager {
         }
     }
 
-    getRefNameOfConstructor(inputClass: any, direction: 'input' | 'output' = 'input') {
-        let name: string;
-        switch (inputClass) {
-            case undefined: {
-                name = 'undefined';
-                break;
-            }
-            case null: {
-                name = 'null';
-                break;
-            }
-
-            default: {
-                name = inputClass.name || inputClass.constructor.name;
-                break;
-            }
-        }
+    protected getRefNameOfConstructor(inputClass: any, direction: 'input' | 'output' = 'input') {
+        const name = describeType(inputClass).replaceAll('~', '~0').replaceAll('/', '~1');
 
         const propOptions = inputClass?.[AUTOCASTABLE_OPTIONS_SYMBOL];
         if (propOptions) {
             for (const [k, v] of chainEntries(propOptions)) {
                 if (v.path !== k) {
-                    return direction === 'input' ? `${name}-dto` : name;
+                    return direction === 'input' ? `Dto<${name}>` : name;
                 }
             }
         }
@@ -254,26 +270,28 @@ export class OpenAPIManager {
         return name;
     }
 
-    getSchemaRef(inputClass: any = Object, direction: 'input' | 'output' = 'input') {
+    protected getSchemaRef(inputClass: any = Object, direction: 'input' | 'output' = 'input') {
         if (this.primitiveSchemaMap.has(inputClass)) {
             return {
                 ...this.primitiveSchemaMap.get(inputClass)
             };
-        } else if (inputClass instanceof Set) {
-            return this.constructorToOpenAPISchema(inputClass, direction);
-        } else if (inputClass?.prototype instanceof AutoCastableMetaClass) {
-            return this.constructorToOpenAPISchema(inputClass, direction);
         }
-        if (!isConstructor(inputClass)) {
+        if (!isConstructor(inputClass) && !(inputClass instanceof Set)) {
             return undefined;
         }
         const theMap = direction === 'input' ? this.classToSchemaMapInput : this.classToSchemaMapOutput;
         if (!theMap.has(inputClass)) {
+            // Placeholder to break circular reference
+            theMap.set(inputClass, {});
             const schema = this.constructorToOpenAPISchema(inputClass, direction);
             if (!schema) {
+                theMap.delete(inputClass);
+
                 return undefined;
             }
             if (this.primitiveSchemaMap.has(inputClass)) {
+                theMap.delete(inputClass);
+
                 return {
                     ...this.primitiveSchemaMap.get(inputClass)
                 };
@@ -284,14 +302,28 @@ export class OpenAPIManager {
         const refVal = `#/components/schemas/${this.getRefNameOfConstructor(inputClass, direction)}`;
         this.refToConstructorMap.set(refVal, inputClass);
 
-        return { $ref: refVal };
+        return {
+            allOf: [
+                { $ref: refVal }
+            ]
+        };
     }
 
-    getConstructorFromRef(ref: string) {
+    protected getConstructorFromRef(ref: string) {
         return this.refToConstructorMap.get(ref);
     }
 
-    unref(ref: string, direction: 'input' | 'output' = 'input') {
+    protected getRef(schema: any) {
+        if (schema?.$ref) {
+            return schema.$ref;
+        }
+
+        if (schema?.allOf?.length === 1 && schema.allOf[0]?.$ref) {
+            return schema.allOf[0].$ref;
+        }
+    }
+
+    protected unref(ref: string, direction: 'input' | 'output' = 'input') {
         const constructor = this.getConstructorFromRef(ref);
         if (constructor) {
             return this.constructorToOpenAPISchema(constructor, direction);
@@ -299,15 +331,19 @@ export class OpenAPIManager {
         return undefined;
     }
 
-    unRefSchema(schema: any, direction: 'input' | 'output' = 'input') {
+    protected unRefSchema(schema: any, direction: 'input' | 'output' = 'input') {
         if (schema?.$ref) {
             return { ...schema, ...this.unref(schema.$ref, direction), $ref: undefined };
+        }
+
+        if (schema?.allOf?.length === 1 && schema.allOf[0]?.$ref) {
+            return { ...schema, ...this.unref(schema.allOf[0].$ref, direction), allOf: undefined };
         }
 
         return schema;
     }
 
-    flattenSchema(inputSchema: any) {
+    protected flattenSchema(inputSchema: any) {
         if (!inputSchema) {
             return undefined;
         }
@@ -320,7 +356,7 @@ export class OpenAPIManager {
             const origSchema = schema;
             schema = {
                 ..._.omit(schema, 'type', 'items', 'default'),
-                ...this.unRefSchema(schema.items),
+                ..._.omit(this.unRefSchema(schema.items), 'description', 'title'),
             };
 
             if (Array.isArray(origSchema.default) && origSchema.default.length === 1) {
@@ -393,34 +429,70 @@ export class OpenAPIManager {
         let additionalOptionsApplied = false;
         let shouldAddToPrimitives = false;
         do {
-            const propOptions = (input as typeof AutoCastable)?.[AUTOCASTABLE_OPTIONS_SYMBOL];
-            if (propOptions) {
-                const properties: { [k: string]: any; } = {};
-                const requiredProperties: string[] = [];
-                for (const [k, v] of chainEntries(propOptions)) {
-                    const prop = direction === 'input' ? v.path : k;
-                    if (typeof prop !== 'string') {
-                        continue;
-                    }
-                    properties[prop] = this.propOptionsLikeToOpenAPISchema(v, direction, true);
-                    if (properties[prop]) {
-                        this.applyMeta(properties[prop], {
-                            partOf: input.name,
-                            ...v,
-                        }, ['property', 'schema']);
-                    } else {
-                        delete properties[prop];
-                    }
-                }
-                const additionalOptions: AdditionalPropOptions<unknown> | undefined =
-                    input[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+            if (isAutoCastableClass(input)) {
                 const openAPIDesc: any = {
                     title: input.name,
-                    description: `Instance object of {${input.name}}`,
-                    type: 'object',
-                    properties,
-                    required: requiredProperties
                 };
+                const properties: { [k: string]: any; } = {};
+                const requiredProperties: string[] = [];
+                const propOptions: { [k: string]: PropOptions<unknown>; } =
+                    input?.[AUTOCASTABLE_OPTIONS_SYMBOL];
+                const additionalOptions: InternalAdditionalPropOptions<unknown> | undefined =
+                    input[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+                let considerProps = true;
+                if (additionalOptions?.arrayOf) {
+                    considerProps = false;
+                    const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, true);
+                    if (schema) {
+                        openAPIDesc.type = schema.type;
+                        openAPIDesc.items = schema.items;
+                        if (schema.description) {
+                            openAPIDesc.description = schema.description;
+                        }
+                    }
+                } else if (additionalOptions?.dictOf) {
+                    const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, true);
+                    if (schema) {
+                        openAPIDesc.type = schema.type;
+                        openAPIDesc.additionalProperties = schema.additionalProperties;
+                    }
+                } else if (additionalOptions?.type) {
+                    considerProps = false;
+                    const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, true);
+                    if (schema) {
+                        Object.assign(
+                            openAPIDesc,
+                            _.omit(schema, 'title', 'description'),
+                            {
+                                title: `${input.name}&${schema.title}`,
+                            }
+                        );
+                    }
+                }
+                if (propOptions && considerProps) {
+                    for (const [k, v] of chainEntries(propOptions)) {
+                        const prop = direction === 'input' ? v.path : k;
+                        if (typeof prop !== 'string') {
+                            continue;
+                        }
+                        properties[prop] = this.propOptionsLikeToOpenAPISchema(v, direction, true);
+                        if (properties[prop]) {
+                            this.applyMeta(properties[prop], {
+                                partOf: input.name,
+                                ...v,
+                            }, ['property', 'schema']);
+                        } else {
+                            delete properties[prop];
+                        }
+                    }
+
+                    Object.assign(openAPIDesc, {
+                        type: 'object',
+                        properties,
+                        required: requiredProperties
+                    });
+                }
+
                 if (additionalOptions) {
                     this.applyMeta(openAPIDesc, additionalOptions, 'schema');
                 }
@@ -444,15 +516,6 @@ export class OpenAPIManager {
                     break;
                 }
 
-                if (additionalOptions?.dictOf) {
-                    const dictSchema = this.propOptionsLikeToOpenAPISchema(
-                        { dictOf: additionalOptions.dictOf }, direction, true
-                    );
-                    if (dictSchema.additionalProperties) {
-                        openAPIDesc.additionalProperties = dictSchema.additionalProperties;
-                    }
-                }
-
                 final = openAPIDesc;
 
                 if (openAPIDesc.type !== 'object') {
@@ -468,35 +531,45 @@ export class OpenAPIManager {
                 }
                 break;
             } else if (input?.prototype instanceof Readable) {
-                final = { type: 'string', format: 'binary' };
+                final = {
+                    type: 'string', format: 'binary',
+                    description: `Binary data (stream)`
+                };
                 break;
             } else if (input?.prototype instanceof Buffer) {
-                final = { type: 'string', format: 'binary' };
+                final = {
+                    type: 'string', format: 'binary',
+                    description: `Binary data (buffed)`
+                };
                 break;
             } else if (input instanceof Set) {
                 // enum
                 const values = Array.from(input);
+                const description = `Enum<${input.toString()}>`;
                 if (typeof values[0] === 'string') {
-                    final = { type: 'string', enum: Array.from(input) };
+                    final = { type: 'string', enum: Array.from(input), description };
                     break;
                 } else if (Number.isInteger(values[0])) {
-                    final = { type: 'integer', enum: Array.from(input) };
+                    final = { type: 'integer', enum: Array.from(input), description };
                     break;
+                } else {
+                    final = { type: 'string', description };
                 }
-                final = { type: 'string' };
                 break;
             } else if (this.primitiveSchemaMap.has(input)) {
                 final = { ...this.primitiveSchemaMap.get(input) };
                 break;
             } else if (isConstructor(input)) {
-                final = { type: 'string', format: input.name };
+                final = {
+                    type: 'string', format: input.name,
+                };
                 shouldAddToPrimitives = true;
                 break;
             }
         } while (false);
 
         if (!additionalOptionsApplied && input?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
-            const additionalOptions: AdditionalPropOptions<unknown> | undefined =
+            const additionalOptions: InternalAdditionalPropOptions<unknown> | undefined =
                 input[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
 
             if (additionalOptions) {
@@ -516,7 +589,7 @@ export class OpenAPIManager {
         return final;
     }
 
-    autoTypesToOpenAPISchema(
+    protected autoTypesToOpenAPISchema(
         input: any | any[] = Object,
         direction: 'input' | 'output' = 'input',
         useRef: boolean = true
@@ -547,14 +620,14 @@ export class OpenAPIManager {
             this.constructorToOpenAPISchema(input, direction);
     }
 
-    autoCollectMetaFromTypes(
+    protected autoCollectMetaFromTypes(
         input: any | any[] = Object,
         scene?: string | string[]
     ) {
         const final: any = {};
         if (Array.isArray(input)) {
             for (const x of input) {
-                const additionalOptions: AdditionalPropOptions<unknown> | undefined =
+                const additionalOptions: InternalAdditionalPropOptions<unknown> | undefined =
                     x?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
 
                 const partial: any = {};
@@ -574,7 +647,7 @@ export class OpenAPIManager {
             return final;
         }
 
-        const additionalOptions: AdditionalPropOptions<unknown> | undefined =
+        const additionalOptions: InternalAdditionalPropOptions<unknown> | undefined =
             input?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
 
         if (additionalOptions) {
@@ -599,7 +672,6 @@ export class OpenAPIManager {
         if (conf.arrayOf) {
             const schema = this.autoTypesToOpenAPISchema(conf.arrayOf, direction, useRef);
             final = schema ? {
-                description: `Array of ${describeTypes(conf.arrayOf)}`,
                 type: 'array',
                 items: schema
             } : undefined;
@@ -607,43 +679,20 @@ export class OpenAPIManager {
             const schema = this.autoTypesToOpenAPISchema(conf.dictOf, direction, useRef);
             final = schema ? {
                 type: 'object',
-                description: `Dict of ${describeTypes(conf.dictOf)}`,
                 additionalProperties: schema
             } : undefined;
-        } else if (conf.combinationOf) {
-            const schema = this.autoTypesToOpenAPISchema(conf.combinationOf, direction, useRef);
-            if (schema?.oneOf) {
-                final = {
-                    description: `Combination of ${describeTypes(conf.combinationOf, 'And')}`,
-                    allOf: schema.oneOf
-                };
-            } else {
-                final = schema;
-            }
         } else if (conf.returnArrayOf) {
             const schema = this.autoTypesToOpenAPISchema(conf.returnArrayOf, direction, useRef);
             final = schema ? {
-                description: `Array of ${describeTypes(conf.returnArrayOf)}`,
                 type: 'array',
                 items: schema
             } : undefined;
         } else if (conf.returnDictOf) {
             const schema = this.autoTypesToOpenAPISchema(conf.returnDictOf, direction, useRef);
             final = schema ? {
-                description: `Dict of ${describeTypes(conf.returnDictOf)}`,
                 type: 'object',
                 additionalProperties: schema
             } : undefined;
-        } else if (conf.returnCombinationOf) {
-            const schema = this.autoTypesToOpenAPISchema(conf.returnCombinationOf, direction, useRef);
-            if (schema?.oneOf) {
-                final = {
-                    description: `Combination of ${describeTypes(conf.returnCombinationOf, 'And')}`,
-                    allOf: schema.oneOf
-                };
-            } else {
-                final = schema;
-            }
         } else if (conf.returnType) {
             const schema = this.autoTypesToOpenAPISchema(conf.returnType, direction, useRef);
             final = schema;
@@ -658,7 +707,25 @@ export class OpenAPIManager {
         return final;
     }
 
-    collectOperationMeta(
+    protected describeType(conf: PropOptionsLike) {
+        if (conf.arrayOf) {
+            return `Array<${describeTypes(conf.arrayOf)}>`;
+        } else if (conf.dictOf) {
+            return `Record<string, ${describeTypes(conf.dictOf)}>`;
+        } else if (conf.returnArrayOf) {
+            return `Array<${describeTypes(conf.returnArrayOf)}>`;
+        } else if (conf.returnDictOf) {
+            return `Record<string, ${describeTypes(conf.returnDictOf)}>`;
+        } else if (conf.returnType) {
+            return describeTypes(conf.returnType);
+        } else if (conf.type) {
+            return describeTypes(conf.type);
+        }
+
+        return 'Unknown';
+    }
+
+    protected collectOperationMeta(
         conf: PropOptionsLike
     ): any {
         const final: any = {};
@@ -700,9 +767,9 @@ export class OpenAPIManager {
         return final;
     }
 
-    getShallowPropertiesFromFullSchema(inputSchema: any) {
+    protected getShallowPropertiesFromFullSchema(inputSchema: any) {
         const parameters: any = {};
-        if (inputSchema.$ref) {
+        if (this.getRef(inputSchema)) {
             Object.assign(parameters, this.getShallowPropertiesFromFullSchema(this.unRefSchema(inputSchema)));
         }
 
@@ -738,7 +805,7 @@ export class OpenAPIManager {
         return parameters;
     }
 
-    createParameterObject(rpcOptions: InternalRPCOptions) {
+    protected createParameterObject(rpcOptions: InternalRPCOptions) {
         const properties: any = {};
 
         const paramPickerMeta = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, rpcOptions.hostProto);
@@ -749,6 +816,7 @@ export class OpenAPIManager {
                 const conf = {
                     type: x,
                     path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
+                    paramOf: rpcOptions.name,
                     ...paramPickerConf[i]
                 } as PropOptions<unknown>;
                 const partialSchema = this.propOptionsLikeToOpenAPISchema(conf, 'input');
@@ -791,7 +859,7 @@ export class OpenAPIManager {
 
     }
 
-    createRequestBodyObject(rpcOptions: InternalRPCOptions) {
+    protected createRequestBodyObject(rpcOptions: InternalRPCOptions) {
         const paramPickerMeta = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, rpcOptions.hostProto);
         const paramPickerConf = (paramPickerMeta ? paramPickerMeta[rpcOptions.nameOnProto] : undefined) || [];
 
@@ -807,8 +875,9 @@ export class OpenAPIManager {
                 const conf = {
                     type: x,
                     path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
+                    paramOf: rpcOptions.name,
                     ...paramPickerConf[i]
-                } as PropOptions<unknown>;
+                } as PropOptionsLike;
 
                 const partialSchema = this.propOptionsLikeToOpenAPISchema(conf, 'input');
 
@@ -854,8 +923,9 @@ export class OpenAPIManager {
                 continue;
             }
 
-            if (v.$ref) {
-                recursiveDetector.add(v.$ref);
+            const ref = this.getRef(v);
+            if (ref) {
+                recursiveDetector.add(ref);
             }
 
             this.consumeIncompatibles(v);
@@ -867,23 +937,33 @@ export class OpenAPIManager {
                 continue;
             }
 
-            if (v.$ref) {
-                recursiveDetector.add(v.$ref);
+            const ref = this.getRef(v);
+            if (ref) {
+                recursiveDetector.add(ref);
             }
 
             this.consumeIncompatibles(v);
         }
 
-        const rpcOpenAPIConfig = rpcOptions.ext?.openapi || rpcOptions.openapi;
+        const rpcOpenAPIConfig = rpcOptions.openapi || rpcOptions.ext?.openapi;
         const requestBodyContentType = rpcOpenAPIConfig?.requestBodyContentType;
 
         openAPISchemas = openAPISchemas.map((x) => {
-            if (!(x?.$ref)) {
+            const ref = this.getRef(x);
+
+            if (!ref) {
                 return x;
             }
 
-            if (recursiveDetector.has(x.$ref)) {
+            if (recursiveDetector.has(ref)) {
                 return this.unRefSchema(x);
+            }
+
+            if (
+                Object.keys(x).length === 1 &&
+                x.allOf?.length === 1
+            ) {
+                return x.allOf[0];
             }
 
             return x;
@@ -919,8 +999,9 @@ export class OpenAPIManager {
         };
     }
 
-    createResponsesObject(inputRpcOptions: InternalRPCOptions, inputEnvelopeClass: typeof RPCEnvelope) {
-        const codeTypeMap = new Map<string, object[]>();
+    protected createResponsesObject(inputRpcOptions: InternalRPCOptions, inputEnvelopeClass: typeof RPCEnvelope) {
+        const codeTypeMap = new Map<string, [object, object | undefined][]>();
+        const codeHeaderMap = new Map<string, [string, string][]>();
 
         let rpcOptions = inputRpcOptions;
 
@@ -932,14 +1013,13 @@ export class OpenAPIManager {
         }
 
         const defaultReturnTypes = rpcOptions.returnArrayOf ||
-            rpcOptions.returnDictOf ||
-            rpcOptions.returnCombinationOf;
+            rpcOptions.returnDictOf;
         if (defaultReturnTypes) {
             rpcOptions = defaultEnvelope.describeWrap(rpcOptions) as InternalRPCOptions;
             const partialSchema = this.propOptionsLikeToOpenAPISchema(rpcOptions, 'output');
             this.applySceneMeta(partialSchema, rpcOptions, 'response');
             this.consumeIncompatibles(partialSchema);
-            codeTypeMap.set(`200::application/json`, [partialSchema]);
+            codeTypeMap.set(`200::application/json`, [[partialSchema, undefined]]);
         } else if (rpcOptions.returnType) {
             const returnTypes = Array.isArray(rpcOptions.returnType) ? rpcOptions.returnType : [rpcOptions.returnType];
             for (const x of returnTypes) {
@@ -959,15 +1039,30 @@ export class OpenAPIManager {
 
                 for (const wrappedType of wrappedTypes) {
                     const wrappedTpm = extractTransferProtocolMeta(wrappedType?.prototype);
-                    const codeTypeKey = `${wrappedTpm?.code || 200}::${wrappedTpm?.contentType || 'application/json'}`;
+                    const codeKey = `${wrappedTpm?.code || 200}`;
+                    const codeTypeKey = `${codeKey}::${wrappedTpm?.contentType || 'application/json'}`;
                     const codeTypeValue = codeTypeMap.get(codeTypeKey);
                     const partialSchema = this.propOptionsLikeToOpenAPISchema(wrappedRpcOptions, 'output');
                     this.applySceneMeta(partialSchema, rpcOptions, 'response');
                     this.consumeIncompatibles(partialSchema);
                     if (codeTypeValue) {
-                        codeTypeValue.push(partialSchema);
+                        codeTypeValue.push([partialSchema, this.tpmToHeaders(wrappedType, wrappedTpm)]);
                     } else {
-                        codeTypeMap.set(codeTypeKey, [partialSchema]);
+                        codeTypeMap.set(codeTypeKey, [[partialSchema, this.tpmToHeaders(wrappedType, wrappedTpm)]]);
+                    }
+
+                    if (wrappedTpm?.headers) {
+                        for (const [k, v] of Object.entries(wrappedTpm.headers)) {
+                            const codeHeaderKey = `${codeKey}::${k}`;
+                            const codeHeaderValue = codeHeaderMap.get(codeHeaderKey);
+                            if (codeHeaderValue) {
+                                codeHeaderValue.push([`${v}`, `Response header "**${k}**"${wrappedType ? ` from {${wrappedType?.name}}` : ''}`] as [string, string]);
+                            } else {
+                                codeHeaderMap.set(codeHeaderKey, [
+                                    [`${v}`, `Response header "**${k}**"${wrappedType ? ` from {${wrappedType?.name}}` : ''}`]
+                                ]);
+                            }
+                        }
                     }
                 }
             }
@@ -979,15 +1074,30 @@ export class OpenAPIManager {
                 [wrappedRpcOptions.throws];
             for (const wrappedError of wrappedErrors) {
                 const wrappedTpm = extractTransferProtocolMeta(wrappedError?.prototype);
-                const codeTypeKey = `${wrappedTpm?.code || 500}::${wrappedTpm?.contentType || 'text/plain'}`;
+                const codeKey = `${wrappedTpm?.code || 500}`;
+                const codeTypeKey = `${codeKey}::${wrappedTpm?.contentType || 'text/plain'}`;
                 const codeTypeValue = codeTypeMap.get(codeTypeKey);
                 const partialSchema = this.autoTypesToOpenAPISchema(wrappedError, 'output');
                 this.applySceneMeta(partialSchema, rpcOptions, 'response');
                 this.consumeIncompatibles(partialSchema);
                 if (codeTypeValue) {
-                    codeTypeValue.push(partialSchema);
+                    codeTypeValue.push([partialSchema, this.tpmToHeaders(wrappedError, wrappedTpm)]);
                 } else {
-                    codeTypeMap.set(codeTypeKey, [partialSchema]);
+                    codeTypeMap.set(codeTypeKey, [[partialSchema, this.tpmToHeaders(wrappedError, wrappedTpm)]]);
+                }
+
+                if (wrappedTpm?.headers) {
+                    for (const [k, v] of Object.entries(wrappedTpm.headers)) {
+                        const codeHeaderKey = `${codeKey}::${k}`;
+                        const codeHeaderValue = codeHeaderMap.get(codeHeaderKey);
+                        if (codeHeaderValue) {
+                            codeHeaderValue.push([`${v}`, `Response header "**${k}**"${wrappedError ? ` from {${wrappedError?.name}}` : ''}`]);
+                        } else {
+                            codeHeaderMap.set(codeHeaderKey, [
+                                [`${v}`, `Response header "**${k}**"${wrappedError ? ` from {${wrappedError?.name}}` : ''}`]
+                            ]);
+                        }
+                    }
                 }
             }
         }
@@ -996,21 +1106,103 @@ export class OpenAPIManager {
         for (const [k, v] of codeTypeMap.entries()) {
             const [code, contentType] = k.split('::');
             const propMap = final[code]?.content || {};
+            const headers = final[code]?.headers || {};
             final[code] = {
                 description: STATUS_CODES[code] || 'User Defined',
-                content: propMap
+                content: propMap,
+                headers
             };
+
             if (v.length === 1) {
-                propMap[contentType] = { schema: v[0] };
+                propMap[contentType] = { schema: v[0][0] };
+                this.mergeHeadersObject(headers, v[0][1]);
             } else {
-                propMap[contentType] = { schema: { oneOf: v } };
+                propMap[contentType] = {
+                    schema: {
+                        oneOf: v.map((x) => {
+                            this.mergeHeadersObject(headers, x[1]);
+
+                            return x[0];
+                        })
+                    }
+                };
+            }
+        }
+
+        for (const [k, v] of codeHeaderMap.entries()) {
+            const [code, header] = k.split('::');
+            const responseObject = final[code] || {
+                description: STATUS_CODES[code] || 'User Defined'
+            };
+            final[code] = responseObject;
+
+            const headersMap = responseObject?.headers || {};
+            responseObject.headers = headersMap;
+
+            if (v.length === 1) {
+                const [headerVal, headerDesc] = v[0];
+                headersMap[header] = {
+                    description: headerDesc,
+                    schema: {
+                        type: 'string',
+                        default: headerVal
+                    }
+                };
+            } else {
+                headersMap[header] = {
+                    description: `Response header "**${header}**" from multiple types`,
+                    schema: {
+                        oneOf: v.map(([headerVal, headerDesc]) => {
+                            return {
+                                type: 'string',
+                                description: headerDesc,
+                                default: headerVal,
+                            };
+                        })
+                    }
+                };
             }
         }
 
         return final;
     }
 
-    createOperationObject(rpcOptions: InternalRPCOptions, envelopeClass: typeof RPCEnvelope) {
+    protected tpmToHeaders(host?: Function, tpm?: TransferProtocolMetadata) {
+        if (!tpm) {
+            return {};
+        }
+        const headers: any = {};
+
+        for (const k of Object.keys(tpm?.headers || {})) {
+            headers[k] = {
+                description: htmlEscape`- Member of <${host ? describeTypes(host) : 'Unknown'}>`,
+                schema: {
+                    type: 'string',
+                    format: k,
+                }
+            };
+        }
+
+        return headers;
+    }
+
+    protected mergeHeadersObject(a: any, b?: object) {
+        if (!b) {
+            return a;
+        }
+
+        for (const [k, v] of Object.entries(b)) {
+            if (a[k]?.description && v?.description) {
+                a[k].description = `${a[k].description}\n${v.description}`;
+            } else {
+                a[k] = v;
+            }
+        }
+
+        return a;
+    }
+
+    protected createOperationObject(rpcOptions: InternalRPCOptions, envelopeClass: typeof RPCEnvelope) {
         const parametersObject = this.createParameterObject(rpcOptions);
 
         for (const x of Object.values<any>(parametersObject)) {
@@ -1055,7 +1247,7 @@ export class OpenAPIManager {
                         ...additionalMeta,
                         method,
                         tags: _.uniq([
-                            ...(rpcOptions.tags || rpcOptions.ext?.openapi?.tags || rpcOptions.openapi?.tags || []),
+                            ...(rpcOptions.tags || rpcOptions.openapi?.tags || rpcOptions.ext?.openapi?.tags || []),
                             ...(additionalMeta.tags || [])
                         ].map((x) => x.toString().toLowerCase())),
                     }
@@ -1064,7 +1256,7 @@ export class OpenAPIManager {
         }
     }
 
-    createPathsObject(
+    protected createPathsObject(
         envelopeClass: typeof RPCEnvelope,
         query?: {
             [k: string]: string | string[] | undefined;
@@ -1144,7 +1336,7 @@ export class OpenAPIManager {
         return paths;
     }
 
-    createComponentsObject() {
+    protected createComponentsObject() {
         const schemas: any = {};
 
         for (const [k, v] of this.classToSchemaMapInput.entries()) {

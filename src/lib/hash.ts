@@ -102,7 +102,7 @@ export class SaltedHashManager<T extends string | Buffer = Buffer> extends HashM
         this.seedHash = super.hash(seed, 'buffer');
     }
 
-    hash<P extends string | Buffer = T>(target: string | Buffer | ArrayBuffer, outputFormat = this.outputFormat): P {
+    override hash<P extends string | Buffer = T>(target: string | Buffer | ArrayBuffer, outputFormat = this.outputFormat): P {
         const targetHash = super.hash<Buffer>(target, 'buffer');
         const fusionBuffer = Buffer.alloc(targetHash.length + this.seedHash.length);
         this.seedHash.forEach((vlu, idx) => {
@@ -118,7 +118,7 @@ export class SaltedHashManager<T extends string | Buffer = Buffer> extends HashM
         }
     }
 
-    hashStream<P extends string | Buffer = T>(target: ReadableStream, outputFormat = this.outputFormat): Promise<P> {
+    override hashStream<P extends string | Buffer = T>(target: ReadableStream, outputFormat = this.outputFormat): Promise<P> {
         return super.hashStream<Buffer>(target, undefined).then((r) => {
             const targetHash = r;
             const fusionBuffer = Buffer.alloc(targetHash.length + this.seedHash.length);
@@ -140,6 +140,6 @@ export class SaltedHashManager<T extends string | Buffer = Buffer> extends HashM
 
 const objHasher = nodeObjectHash();
 
-export function objHashMd5B64Of(obj: any) {
-    return objHasher.hash(obj, { enc: 'base64', alg: 'md5' });
+export function objHashMd5B64Of(obj: any, options?: nodeObjectHash.HasherOptions) {
+    return objHasher.hash(obj, { enc: 'base64', alg: 'md5', ...options });
 }

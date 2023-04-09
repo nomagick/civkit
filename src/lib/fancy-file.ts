@@ -5,8 +5,13 @@ import { basename } from 'path';
 import { Defer, Deferred } from './defer';
 import { HashManager } from './hash';
 import { mimeOf, MIMEVec, parseContentType, restoreContentType } from './mime';
-import { Also } from './auto-castable';
-import { TransferProtocolMetadata, RPC_TRANSFER_PROTOCOL_META_SYMBOL } from '../civi-rpc/meta';
+import { Also, AutoConstructor } from './auto-castable';
+import {
+    TransferProtocolMetadata, RPC_TRANSFER_PROTOCOL_META_SYMBOL,
+    transferProtocolMetaDecorated,
+    TPM
+} from '../civ-rpc/meta';
+import { RPC_MARSHALL } from '../civ-rpc/meta';
 
 const PEEK_BUFFER_SIZE = 32 * 1024;
 
@@ -32,18 +37,26 @@ export class ResolvedFile {
     sha256Sum?: string;
     filePath!: string;
 
-    get [RPC_TRANSFER_PROTOCOL_META_SYMBOL](): TransferProtocolMetadata {
+    protected get [RPC_TRANSFER_PROTOCOL_META_SYMBOL](): TransferProtocolMetadata {
         return {
-            contentType: restoreContentType(this.mimeVec),
+            contentType: this.mimeVec ? restoreContentType(this.mimeVec) : 'application/octet-stream',
             headers: {
-                'content-length': this.size.toString(),
-                'content-disposition': `attachment; filename="${this.fileName}"`,
+                'content-length': `${this.size}`,
+                'content-disposition': `attachment; filename="${this.fileName}"; filename*=UTF-8''${encodeURIComponent(this.fileName)}`,
 
                 // RFC1864 being obsoleted, for not supporting partial responses.
                 // https://datatracker.ietf.org/doc/html/rfc1864
                 'content-sha256': this.sha256Sum || ''
-            }
+            },
+            envelope: null
         };
+    }
+
+    [RPC_MARSHALL]() {
+        return transferProtocolMetaDecorated(
+            this[RPC_TRANSFER_PROTOCOL_META_SYMBOL],
+            this.createReadStream()
+        );
     }
 
     createReadStream() {
@@ -75,6 +88,10 @@ export interface HashedFile extends ResolvedFile {
             format: 'binary'
         }
     }
+})
+@TPM({
+    contentType: 'application/octet-stream',
+    envelope: null
 })
 export class FancyFile {
     protected static _keys = ['mimeType', 'mimeVec', 'fileName', 'filePath', 'sha256Sum', 'size'];
@@ -208,6 +225,7 @@ export class FancyFile {
     static auto(filePath: string, partialFile?: PartialFile): FancyFile;
     static auto(readable: Readable | Buffer | string, tmpFilePath: string, partialFile?: PartialFile): FancyFile;
     static auto(partialFile: PartialFile, tmpFilePath?: string): FancyFile;
+    @AutoConstructor
     static auto(a: any, b?: any, c?: any) {
         if (!a) {
             throw new Error('Unrecognized Input. No Idea What To Do.');
@@ -284,7 +302,7 @@ export class FancyFile {
         return deferred.promise;
     }
 
-    get mimeVec() {
+    get mimeVec(): Promise<MIMEVec | null> {
         const deferred = this._ensureDeferred('mimeVec');
         if (deferred.isNew) {
             (this.filePath as any)
@@ -405,5 +423,9 @@ export class FancyFile {
         const fpath = await this.filePath;
 
         return fsp.unlink(fpath);
+    }
+
+    [RPC_MARSHALL]() {
+        return this.resolve();
     }
 }

@@ -196,5 +196,4 @@ export abstract class AbstractTempFileManger extends AsyncService {
             dirName: path.basename(absPath),
         };
     }
-
 }

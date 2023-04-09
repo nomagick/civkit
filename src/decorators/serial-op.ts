@@ -32,7 +32,10 @@ export function serialOperation(id: symbol = DEFAULT_SERIAL_SYMBOL) {
             return deferred.promise;
         }
 
-        // eslint-disable-next-line no-param-reassign
+        Object.defineProperty(serialOperationAwareFunction, 'name',
+            { value: `serialOperationDecorated${(func.name[0] || '').toUpperCase()}${func.name.slice(1)}`, writable: false, enumerable: false, configurable: true }
+        );
+
         propDesc.value = serialOperationAwareFunction;
 
         return propDesc;
@@ -68,7 +71,10 @@ export function globalSerialOperation(id: symbol = DEFAULT_SERIAL_SYMBOL) {
             return deferred.promise;
         }
 
-        // eslint-disable-next-line no-param-reassign
+        Object.defineProperty(serialOperationAwareFunction, 'name',
+            { value: `globalSerialOperationDecorated${(func.name[0] || '').toUpperCase()}${func.name.slice(1)}`, writable: false, enumerable: false, configurable: true }
+        );
+
         propDesc.value = serialOperationAwareFunction;
 
         return propDesc;
