@@ -29,6 +29,6 @@ tskit-build-pub:
 tskit-publish:
     stage: publish
     script:
-        - npm run publish:beta
+        - npm run publish:latest
     dependencies:
         - tskit-build-pub

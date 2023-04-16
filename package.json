@@ -1,5 +1,5 @@
 {
-    "name": "@naiverlabs/tskit",
+    "name": "civkit",
     "version": "0.6.1",
     "description": "Sets of tools, in typescript",
     "main": "index.js",
@@ -17,7 +17,7 @@
         "type": "git",
         "url": "ssh://git@git.naiver.org:6022/naiverlabs/typescript-toolkit.git"
     },
-    "author": "yanlong.wang@naiver.org",
+    "author": "nomagick@naiver.org",
     "license": "AGPL",
     "dependencies": {
         "lodash": "^4.17.21",
