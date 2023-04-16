@@ -293,7 +293,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             const jointInput = {
                 ...ctx.params,
                 ...ctx.query,
-                ...ctx.request.body,
+                ...ctx.request.body as any,
                 [RPC_CALL_ENVIROMENT]: ctx
             };
 
@@ -479,6 +479,8 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             };
         }
 
+        const reqBody = ctx.request.body as Record<string, any>;
+
         ctx.files = allFiles;
 
         boy.on('field', (
@@ -499,13 +501,13 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
             if (decodedFieldName.endsWith('[]')) {
                 const realFieldName = decodedFieldName.slice(0, decodedFieldName.length - 2);
-                if (Array.isArray(ctx.request.body[realFieldName])) {
-                    ctx.request.body[realFieldName].push(parsedVal);
+                if (Array.isArray(reqBody[realFieldName])) {
+                    reqBody[realFieldName].push(parsedVal);
                 } else {
-                    ctx.request.body[realFieldName] = [parsedVal];
+                    reqBody[realFieldName] = [parsedVal];
                 }
             } else {
-                ctx.request.body[decodedFieldName] = parsedVal;
+                reqBody[decodedFieldName] = parsedVal;
             }
         });
 
@@ -519,13 +521,13 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
             if (decodedFieldName.endsWith('[]')) {
                 const realFieldName = decodedFieldName.slice(0, decodedFieldName.length - 2);
-                if (Array.isArray(ctx.request.body[realFieldName])) {
-                    ctx.request.body[realFieldName].push(file);
+                if (Array.isArray(reqBody[realFieldName])) {
+                    reqBody[realFieldName].push(file);
                 } else {
-                    ctx.request.body[realFieldName] = [file];
+                    reqBody[realFieldName] = [file];
                 }
             } else {
-                ctx.request.body[decodedFieldName] = file;
+                reqBody[decodedFieldName] = file;
             }
             allFiles.push(file);
         });
@@ -588,7 +590,9 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             file: cachedFile,
         };
 
-        ctx.files = ctx.request.body.__files;
+        const reqBody = ctx.request.body as Record<string, any>;
+
+        ctx.files = reqBody.__files;
 
         try {
             return await next();

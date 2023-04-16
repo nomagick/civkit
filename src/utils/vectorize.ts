@@ -3,7 +3,6 @@ import {
     ObjectId, Timestamp, UUID, Binary, BSONRegExp, BSONSymbol,
     Code, DBRef, Decimal128, Double, Int32, Long, MaxKey, MinKey
 } from 'bson';
-import nodeObjectHash from 'node-object-hash';
 
 import {
     chainEntriesSimple as chainEntries, isPrimitiveLike,
@@ -236,10 +235,4 @@ export function deepClean<T extends object>(object: T): Partial<T> {
     }
 
     return object as any;
-}
-
-const objHasher = nodeObjectHash();
-
-export function objHashMd5B64Of(obj: any, options?: nodeObjectHash.HasherOptions) {
-    return objHasher.hash(obj, { enc: 'base64', alg: 'md5', ...options });
 }

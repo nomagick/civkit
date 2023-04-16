@@ -2,6 +2,7 @@ export {
     Dto,
     RPCHost,
     RPC_CALL_ENVIROMENT,
+    RPC_REFLECT,
     RPCEnvelope,
     IntegrityEnvelope,
     rpcExport,

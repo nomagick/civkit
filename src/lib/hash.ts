@@ -1,7 +1,8 @@
 import { createHash, createHmac, BinaryToTextEncoding } from 'crypto';
 import { Readable as ReadableStream } from 'stream';
 
-import nodeObjectHash from 'node-object-hash';
+import { HasherOptions, hasher as nodeObjHasher } from 'node-object-hash';
+
 export class HashManager<T extends string | Buffer = string> {
     protected algorithm: string = 'sha256';
     protected outputFormat: BinaryToTextEncoding | 'buffer' = 'hex';
@@ -138,8 +139,11 @@ export class SaltedHashManager<T extends string | Buffer = Buffer> extends HashM
 }
 
 
-const objHasher = nodeObjectHash();
+const objHasher = nodeObjHasher({
+    alg: 'md5',
+    enc: 'base64',
+});
 
-export function objHashMd5B64Of(obj: any, options?: nodeObjectHash.HasherOptions) {
+export function objHashMd5B64Of(obj: any, options?: HasherOptions) {
     return objHasher.hash(obj, { enc: 'base64', alg: 'md5', ...options });
 }

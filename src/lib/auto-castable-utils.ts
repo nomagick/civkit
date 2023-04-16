@@ -117,7 +117,7 @@ export function Combine<T extends Constructor<any>[]>(
     });
 
     Object.defineProperty(NaivelyMergedClass, 'name', {
-        value: `${argArr.map((x) => x.name).join('&')}`,
+        value: `${argArr.map((x) => x.name).reverse().join('&')}`,
         writable: false,
     });
 
@@ -325,7 +325,7 @@ export function Literal<T extends Record<string | symbol, Constructor<any> | obj
     }
 
     Object.defineProperty(LiteralClass, 'name', {
-        value: AutoCastable.name,
+        value: describeType(LiteralClass),
         writable: false,
     });
 

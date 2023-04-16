@@ -1,5 +1,4 @@
 import { Readable, PassThrough } from 'stream';
-import { ensureDir, pathExists } from 'fs-extra';
 
 import path from 'path';
 
@@ -9,6 +8,7 @@ import { promisify } from 'util';
 import fs from 'fs';
 import { randomBytes as originalRandomBytes } from 'crypto';
 import { AsyncService } from './async-service';
+import { ensureDir } from '../utils/filesystem';
 
 const fstat = promisify(fs.stat);
 const funlink = promisify(fs.unlink);
@@ -209,17 +209,14 @@ export abstract class AbstractStorageManager extends AsyncService {
 
     getLocalStream(fpath: string, options?: { start: number; end: number }): Promise<fs.ReadStream> {
         return new Promise((resolve, reject) => {
-            pathExists(fpath, (err, exists) => {
-                if (exists) {
-                    const theStream = fs.createReadStream(fpath, options);
-
-                    return resolve(theStream);
-                }
+            fs.access(fpath, fs.constants.R_OK, (err) => {
                 if (err) {
                     return reject(err);
                 }
+                
+                const theStream = fs.createReadStream(fpath, options);
 
-                return reject(new ReferenceError('No such file'));
+                return resolve(theStream);
             });
         });
     }

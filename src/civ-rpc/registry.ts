@@ -1,4 +1,4 @@
-import { RPCEnvelope, RPCHost, RPC_CALL_ENVIROMENT } from './base';
+import { RPCEnvelope, RPCHost, RPC_CALL_ENVIROMENT, RPC_REFLECT } from './base';
 import { AsyncService } from '../lib/async-service';
 import {
     RPCMethodNotFoundError,
@@ -12,6 +12,7 @@ import {
 } from '../lib/auto-castable';
 import { RestParameters, shallowDetectRestParametersKeys } from './magic';
 import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
+import { get } from 'lodash';
 
 const REMOVE_COMMENTS_REGEXP = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/gm;
 export function getParamNames(func: Function): string[] {
@@ -30,7 +31,6 @@ export function getParamNames(func: Function): string[] {
 export interface RPCOptions {
     name: string | string[];
     returnType?: Function | Function[];
-    returnCombinationOf?: (typeof AutoCastableMetaClass)[];
     returnArrayOf?: Function | Function[];
     returnDictOf?: Function | Function[];
     returnMetaType?: (typeof AutoCastableMetaClass) | (typeof AutoCastableMetaClass)[];
@@ -52,9 +52,21 @@ export interface InternalRPCOptions extends RPCOptions {
     hostProto?: any;
     nameOnProto?: any;
     method?: Function;
+
+    _detectEtc?: boolean;
+    _host?: any;
+    _func?: Function;
 }
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
+
+export interface RPCReflection {
+    registry: AbstractRPCRegistry;
+    name: string;
+    conf: InternalRPCOptions & {
+        paramOptions: PropOptions<unknown>[];
+    };
+}
 
 export abstract class AbstractRPCRegistry extends AsyncService {
     static envelope: typeof RPCEnvelope = RPCEnvelope;
@@ -64,8 +76,6 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     abstract container: typeof DIContainer;
 
     conf: Map<string, InternalRPCOptions & { paramOptions: PropOptions<unknown>[]; }> = new Map();
-
-    wrapped: Map<string, Function> = new Map();
 
     override async init() {
         setImmediate(() => {
@@ -107,23 +117,19 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             // Postpone it to tick 2.
             // Stuff could be not ready yet.
             setImmediate(() => {
-                this.wrapRPCMethod(name);
+                this.prepare(name);
             });
             return;
         }
 
-        return this.wrapRPCMethod(name);
+        return this.prepare(name);
     }
 
-    wrapRPCMethod(name: string) {
+    prepare(name: string) {
         const conf = this.conf.get(name);
 
         if (!conf) {
             throw new Error(`Unknown method: ${name}`);
-        }
-
-        if (this.wrapped.has(name)) {
-            return this.wrapped.get(name);
         }
 
         const host = this.container.resolve(conf!.hostProto.constructor);
@@ -135,7 +141,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         const paramPickerMeta = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, conf.hostProto);
         const paramPickerConf = paramPickerMeta ? paramPickerMeta[conf.nameOnProto] : undefined;
 
-        // At wrap time we preload the param options so at runtime it's faster.
+        // At prepare time we preload the param options so at runtime it's faster.
         for (const [i, t] of paramTypes.entries()) {
             const propOps = paramPickerConf?.[i];
             const propName = paramNames[i];
@@ -157,66 +163,81 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         const detectEtc = paramTypes.find((x) => (x?.prototype instanceof RestParameters || x === RestParameters));
 
-        function patchedRPCMethod<T extends object = any>(this: RPCHost, input: T) {
-            let params;
-            const etcDetectKit = detectEtc ? shallowDetectRestParametersKeys(input) : undefined;
-            const patchedInput = etcDetectKit?.proxy || input;
-            try {
+        conf._detectEtc = detectEtc;
+        conf._host = host;
+        conf._func = func;
 
-                params = conf!.paramOptions.map((paramOption) => {
-                    return inputSingle('Input', patchedInput, paramOption.path, paramOption);
-                });
-
-            } catch (err) {
-                if (err instanceof ApplicationError) {
-                    throw err;
-                }
-                if (err instanceof AutoCastingError) {
-                    throw new ParamValidationError({
-                        ...err,
-                        readableMessage: (err.cause as any)?.message || err.reason,
-                    });
-                }
-
-                throw err;
-            }
-
-            if (etcDetectKit) {
-                const etcKeys = Array.from(etcDetectKit.etcKeys.keys());
-                for (const x of params) {
-                    if (x instanceof RestParameters) {
-                        for (const k of etcKeys) {
-                            Reflect.set(x, k, Reflect.get(input, k));
-                        }
-                    }
-                }
-            }
-
-            const r = func.apply(host, params);
-
-            return r;
-        }
-
-        this.wrapped.set(name, patchedRPCMethod);
-
-        return patchedRPCMethod;
+        return func;
     }
 
     dump() {
         return Array.from(this.conf.keys()).map((x) => {
-            return [x, this.wrapRPCMethod(x), this.conf.get(x)];
+            return [x, this.prepare(x), this.conf.get(x)];
         }) as [string, Function, InternalRPCOptions][];
     }
 
     exec(name: string, input: object) {
         const conf = this.conf.get(name);
-        const func = this.wrapped.get(name);
+        const func = conf?._func;
+
+        const params = this.fitInputToArgs(name, {
+            ...input,
+            [RPC_REFLECT]: {
+                registry: this,
+                name,
+                conf
+            },
+        });
 
         if (!(conf && func)) {
-            throw new RPCMethodNotFoundError({ message: `Could not found method of name: ${name}.`, method: name });
+            throw new RPCMethodNotFoundError({ message: `Could not find method of name: ${name}.`, method: name });
         }
 
-        return func.call(conf.host, input);
+        return func.call(conf._host, ...params);
+    }
+
+    fitInputToArgs(name: string, input: object) {
+        const conf = this.conf.get(name);
+
+        if (!conf) {
+            throw new Error(`Unknown method: ${name}`);
+        }
+
+        let params;
+        const etcDetectKit = conf._detectEtc ? shallowDetectRestParametersKeys(input) : undefined;
+        const patchedInput = etcDetectKit?.proxy || input;
+        try {
+
+            params = conf!.paramOptions.map((paramOption) => {
+                return inputSingle('Input', patchedInput, paramOption.path, paramOption);
+            });
+
+        } catch (err) {
+            if (err instanceof ApplicationError) {
+                throw err;
+            }
+            if (err instanceof AutoCastingError) {
+                throw new ParamValidationError({
+                    ...err,
+                    readableMessage: get(err.cause, 'message') || err.reason,
+                });
+            }
+
+            throw err;
+        }
+
+        if (etcDetectKit) {
+            const etcKeys = Array.from(etcDetectKit.etcKeys.keys());
+            for (const x of params) {
+                if (x instanceof RestParameters) {
+                    for (const k of etcKeys) {
+                        Reflect.set(x, k, Reflect.get(input, k));
+                    }
+                }
+            }
+        }
+
+        return params;
     }
 
     protected resolveEnvelopeClass<T extends typeof RPCEnvelope>(envelopeClass: T) {
@@ -237,7 +258,8 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         succ: boolean,
         err?: any;
     }> {
-        const rpcDefinedEnvelope = this.conf.get(name)?.envelope;
+        const conf = this.conf.get(name);
+        const rpcDefinedEnvelope = conf?.envelope;
 
         let envelopeClass = overrideEnvelopeClass ||
             (rpcDefinedEnvelope === null ? RPCEnvelope : rpcDefinedEnvelope) ||
@@ -308,7 +330,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         return RPCDecorator;
     }
 
-    Pick<T>(path?: string | symbol | PropOptions<T>, conf?: PropOptions<T>) {
+    Param<T>(path?: string | symbol | PropOptions<T>, conf?: PropOptions<T>) {
         if (typeof path === 'string' || typeof path === 'symbol') {
             if (conf) {
                 conf.path = path;
@@ -346,11 +368,12 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     decorators() {
         const RPCMethod = this.RPCMethod.bind(this);
 
-        const Pick = this.Pick.bind(this);
+        const Param = this.Param.bind(this);
 
-        const Ctx = (...args: any[]) => Pick(RPC_CALL_ENVIROMENT, ...args);
+        const Ctx = (...args: any[]) => Param(RPC_CALL_ENVIROMENT, ...args);
+        const RPCReflect = (...args: any[]) => Param(RPC_REFLECT, ...args);
 
-        return { RPCMethod, Pick, Ctx };
+        return { RPCMethod, Param, Ctx, RPCReflect };
     }
 }
 

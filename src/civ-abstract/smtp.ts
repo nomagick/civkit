@@ -8,7 +8,7 @@ import { AsyncService, Defer, FancyFile, LoggerInterface, SYSTEM_CPU_COUNT } fro
 
 import { AbstractX509Manager } from '../lib/x509';
 import { AbstractTempFileManger } from '../lib/temp';
-import { AbstractEventDispatch } from '../lib/event-dispatch';
+import { AbstractSignalBus } from '../lib/signal-bus';
 import { which } from '../utils/which';
 
 export interface SMTPConfig {
@@ -343,7 +343,7 @@ export abstract class AbstractSMTPServerService extends AsyncService {
     constructor(
         protected x509: AbstractX509Manager,
         protected tmpFileManager: AbstractTempFileManger,
-        protected eventDispatch: AbstractEventDispatch
+        protected eventDispatch: AbstractSignalBus
     ) {
         super(...arguments);
 

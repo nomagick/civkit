@@ -20,6 +20,7 @@ import { RPCOptions } from './registry';
 import _, { get } from 'lodash';
 
 export const RPC_CALL_ENVIROMENT = Symbol('RPCEnv');
+export const RPC_REFLECT = Symbol('RPCReflect');
 
 export class RPCHost extends AsyncService {
     setResultMeta<T extends object, P extends object>(target: T, metaToSet: P) {
