@@ -191,7 +191,7 @@ export function Required<T extends typeof AutoCastableMetaClass>(
     }
     const opts: { [k: string | symbol]: PropOptions<unknown>; } = {};
     const extOpts: AdditionalPropOptions<unknown> = {};
-    abstract class PartialClass extends cls { }
+    abstract class RequiredClass extends cls { }
 
     const partialOpts: any = {};
     for (const [k, v] of chainEntries(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
@@ -200,7 +200,7 @@ export function Required<T extends typeof AutoCastableMetaClass>(
     Object.assign(opts, reverseObjectKeys(partialOpts));
     Object.assign(extOpts, cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {});
 
-    Object.defineProperties(PartialClass, {
+    Object.defineProperties(RequiredClass, {
         [AUTOCASTABLE_OPTIONS_SYMBOL]: {
             value: reverseObjectKeys(opts),
             configurable: true,
@@ -215,14 +215,14 @@ export function Required<T extends typeof AutoCastableMetaClass>(
         },
     });
 
-    Object.defineProperty(PartialClass, 'name', {
-        value: `Partial<${cls.name}>`,
+    Object.defineProperty(RequiredClass, 'name', {
+        value: `Required<${cls.name}>`,
         writable: false,
     });
 
-    requiredTrackMap.set(cls, PartialClass);
+    requiredTrackMap.set(cls, RequiredClass);
 
-    return PartialClass as any;
+    return RequiredClass as any;
 }
 
 export function Omit<T extends typeof AutoCastableMetaClass, P extends (keyof InstanceType<T>)[]>(
@@ -314,22 +314,22 @@ export function Literal<T extends Record<string | symbol, Constructor<any> | obj
         [k in keyof T]?: T[k] extends Constructor<infer U> ? U : T[k];
     }
 > & (typeof AutoCastable) {
-    class LiteralClass extends AutoCastable {
+    class AnonCls extends AutoCastable {
     }
 
     for (const [k, v] of chainEntries(literal)) {
-        Prop({ type: v })(LiteralClass.prototype, k);
+        Prop({ type: v })(AnonCls.prototype, k);
     }
     if (additionalOpts) {
-        Also(additionalOpts)(LiteralClass);
+        Also(additionalOpts)(AnonCls);
     }
 
-    Object.defineProperty(LiteralClass, 'name', {
-        value: describeType(LiteralClass),
+    Object.defineProperty(AnonCls, 'name', {
+        value: describeType(AnonCls),
         writable: false,
     });
 
-    return LiteralClass as any;
+    return AnonCls as any;
 }
 
 export function ArrayOf<P extends (Constructor<any> | object)[]>(...classes: P): Constructor<
