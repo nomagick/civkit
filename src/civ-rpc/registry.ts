@@ -176,11 +176,12 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         }) as [string, Function, InternalRPCOptions][];
     }
 
-    exec(name: string, input: object) {
+    exec(name: string, input: object, env?: object) {
         const conf = this.conf.get(name);
         const func = conf?._func;
 
         const params = this.fitInputToArgs(name, {
+            [RPC_CALL_ENVIROMENT]: env,
             ...input,
             [RPC_REFLECT]: {
                 registry: this,
@@ -252,7 +253,10 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         return instance;
     }
 
-    async call(name: string, input: object, overrideEnvelopeClass?: typeof RPCEnvelope): Promise<{
+    async call(name: string, input: object, options?: {
+        overrideEnvelopeClass?: typeof RPCEnvelope;
+        env?: object;
+    }): Promise<{
         tpm?: TransferProtocolMetadata;
         output: any,
         succ: boolean,
@@ -261,16 +265,16 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         const conf = this.conf.get(name);
         const rpcDefinedEnvelope = conf?.envelope;
 
-        let envelopeClass = overrideEnvelopeClass ||
+        let envelopeClass = options?.overrideEnvelopeClass ||
             (rpcDefinedEnvelope === null ? RPCEnvelope : rpcDefinedEnvelope) ||
             (this.constructor as typeof AbstractRPCRegistry).envelope;
         let envelopeInstance: RPCEnvelope = this.resolveEnvelopeClass(envelopeClass);
         let result: any;
         try {
-            result = await this.exec(name, input);
+            result = await this.exec(name, input, options?.env);
 
             const tpm = extractTransferProtocolMeta(result);
-            if (!overrideEnvelopeClass && (tpm?.envelope || tpm?.envelope === null)) {
+            if (!options?.overrideEnvelopeClass && (tpm?.envelope || tpm?.envelope === null)) {
                 envelopeClass = tpm.envelope || RPCEnvelope;
                 envelopeInstance = this.resolveEnvelopeClass(envelopeClass);
             }
