@@ -1,47 +1,31 @@
-
-import _ from "lodash";
-import busboy from 'busboy';
-
-import os from 'os';
-
 import { Readable } from 'stream';
-import type { Context, Middleware } from 'koa';
-import Koa from 'koa';
-import compose from 'koa-compose';
-import KoaRouter from '@koa/router';
+import os from 'os';
+import { randomUUID } from 'crypto';
+import http, { IncomingHttpHeaders } from 'http';
+import { createHook, executionAsyncResource } from 'async_hooks';
 
-import bodyParser from "koa-bodyparser";
+import _ from 'lodash';
+import busboy from 'busboy';
+import express from 'express';
+
 import {
-    AbstractTempFileManger, AsyncService, Defer, FancyFile,
-    LoggerInterface, mimeOf, MIMEVec, NDJsonStream, parseContentType,
+    AbstractTempFileManger, AsyncService, Defer,
+    LoggerInterface, mimeOf, NDJsonStream, parseContentType,
     restoreContentType, TimeoutError
-} from "../lib";
-import { RPCHost, RPC_CALL_ENVIROMENT } from "./base";
-import { ApplicationError, DataStreamBrokenError } from "./errors";
-import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from "./meta";
-import { AbstractRPCRegistry } from "./registry";
-import { OpenAPIManager } from "./openapi";
-import http, { IncomingHttpHeaders } from "http";
-import { runOnce } from "../decorators";
-import { createHook, executionAsyncResource } from "async_hooks";
-import { humanReadableDataSize } from "utils/readability";
-import { randomUUID } from "crypto";
-import { TraceableInterface, TRACE_ID } from "../lib/logger";
+} from "../../lib";
+import { RPCHost, RPC_CALL_ENVIROMENT } from "../base";
+import { DataStreamBrokenError } from "../errors";
+import { extractTransferProtocolMeta, TransferProtocolMetadata } from "../meta";
+import { AbstractRPCRegistry } from "../registry";
+import { OpenAPIManager } from "../openapi";
+import { runOnce } from "../../decorators";
+import { humanReadableDataSize } from "../../utils/readability";
+import { TraceableInterface, TRACE_ID } from "../../lib/logger";
+
+import { UploadedFile } from "./shared";
 
 
-export type ParsedContext = Context & {
-    request: { body: { [key: string]: any; }; };
-    files: UploadedFile[];
-};
-
-export type UploadedFile = FancyFile & {
-    field?: string;
-    claimedName?: string;
-    claimedContentType?: MIMEVec | null;
-    claimedMime?: string;
-};
-
-export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
+export abstract class ExpressRegistry extends AbstractRPCRegistry {
     abstract logger: LoggerInterface;
     abstract tempFileManager: AbstractTempFileManger;
     abstract title: string;
@@ -56,22 +40,24 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     };
     _BODY_PARSER_LIMIT = '50mb';
 
-    koaMiddlewares = [
+    expressMiddlewares = [
+        express.json(),
+        express.urlencoded(),
         this.__CORSAllowAllMiddleware,
-        bodyParser({
-            enableTypes: ['json', 'form', 'text'],
-            extendTypes: {
-                text: ['application/xml', 'text/xml']
-            },
-            textLimit: this._BODY_PARSER_LIMIT,
-            jsonLimit: this._BODY_PARSER_LIMIT,
-            xmlLimit: this._BODY_PARSER_LIMIT,
-
-        }),
         this.__multiParse
     ];
 
-    registerMethodsToKoaRouter(koaRouter: KoaRouter) {
+    protected __routerRegister(router: express.Router, url: string, methods: string[], controller: express.RequestHandler) {
+        for (const method of methods) {
+            const func = Reflect.get(router, method.toLowerCase());
+            if (!func) {
+                continue;
+            }
+            func.call(router, url, ...this.expressMiddlewares, controller);
+        }
+    }
+
+    registerMethodsToExpressRouter(expressRouter: express.Router, openapiJsonPath = '/openapi.json') {
         for (const [methodName, , methodConfig] of this.dump()) {
             const httpConfig: {
                 action?: string | string[];
@@ -88,17 +74,15 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             }
             methods = _(methods).uniq().compact().map((x) => x.toLowerCase()).value();
 
-            const theController = this.makeKoaShimController(methodName);
+            const theController = this.makeShimController(methodName);
 
             if (httpConfig?.path) {
                 const regUrl = `/${httpConfig.path}`.replace(/^\/+/, '/');
-                koaRouter.register(
+                this.__routerRegister(
+                    expressRouter,
                     regUrl,
                     methods,
-                    this.wipeBehindKoaRouter(
-                        ...this.koaMiddlewares,
-                        theController
-                    )
+                    theController
                 );
                 this.openAPIManager.document(
                     regUrl.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
@@ -112,13 +96,11 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
                 const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
                 if (methodsToFillNoop.length) {
-                    koaRouter.register(
+                    this.__routerRegister(
+                        expressRouter,
                         regUrl,
                         methodsToFillNoop,
-                        this.wipeBehindKoaRouter(
-                            ...this.koaMiddlewares,
-                            this.__noop
-                        )
+                        this.__noop
                     );
                 }
 
@@ -132,13 +114,11 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             for (const name of methodNames) {
 
                 const apiPath = `/${name.split('.').join('/')}`;
-                koaRouter.register(
+                this.__routerRegister(
+                    expressRouter,
                     apiPath,
                     methods,
-                    this.wipeBehindKoaRouter(
-                        ...this.koaMiddlewares,
-                        theController
-                    )
+                    theController
                 );
 
                 this.openAPIManager.document(
@@ -153,13 +133,11 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
                 const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
                 if (methodsToFillNoop.length) {
-                    koaRouter.register(
+                    this.__routerRegister(
+                        expressRouter,
                         apiPath,
                         methodsToFillNoop,
-                        this.wipeBehindKoaRouter(
-                            ...this.koaMiddlewares,
-                            this.__noop
-                        )
+                        this.__noop
                     );
                 }
 
@@ -169,13 +147,11 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 );
 
                 const rpcPath = `/rpc/${name}`;
-                koaRouter.register(
+                this.__routerRegister(
+                    expressRouter,
                     rpcPath,
                     methods,
-                    this.wipeBehindKoaRouter(
-                        ...this.koaMiddlewares,
-                        theController
-                    )
+                    theController
                 );
                 this.openAPIManager.document(
                     rpcPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
@@ -187,13 +163,11 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     }
                 );
                 if (methodsToFillNoop.length) {
-                    koaRouter.register(
+                    this.__routerRegister(
+                        expressRouter,
                         rpcPath,
                         methodsToFillNoop,
-                        this.wipeBehindKoaRouter(
-                            ...this.koaMiddlewares,
-                            this.__noop
-                        )
+                        this.__noop
                     );
                 }
                 this.logger.debug(
@@ -204,83 +178,47 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
         }
 
-        koaRouter.register('/openapi.json', ['get'], this.wipeBehindKoaRouter(this.__CORSAllowAllMiddleware, (ctx) => {
-            const baseURL = new URL(ctx.URL.toString());
-            baseURL.pathname = baseURL.pathname.replace(/openapi\.json$/i, '').replace(/\/+$/g, '');
-            baseURL.search = '';
-            ctx.body = this.openAPIManager.createOpenAPIObject(baseURL.toString(), {
-                info: {
-                    title: this.title,
-                    description: `${this.title} openapi document`,
-                    'x-logo': {
-                        url: this.logoUrl || `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
+        this.__routerRegister(
+            expressRouter,
+            openapiJsonPath, ['get'],
+            (req, res) => {
+                const baseURL = new URL(req.url);
+                baseURL.pathname = baseURL.pathname.replace(new RegExp(`${openapiJsonPath}$`, 'i'), '').replace(/\/+$/g, '');
+                baseURL.search = '';
+                const content = this.openAPIManager.createOpenAPIObject(baseURL.toString(), {
+                    info: {
+                        title: this.title,
+                        description: `${this.title} openapi document`,
+                        'x-logo': {
+                            url: this.logoUrl || `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
+                        }
                     }
-                }
-            }, (this.constructor as typeof AbstractRPCRegistry).envelope, ctx.request.query);
-        }));
+                }, (this.constructor as typeof AbstractRPCRegistry).envelope, req.query as any);
+                res.statusCode = 200;
+                res.end(content);
+            });
     }
 
-    protected applyTransferProtocolMeta(ctx: Context, protocolMeta?: TransferProtocolMetadata) {
+    protected applyTransferProtocolMeta(res: express.Response, protocolMeta?: TransferProtocolMetadata) {
         if (protocolMeta) {
             if (Number.isInteger(protocolMeta.code)) {
-                ctx.status = protocolMeta.code!;
+                res.statusCode = protocolMeta.code!;
             }
             if (protocolMeta.contentType) {
-                ctx.set('content-type', protocolMeta.contentType);
+                res.set('content-type', protocolMeta.contentType);
             }
             if (protocolMeta.headers) {
                 for (const [key, value] of Object.entries(protocolMeta.headers)) {
                     if (value === undefined) {
                         continue;
                     }
-                    ctx.set(key, value);
+                    res.set(key, value);
                 }
             }
         }
     }
 
-    makeSuccResponse(result: any) {
-        const protocolMeta = extractTransferProtocolMeta(result);
-        const data = {
-            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-            code: protocolMeta?.code || 200,
-            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-            status: protocolMeta?.status || 20000,
-            data: result,
-            meta: extractMeta(result)
-        };
-
-        return data;
-    }
-
-    makeErrResponse(err: Error) {
-
-        const protocolMeta = extractTransferProtocolMeta(err);
-
-        if (err instanceof ApplicationError) {
-
-            return {
-                code: err.code,
-                status: err.status, data: null,
-                message: `${err.name}: ${err.message}`,
-                readableMessage: err.readableMessage
-            };
-
-        } else if (protocolMeta) {
-            return {
-                // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-                code: protocolMeta.code || 500,
-                // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-                status: protocolMeta.status || 50000,
-                data: null,
-                message: `${err.name}: ${err.message}`,
-            };
-        }
-
-        return { code: 500, status: 50000, message: `${err.name}: ${err.message}` };
-    }
-
-    makeKoaShimController(methodName: string) {
+    makeShimController(methodName: string) {
         const conf = this.conf.get(methodName);
         if (!conf) {
             throw new Error(`Unknown rpc method: ${methodName}`);
@@ -288,18 +226,20 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         const rpcHost = this.host(methodName) as RPCHost;
         const hostIsAsyncService = rpcHost instanceof AsyncService;
 
-        return async (ctx: Context, next: (err?: Error) => Promise<unknown>) => {
+        return async (req: express.Request, res: express.Response) => {
 
             const jointInput = {
-                ...ctx.params,
-                ...ctx.query,
-                ...ctx.request.body as any,
-                [RPC_CALL_ENVIROMENT]: ctx
+                ...req.params,
+                ...req.query,
+                ...req.body as any,
+                [RPC_CALL_ENVIROMENT]: { req, res }
             };
 
-            ctx.status = 404;
+            res.statusCode = 404;
             const keepAliveTimer = setTimeout(() => {
-                ctx.socket.setKeepAlive(true, 2 * 1000);
+                if (res.socket) {
+                    res.socket.setKeepAlive(true, 2 * 1000);
+                }
             }, 2 * 1000);
             try {
                 if (hostIsAsyncService && rpcHost.serviceStatus !== 'ready') {
@@ -314,31 +254,30 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 clearTimeout(keepAliveTimer);
 
                 // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-                if (ctx.status === 404) {
-                    ctx.status = 200;
+                if (res.statusCode === 404) {
+                    res.statusCode = 200;
                 }
 
                 if (output instanceof Readable || (typeof output?.pipe) === 'function') {
-                    ctx.socket.setKeepAlive(true, 1000);
-                    ctx.respond = false;
+                    res.socket?.setKeepAlive(true, 1000);
 
-                    this.applyTransferProtocolMeta(ctx, result.tpm);
+                    this.applyTransferProtocolMeta(res, result.tpm);
                     if (output.readableObjectMode) {
                         const transformStream = new NDJsonStream();
-                        this.applyTransferProtocolMeta(ctx, extractTransferProtocolMeta(transformStream));
+                        this.applyTransferProtocolMeta(res, extractTransferProtocolMeta(transformStream));
                         output.pipe(transformStream, { end: true });
-                        transformStream.pipe(ctx.res, { end: true });
+                        transformStream.pipe(res, { end: true });
                     } else {
-                        output.pipe(ctx.res);
+                        output.pipe(res);
                     }
-                    ctx.res.once('close', () => {
+                    res.once('close', () => {
                         if (!output.readableEnded) {
                             this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`, {
-                                traceId: Reflect.get(ctx, TRACE_ID)
+                                traceId: Reflect.get(res, TRACE_ID)
                             });
                             output.once('error', (err: any) => {
                                 this.logger.warn(`Error occurred in response stream: ${err}`, {
-                                    traceId: Reflect.get(ctx, TRACE_ID),
+                                    traceId: Reflect.get(res, TRACE_ID),
                                     err
                                 });
                             });
@@ -348,22 +287,22 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 } else if (Buffer.isBuffer(output)) {
                     if (!(result.tpm?.contentType)) {
                         const contentType = restoreContentType(await mimeOf(output));
-                        ctx.set('content-type', contentType);
+                        res.set('content-type', contentType);
                     }
-                    this.applyTransferProtocolMeta(ctx, result.tpm);
-                    ctx.body = output;
+                    this.applyTransferProtocolMeta(res, result.tpm);
+                    res.end(output);
                 } else if (typeof output === 'string') {
-                    ctx.set('content-type', 'text/plain');
-                    this.applyTransferProtocolMeta(ctx, result.tpm);
-                    ctx.body = output;
+                    res.set('content-type', 'text/plain');
+                    this.applyTransferProtocolMeta(res, result.tpm);
+                    res.end(output);
                 } else {
-                    ctx.set('content-type', 'application/json');
-                    this.applyTransferProtocolMeta(ctx, result.tpm);
-                    ctx.body = output;
+                    res.set('content-type', 'application/json');
+                    this.applyTransferProtocolMeta(res, result.tpm);
+                    res.end(output);
                 }
 
                 if (!result.succ) {
-                    this.logger.warn(`Error serving incoming request`, { brief: this.briefKoaRequest(ctx), err: result.err });
+                    this.logger.warn(`Error serving incoming request`, { brief: this.briefExpressRequest(req, res), err: result.err });
                     if (result.err?.stack) {
                         this.logger.warn(`Stacktrace: \n`, result.err?.stack);
                     }
@@ -371,19 +310,13 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             } catch (err: any) {
                 // Note that the shim controller doesn't suppose to throw any error.
                 clearTimeout(keepAliveTimer);
-                this.logger.warn(`Error serving incoming request`, { brief: this.briefKoaRequest(ctx), err });
+                this.logger.warn(`Error serving incoming request`, { brief: this.briefExpressRequest(req, res), err });
                 if (err?.stack) {
                     this.logger.warn(`Stacktrace: \n`, err?.stack);
                 }
-                return next(err);
+                res.end(`${err}`);
             }
-
-            return next();
         };
-    }
-
-    wipeBehindKoaRouter(...middlewares: Middleware[]) {
-        return compose(middlewares);
     }
 
     briefHeaders(headers: IncomingHttpHeaders) {
@@ -411,18 +344,18 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         return result;
     }
 
-    briefKoaRequest(ctx: Context) {
+    briefExpressRequest(req: express.Request, res: express.Response) {
         return {
-            code: ctx.response.status,
-            resp: this.briefBody(ctx.body),
+            code: res.statusCode,
+            resp: this.briefBody(req.body),
 
-            ip: ctx.ip,
-            ips: ctx.ips,
-            host: ctx.host,
-            method: ctx.method,
-            url: ctx.request.originalUrl,
-            headers: this.briefHeaders(ctx.request.headers),
-            traceId: Reflect.get(ctx, TRACE_ID)
+            ip: req.ip,
+            ips: req.ips,
+            host: req.hostname,
+            method: req.method,
+            url: req.originalUrl,
+            headers: this.briefHeaders(req.headers),
+            traceId: Reflect.get(res, TRACE_ID)
         };
     }
 
@@ -441,47 +374,47 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
         return body;
     }
-    override async exec(name: string, input: object) {
-        this.emit('run', name, input);
+    override async exec(name: string, input: object, env?: object) {
+        this.emit('run', name, input, env);
         const startTime = Date.now();
         try {
-            const result = await super.exec(name, input);
+            const result = await super.exec(name, input, env);
 
-            this.emit('ran', name, input, result, startTime);
+            this.emit('ran', name, input, result, startTime, env);
 
             return result;
         } catch (err) {
 
-            this.emit('fail', err, name, input, startTime);
+            this.emit('fail', err, name, input, startTime, env);
 
             throw err;
         }
 
     }
 
-    protected async __multiParse(ctx: Context, next: () => Promise<void>) {
+    protected async __multiParse(req: express.Request, res: express.Response, next: express.NextFunction) {
         if (
-            !ctx.request.header['content-type'] ||
-            !(ctx.request.header['content-type'].indexOf('multipart/form-data') >= 0)
+            !req.headers['content-type'] ||
+            !(req.headers['content-type'].indexOf('multipart/form-data') >= 0)
         ) {
             return next();
         }
 
         const boy = busboy({
-            headers: ctx.headers,
+            headers: req.headers,
             limits: this._MULTIPART_LIMITS,
         });
 
         const allFiles: UploadedFile[] = [];
-        if (!ctx.request.body) {
-            ctx.request.body = {
+        if (!req.body) {
+            req.body = {
                 __files: allFiles,
             };
         }
 
-        const reqBody = ctx.request.body as Record<string, any>;
+        const reqBody = req.body as Record<string, any>;
 
-        ctx.files = allFiles;
+        Reflect.set(req, 'files', allFiles);
 
         boy.on('field', (
             fieldName,
@@ -545,123 +478,120 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             deferred.reject(new DataStreamBrokenError(err));
         });
 
-        ctx.req.pipe(boy);
+        req.pipe(boy);
 
         await deferred.promise;
 
         try {
-            return await next();
+            return next();
         } finally {
-            if (ctx.res.writable) {
-                ctx.res.once('close', () => {
-                    deletionOfFiles().catch(this.logger.warn);
-                });
-            } else {
+            res.once('close', () => {
                 deletionOfFiles().catch(this.logger.warn);
-            }
+            });
         }
     }
 
-    protected async __binaryParse(ctx: Context, next: () => Promise<void>) {
-        if (!_.isEmpty(ctx.request.body)) {
+    protected async __binaryParse(req: express.Request, res: express.Response, next: express.NextFunction) {
+        if (!_.isEmpty(req.body)) {
             return next();
         }
 
         let useTimeout = false;
-        if (!ctx.request.header['content-length']) {
+        if (!req.headers['content-length']) {
             useTimeout = true;
         }
-        const mimeVec = parseContentType(ctx.request.header['content-type'] || 'application/octet-stream');
-        const cachedFile = this.tempFileManager.cacheReadable(ctx.req) as UploadedFile;
+        const mimeVec = parseContentType(req.headers['content-type'] || 'application/octet-stream');
+        const cachedFile = this.tempFileManager.cacheReadable(req) as UploadedFile;
         if (useTimeout) {
             const timer = setTimeout(() => {
-                ctx.req.destroy(new TimeoutError(`Unbounded request timedout after ${this._RECEIVE_TIMEOUT} ms`));
+                req.destroy(new TimeoutError(`Unbounded request timedout after ${this._RECEIVE_TIMEOUT} ms`));
             }, this._RECEIVE_TIMEOUT);
 
-            ctx.req.once('end', () => clearTimeout(timer));
+            req.once('end', () => clearTimeout(timer));
         }
 
         if (mimeVec) {
             cachedFile.claimedContentType = mimeVec;
         }
 
-        ctx.request.body = {
+        req.body = {
             __files: [cachedFile],
             file: cachedFile,
         };
 
-        const reqBody = ctx.request.body as Record<string, any>;
+        const reqBody = req.body as Record<string, any>;
 
-        ctx.files = reqBody.__files;
+        Reflect.set(req, 'files', reqBody.__files);
 
         try {
-            return await next();
+            return next();
         } finally {
-            cachedFile.unlink().catch(this.logger.warn);
+            res.once('close', () => {
+                cachedFile.unlink().catch(this.logger.warn);
+            });
         }
     }
 
-    protected __CORSAllowOnceMiddleware(ctx: Context, next: () => Promise<any>) {
-        if (ctx.method.toUpperCase() !== 'OPTIONS') {
+    protected __CORSAllowOnceMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+        if (req.method.toUpperCase() !== 'OPTIONS') {
             return next();
         }
-        const requestOrigin = ctx.request.header.origin;
+        const requestOrigin = req.headers.origin;
         if (!requestOrigin) {
             return next();
         }
-        ctx.response.set('Access-Control-Allow-Origin', requestOrigin);
+        res.set('Access-Control-Allow-Origin', requestOrigin);
 
-        const customMethod = ctx.request.header['Access-Control-Request-Method'.toLowerCase()];
-        const customHeaders = ctx.request.header['Access-Control-Request-Headers'.toLowerCase()];
+        const customMethod = req.headers['Access-Control-Request-Method'.toLowerCase()];
+        const customHeaders = req.headers['Access-Control-Request-Headers'.toLowerCase()];
         if (customMethod) {
-            ctx.response.set('Access-Control-Allow-Methods', customMethod);
+            res.set('Access-Control-Allow-Methods', customMethod);
         }
         if (customHeaders) {
-            ctx.response.set('Access-Control-Allow-Headers', customHeaders);
+            res.set('Access-Control-Allow-Headers', customHeaders);
         }
-        ctx.response.set('Access-Control-Allow-Credentials', 'true');
+        res.set('Access-Control-Allow-Credentials', 'true');
 
-        ctx.status = 200;
+        res.statusCode = 200;
 
         return;
     }
 
-    protected __CORSAllowAllMiddleware(ctx: Context, next: () => Promise<any>) {
-        const requestOrigin = ctx.request.header.origin;
+    protected __CORSAllowAllMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+        const requestOrigin = req.headers.origin;
         if (!requestOrigin) {
             return next();
         }
-        ctx.response.set('Access-Control-Allow-Origin', requestOrigin);
-        ctx.response.set('Access-Control-Max-Age', '25200');
-        ctx.response.set('Access-Control-Allow-Credentials', 'true');
-        if (ctx.method.toUpperCase() !== 'OPTIONS') {
+        res.set('Access-Control-Allow-Origin', requestOrigin);
+        res.set('Access-Control-Max-Age', '25200');
+        res.set('Access-Control-Allow-Credentials', 'true');
+        if (req.method.toUpperCase() !== 'OPTIONS') {
             return next();
         }
-        ctx.status = 200;
-        const customMethod = ctx.request.header['Access-Control-Request-Method'.toLowerCase()];
-        const customHeaders = ctx.request.header['Access-Control-Request-Headers'.toLowerCase()];
+        res.statusCode = 200;
+        const customMethod = req.headers['Access-Control-Request-Method'.toLowerCase()];
+        const customHeaders = req.headers['Access-Control-Request-Headers'.toLowerCase()];
         if (customMethod) {
-            ctx.response.set('Access-Control-Allow-Methods',
+            res.set('Access-Control-Allow-Methods',
                 ['GET', 'POST', 'OPTIONS', 'HEAD', 'PUT', 'DELETE', 'PATCH', 'TRACE'].join(',')
             );
         }
         if (customHeaders) {
-            ctx.response.set('Access-Control-Allow-Headers', customHeaders);
+            res.set('Access-Control-Allow-Headers', customHeaders);
         }
 
         return next();
     }
 
-    protected __noop(ctx: Context, next: () => Promise<any>) {
-        ctx.status = 200;
-        ctx.body = '';
+    protected __noop(_req: express.Request, res: express.Response) {
+        res.status(200);
 
-        return next();
+        return res.end();
     }
 
     async registerParticularRoute(
         rpcMethod: string,
-        koaRouter: KoaRouter,
+        expressRouter: express.Router,
         qPath: string,
     ) {
         const methodConfig = this.conf.get(rpcMethod);
@@ -683,25 +613,21 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         }
         methods = _(methods).uniq().compact().map((x) => x.toLowerCase()).value();
 
-        koaRouter.register(
+        this.__routerRegister(
+            expressRouter,
             qPath,
             methods,
-            this.wipeBehindKoaRouter(
-                ...this.koaMiddlewares,
-                this.makeKoaShimController(rpcMethod)
-            )
+            this.makeShimController(rpcMethod)
         );
 
         const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
 
         if (methodsToFillNoop.length) {
-            koaRouter.register(
+            this.__routerRegister(
+                expressRouter,
                 qPath,
                 methodsToFillNoop,
-                this.wipeBehindKoaRouter(
-                    ...this.koaMiddlewares,
-                    this.__noop
-                )
+                this.__noop
             );
         }
         this.logger.debug(
@@ -711,7 +637,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     }
 }
 
-export interface RPCRegistry {
+export interface ExpressRPCRegistry {
     on(event: 'run', listener: (name: string, input: {
         [RPC_CALL_ENVIROMENT]: any;
         [k: string]: any;
@@ -731,12 +657,12 @@ export interface RPCRegistry {
     on(event: string | symbol, listener: (...args: any[]) => void): this;
 }
 
-export abstract class KoaServer extends AsyncService {
+export abstract class ExpressServer extends AsyncService {
     abstract logger: LoggerInterface;
     healthCheckEndpoint = '/ping';
 
-    koaApp: Koa = new Koa();
-    koaRootRouter: KoaRouter = new KoaRouter();
+    expressApp: express.Express = express();
+    expressRootRouter: express.Router = express.Router();
 
     httpServer!: http.Server;
 
@@ -744,7 +670,7 @@ export abstract class KoaServer extends AsyncService {
 
     constructor() {
         super(...arguments);
-        this.koaApp.proxy = true;
+        this.expressApp.set('trust proxy', true);
         this.init()
             .catch((err) => {
                 this.logger.error(`Server start failed: ${err.toString()}`, err);
@@ -765,7 +691,7 @@ export abstract class KoaServer extends AsyncService {
 
         this.featureSelect();
 
-        this.koaApp.use(this.koaRootRouter.routes());
+        this.expressApp.use(this.expressRootRouter);
 
         this.logger.info('Server dependency ready');
 
@@ -787,7 +713,7 @@ export abstract class KoaServer extends AsyncService {
             this.logger.warn(`Stacktrace: \n${err?.stack}`);
         });
 
-        this.httpServer = http.createServer(this.koaApp.callback());
+        this.httpServer = http.createServer(this.expressApp);
 
         this.emit('ready');
     }
@@ -815,13 +741,9 @@ export abstract class KoaServer extends AsyncService {
     abstract registerRoutes(): void;
 
     @runOnce()
-    registerOpenAPIDocsRoutes() {
-        this.koaRootRouter.get('/docs', async (ctx: Context) => {
-            ctx.redirect('/docs/v2?style=rpc');
-        });
-        this.koaRootRouter.get('/docs/:apiVersion', async (ctx: Context) => {
-            const apiVersion = ctx.params.apiVersion;
-            ctx.body = `
+    registerOpenAPIDocsRoutes(url: string = 'docs', openapiUrl: string = '/openapi.json') {
+        this.expressRootRouter.get(url, (req, res) => {
+            const content = `
             <!DOCTYPE html>
             <html>
               <head>
@@ -842,12 +764,26 @@ export abstract class KoaServer extends AsyncService {
                 </style>
               </head>
               <body>
-                <redoc spec-url='/${apiVersion}/openapi.json?${ctx.querystring}'></redoc>
+                <div id="redoc-container"></div>
                 <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"> </script>
+                <script>
+                  document.addEventListener('DOMContentLoaded', function() {
+                        Redoc.init('${openapiUrl}${new URL(req.originalUrl).search}',
+                        {},
+                        document.getElementById('redoc-container'),
+                        ()=> {
+                            const apiTitle = document.querySelector('.api-info>h1').innerText;
+                            if (apiTitle) {
+                                document.title = apiTitle;
+                            }
+                        });
+                  });
+                </script>
               </body>
             </html>
             `;
 
+            res.status(200).end(content);
         });
     }
 
@@ -862,52 +798,46 @@ export abstract class KoaServer extends AsyncService {
             }
         }).enable();
 
-        const asyncHookMiddleware = async (ctx: Context, next: () => Promise<void>) => {
+        const asyncHookMiddleware = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
             const currentResource: TraceableInterface = executionAsyncResource();
             if (currentResource) {
-                currentResource[TRACE_ID] = ctx.get('x-request-id') || ctx.get('request-id') as string || randomUUID();
+                currentResource[TRACE_ID] = req.get('x-request-id') || req.get('request-id') as string || randomUUID();
             }
 
             return next();
         };
 
-        this.koaApp.use(asyncHookMiddleware);
+        this.expressApp.use(asyncHookMiddleware);
     }
 
     @runOnce()
     insertLogRequestsMiddleware() {
 
-        const loggingMiddleware = async (ctx: Context, next: () => Promise<void>) => {
+        const loggingMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
             const startedAt = Date.now();
-            const url = ctx.request.originalUrl.replace(/secret=\w+/, 'secret=***');
-            if (['GET', 'DELETE', 'HEAD', 'OPTIONS'].includes(ctx.method.toUpperCase())) {
-                this.logger.info(`Incoming request: ${ctx.request.method.toUpperCase()} ${url} ${ctx.ip}`, { service: 'HTTP Server' });
+            const url = req.originalUrl.replace(/secret=\w+/, 'secret=***');
+            if (['GET', 'DELETE', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
+                this.logger.info(`Incoming request: ${req.method.toUpperCase()} ${url} ${req.ip}`, { service: 'HTTP Server' });
             } else {
-                this.logger.info(`Incoming request: ${ctx.request.method.toUpperCase()} ${url} ${ctx.request.type || 'unspecified-type'} ${humanReadableDataSize(ctx.request.get('content-length') || ctx.request.socket.bytesRead) || 'N/A'} ${ctx.ip}`, { service: 'HTTP Server' });
+                this.logger.info(`Incoming request: ${req.method.toUpperCase()} ${url} ${req.get('content-type') || 'unspecified-type'} ${humanReadableDataSize(req.get('content-length') || req.socket.bytesRead) || 'N/A'} ${req.ip}`, { service: 'HTTP Server' });
             }
 
-            ctx.res.once('close', () => {
+            res.once('close', () => {
                 const duration = Date.now() - startedAt;
-                this.logger.info(`Request completed: ${ctx.status} ${ctx.request.method.toUpperCase()} ${url} ${ctx.response.type || 'unspecified-type'} ${humanReadableDataSize(ctx.response.get('content-length') || ctx.res.socket?.bytesWritten) || 'cancelled'} ${duration}ms`, { service: 'HTTP Server' });
+                this.logger.info(`Request completed: ${res.statusCode} ${req.method.toUpperCase()} ${url} ${res.get('content-type') || 'unspecified-type'} ${humanReadableDataSize(res.get('content-length') || res.socket?.bytesWritten) || 'cancelled'} ${duration}ms`, { service: 'HTTP Server' });
             });
 
             return next();
         };
 
-        this.koaApp.use(loggingMiddleware);
+        this.expressApp.use(loggingMiddleware);
     }
 
     @runOnce()
     insertHealthCheckMiddleware(path: string = '/ping') {
-        const healthCheck = async (ctx: Context, next: () => Promise<void>) => {
-            if (ctx.path !== path) {
-                return next();
-            }
-
-            // No next() from here, so it returns directly without waking up any downstream logic.
+        const healthCheck = async (_req: express.Request, res: express.Response) => {
             if (this.serviceStatus === 'ready') {
-                ctx.status = 200;
-                ctx.body = 'pone';
+                res.status(200).end('pone');
 
                 return;
             }
@@ -915,18 +845,15 @@ export abstract class KoaServer extends AsyncService {
             try {
                 await this.serviceReady();
 
-                ctx.status = 200;
-                ctx.body = 'pone';
+                res.status(200).end('pone');
 
             } catch (err: any) {
-                ctx.status = 503;
-                ctx.body = err.toString();
-
+                res.status(503).end(err.toString());
                 this.logger.error('Service not ready upon health check', { err });
             }
         };
 
-        this.koaApp.use(healthCheck);
+        this.expressRootRouter.get(path, healthCheck);
     }
 
     override async standDown() {
