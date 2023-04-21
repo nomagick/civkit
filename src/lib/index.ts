@@ -13,6 +13,7 @@ export * from './sub-process';
 export * from './throttle';
 export * from './temp';
 export * from './logger';
+export * from './pino-logger';
 export * from './file-storage';
 
 export * from './auto-castable';

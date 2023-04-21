@@ -1,10 +1,7 @@
 import { AsyncService } from './async-service';
-import pino from 'pino';
 import { createHook, executionAsyncResource } from 'async_hooks';
 import { randomUUID } from 'crypto';
-
-export type LoggerOptions = pino.LoggerOptions;
-export type LoggerInterface = pino.Logger;
+import { Writable } from 'stream';
 
 const logLevels = {
     FATAL: 'fatal',
@@ -14,8 +11,6 @@ const logLevels = {
     DEBUG: 'debug',
     TRACE: 'trace'
 } as const;
-
-type Level = typeof logLevels[keyof typeof logLevels];
 
 export const TRACE_ID = Symbol('TraceID');
 export interface TraceableInterface {
@@ -49,14 +44,25 @@ export function getTraceId() {
     return currentResource?.[TRACE_ID];
 }
 
+export abstract class AbstractLogger extends AsyncService {
+    abstract _targetStream: Writable;
 
-function wipeBehindPinoFunction(level: Level, binding?: object) {
+    bindings: Record<string, any> = {
+        pid: process.pid,
+        host: process.env.HOSTNAME || process.env.HOST || 'unknown',
+    };
 
-    return function patchedLogger(this: AbstractLogger, ...args: any[]) {
-        const thePino = this.logger;
-        const logFunc = thePino[level];
+    constructor(...whatever: any[]) {
+        super(...whatever);
+    }
+
+    override init(stream?: Writable) {
+        this._targetStream = stream || process.stderr;
+    }
+
+    log(...args: any[]) {
         const texts: string[] = [];
-        const objects: object[] = [];
+        const objects: object[] = [this.bindings];
 
         let errCounter = 0;
         for (const x of args) {
@@ -79,65 +85,48 @@ function wipeBehindPinoFunction(level: Level, binding?: object) {
             objects.push({ 'traceId': resource[TRACE_ID] });
         }
 
-        return logFunc.call(thePino, Object.assign({}, binding, ...objects), texts.join(' '));
-    };
-
-}
-
-export abstract class AbstractLogger extends AsyncService {
-    abstract logger: LoggerInterface;
-    abstract loggerOptions: LoggerOptions;
-
-    constructor(...whatever: any[]) {
-        super(...whatever);
-    }
-
-    override init(stream: pino.DestinationStream) {
-        this.logger = pino(this.loggerOptions, stream);
+        return this._targetStream.write(Object.assign({ message: texts.join(' '), date: new Date() }, ...objects));
     }
 
     child(bindings: object) {
-        const childLogger = {} as LoggerInterface;
+        const childLogger = Object.create(this) as this;
 
-        Object.defineProperty(childLogger, 'logger', {
-            get: () => this.logger
-        });
-        Object.defineProperty(childLogger, 'child', {
-            value: (bindings: object) => this.child(bindings)
-        });
-        Object.defineProperty(childLogger, 'flush', {
-            value: () => this.logger.flush()
-        });
-
-        for (const level of Object.values(logLevels)) {
-            childLogger[level] = wipeBehindPinoFunction(level, bindings);
-        }
+        childLogger.bindings = Object.assign({}, this.bindings, bindings);
 
         return childLogger;
     }
 }
 
 for (const level of Object.values(logLevels)) {
-    AbstractLogger.prototype[level] = wipeBehindPinoFunction(level);
+    AbstractLogger.prototype[level] = function (...args: any[]) {
+        return this.log({ level }, ...args);
+    };
 }
 
-export interface AbstractLogger {
+export interface LoggerInterface {
     error(message: string, ...args: any[]): void;
-    error(obj: object, message?: string, ...args: any[]): void;
+    error(obj: unknown, message?: string, ...args: any[]): void;
 
     warn(message: string, ...args: any[]): void;
-    warn(obj: object, message?: string, ...args: any[]): void;
-
+    warn(obj: unknown, message?: string, ...args: any[]): void;
 
     info(message: string, ...args: any[]): void;
-    info(obj: object, message?: string, ...args: any[]): void;
+    info(obj: unknown, message?: string, ...args: any[]): void;
 
     debug(message: string, ...args: any[]): void;
-    debug(obj: object, message?: string, ...args: any[]): void;
+    debug(obj: unknown, message?: string, ...args: any[]): void;
 
     fatal(message: string, ...args: any[]): void;
-    fatal(obj: object, message?: string, ...args: any[]): void;
+    fatal(obj: unknown, message?: string, ...args: any[]): void;
 
     trace(message: string, ...args: any[]): void;
-    trace(obj: object, message?: string, ...args: any[]): void;
+    trace(obj: unknown, message?: string, ...args: any[]): void;
+
+    log(message: string, ...args: any[]): void;
+    log(obj: unknown, message?: string, ...args: any[]): void;
+
+    child(binding: object): LoggerInterface;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface AbstractLogger extends LoggerInterface { }
