@@ -42,7 +42,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
 
     expressMiddlewares = [
         express.json(),
-        express.urlencoded(),
+        express.urlencoded({ extended: true }),
         this.__CORSAllowAllMiddleware,
         this.__multiParse
     ];
