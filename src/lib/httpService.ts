@@ -11,6 +11,7 @@ import { Defer } from './defer';
 import { stringifyErrorLike } from '../utils/lang';
 
 import type { RequestInit, Response, File } from 'undici';
+import { Readable } from 'stream';
 
 export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void; };
 
@@ -306,8 +307,9 @@ export abstract class HTTPService<
             } else if (options.responseType === 'blob') {
                 bodyParsed = r.blob();
                 break;
-            } else if (options.responseType === 'stream') {
-                bodyParsed = r.body;
+            } else if (options.responseType === 'stream' && r.body) {
+                // WebStream sucks. Node stream is the real stream.
+                bodyParsed = Readable.fromWeb(r.body);
                 break;
             }
             if (contentType?.startsWith('application/json')) {
