@@ -195,7 +195,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     }
                 }, (this.constructor as typeof AbstractRPCRegistry).envelope, req.query as any);
                 res.statusCode = 200;
-                res.end(content);
+                res.end(JSON.stringify(content));
             });
     }
 
@@ -299,7 +299,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 } else {
                     res.set('content-type', 'application/json');
                     this.applyTransferProtocolMeta(res, result.tpm);
-                    res.end(output);
+                    res.end(JSON.stringify(output));
                 }
 
                 if (!result.succ) {
