@@ -163,8 +163,10 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         const detectEtc = paramTypes.find((x) => (x?.prototype instanceof RestParameters || x === RestParameters));
 
+
+        conf.host ??= host;
         conf._detectEtc = detectEtc;
-        conf._host = host;
+        conf._host = conf.host;
         conf._func = func;
 
         return func;

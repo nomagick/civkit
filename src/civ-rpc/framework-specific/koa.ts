@@ -3,6 +3,7 @@ import _ from "lodash";
 import busboy from 'busboy';
 
 import os from 'os';
+import { randomUUID } from "crypto";
 
 import { Readable } from 'stream';
 import type { Context, Middleware } from 'koa';
@@ -12,7 +13,7 @@ import KoaRouter from '@koa/router';
 
 import bodyParser from "koa-bodyparser";
 import {
-    AbstractTempFileManger, AsyncService, Defer, 
+    AbstractTempFileManger, AsyncService, Defer,
     LoggerInterface, mimeOf, NDJsonStream, parseContentType,
     restoreContentType, TimeoutError
 } from "../../lib";
@@ -25,7 +26,7 @@ import http, { IncomingHttpHeaders } from "http";
 import { runOnce } from "../../decorators";
 import { createHook, executionAsyncResource } from "async_hooks";
 import { humanReadableDataSize } from "../../utils/readability";
-import { randomUUID } from "crypto";
+import { marshalErrorLike } from "../../utils/lang";
 import { TraceableInterface, TRACE_ID } from "../../lib/logger";
 import { UploadedFile } from "./shared";
 
@@ -316,7 +317,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 }
 
                 if (!result.succ) {
-                    this.logger.warn(`Error serving incoming request`, { brief: this.briefKoaRequest(ctx), err: result.err });
+                    this.logger.warn(`Error serving incoming request`, { brief: this.briefKoaRequest(ctx), err: marshalErrorLike(result.err) });
                     if (result.err?.stack) {
                         this.logger.warn(`Stacktrace: \n`, result.err?.stack);
                     }
@@ -324,7 +325,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             } catch (err: any) {
                 // Note that the shim controller doesn't suppose to throw any error.
                 clearTimeout(keepAliveTimer);
-                this.logger.warn(`Error serving incoming request`, { brief: this.briefKoaRequest(ctx), err });
+                this.logger.warn(`Error serving incoming request`, { brief: this.briefKoaRequest(ctx), err: marshalErrorLike(err) });
                 if (err?.stack) {
                     this.logger.warn(`Stacktrace: \n`, err?.stack);
                 }

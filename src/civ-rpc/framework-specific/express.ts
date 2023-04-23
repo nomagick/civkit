@@ -304,7 +304,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 }
 
                 if (!result.succ) {
-                    this.logger.warn(`Error serving incoming request`, { brief: this.briefExpressRequest(req, res), err: result.err });
+                    this.logger.warn(`Error serving incoming request`, { brief: this.briefExpressRequest(req, res), err: marshalErrorLike(result.err) });
                     if (result.err?.stack) {
                         this.logger.warn(`Stacktrace: \n`, result.err?.stack);
                     }
@@ -312,7 +312,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             } catch (err: any) {
                 // Note that the shim controller doesn't suppose to throw any error.
                 clearTimeout(keepAliveTimer);
-                this.logger.warn(`Error serving incoming request`, { brief: this.briefExpressRequest(req, res), err });
+                this.logger.warn(`Error serving incoming request`, { brief: this.briefExpressRequest(req, res), err:  marshalErrorLike(err) });
                 if (err?.stack) {
                     this.logger.warn(`Stacktrace: \n`, err?.stack);
                 }
