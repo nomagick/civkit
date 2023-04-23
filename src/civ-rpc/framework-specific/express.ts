@@ -316,7 +316,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 if (err?.stack) {
                     this.logger.warn(`Stacktrace: \n`, err?.stack);
                 }
-                res.end(`${marshalErrorLike(err)}`);
+                res.end(`${JSON.stringify(marshalErrorLike(err))}`);
             }
         };
     }
