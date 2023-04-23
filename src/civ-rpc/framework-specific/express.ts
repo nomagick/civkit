@@ -21,6 +21,7 @@ import { OpenAPIManager } from "../openapi";
 import { runOnce } from "../../decorators";
 import { humanReadableDataSize } from "../../utils/readability";
 import { TraceableInterface, TRACE_ID } from "../../lib/logger";
+import { marshalErrorLike } from '../../utils/lang';
 
 import { UploadedFile } from "./shared";
 
@@ -315,7 +316,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 if (err?.stack) {
                     this.logger.warn(`Stacktrace: \n`, err?.stack);
                 }
-                res.end(`${err}`);
+                res.end(`${marshalErrorLike(err)}`);
             }
         };
     }
