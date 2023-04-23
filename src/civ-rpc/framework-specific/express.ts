@@ -242,6 +242,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 }
             }, 2 * 1000);
             try {
+                await this.serviceReady();
                 if (hostIsAsyncService && rpcHost.serviceStatus !== 'ready') {
                     // RPC host may be crippled, if this is the case, assert its back up again.
                     this.logger.info(`${rpcHost.constructor.name} is not ready upon a request, trying to bring it up...`);
