@@ -239,8 +239,6 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         if (!conf) {
             throw new Error(`Unknown rpc method: ${methodName}`);
         }
-        const rpcHost = this.host(methodName) as RPCHost;
-        const hostIsAsyncService = rpcHost instanceof AsyncService;
 
         return async (ctx: Context, next: (err?: Error) => Promise<unknown>) => {
 
@@ -256,6 +254,10 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 ctx.socket.setKeepAlive(true, 2 * 1000);
             }, 2 * 1000);
             try {
+                await this.serviceReady();
+                const rpcHost = this.host(methodName) as RPCHost;
+                const hostIsAsyncService = rpcHost instanceof AsyncService;
+                
                 if (hostIsAsyncService && rpcHost.serviceStatus !== 'ready') {
                     // RPC host may be crippled, if this is the case, assert its back up again.
                     this.logger.info(`${rpcHost.constructor.name} is not ready upon a request, trying to bring it up...`);

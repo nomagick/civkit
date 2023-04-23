@@ -224,18 +224,16 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
         if (!conf) {
             throw new Error(`Unknown rpc method: ${methodName}`);
         }
-        const rpcHost = this.host(methodName) as RPCHost;
-        const hostIsAsyncService = rpcHost instanceof AsyncService;
-
+        
         return async (req: express.Request, res: express.Response) => {
-
+            
             const jointInput = {
                 ...req.params,
                 ...req.query,
                 ...req.body as any,
                 [RPC_CALL_ENVIROMENT]: { req, res }
             };
-
+            
             res.statusCode = 404;
             const keepAliveTimer = setTimeout(() => {
                 if (res.socket) {
@@ -244,6 +242,8 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             }, 2 * 1000);
             try {
                 await this.serviceReady();
+                const rpcHost = this.host(methodName) as RPCHost;
+                const hostIsAsyncService = rpcHost instanceof AsyncService;
                 if (hostIsAsyncService && rpcHost.serviceStatus !== 'ready') {
                     // RPC host may be crippled, if this is the case, assert its back up again.
                     this.logger.info(`${rpcHost.constructor.name} is not ready upon a request, trying to bring it up...`);
