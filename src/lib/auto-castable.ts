@@ -178,6 +178,9 @@ function makeAutoCastingErrorMessage(err: AutoCastingError) {
     return `At #${err.hostName || 'input'}${compPath}: ${err.reason[0]?.toUpperCase()}${err.reason.substring(1)}`;
 }
 
+const TRUE_VALUES = new Set([true, 'TRUE', 'true', 'True', 1, '1']);
+const FALSE_VALUES = new Set([false, 'FALSE', 'false', 'False', 0, '0']);
+
 export function castToType(ensureTypes: any[], inputProp: any) {
     let val: any = NOT_RESOLVED;
     let lastErr: Error | undefined | unknown;
@@ -233,8 +236,18 @@ export function castToType(ensureTypes: any[], inputProp: any) {
             }
 
             case Boolean: {
-                val = Boolean(inputProp);
-                break theLoop;
+                if (TRUE_VALUES.has(inputProp)) {
+                    val = true;
+                    break theLoop;
+                } else if (FALSE_VALUES.has(inputProp)) {
+                    val = false;
+                    break theLoop;
+                } else if (inputProp === '') {
+                    // Empty string may be cast to false. However if String type is allowed, it should be left as string.
+                    val = ensureTypes.includes(String) ? inputProp : false;
+                    break theLoop;
+                }
+                continue theLoop;
             }
 
             // Object/Array is the type of all mixed/any/T[] types.
