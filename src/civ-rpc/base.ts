@@ -19,7 +19,7 @@ import { Readable } from 'stream';
 import { RPCOptions } from './registry';
 import _, { get } from 'lodash';
 
-export const RPC_CALL_ENVIROMENT = Symbol('RPCEnv');
+export const RPC_CALL_ENVIRONMENT = Symbol('RPCEnv');
 export const RPC_REFLECT = Symbol('RPCReflect');
 
 export class RPCHost extends AsyncService {
@@ -35,15 +35,15 @@ export class RPCHost extends AsyncService {
 }
 
 export class Dto<T = any> extends AutoCastable {
-    protected [RPC_CALL_ENVIROMENT]?: T;
+    protected [RPC_CALL_ENVIRONMENT]?: T;
     protected [RPC_MARSHALL]?: (...args: any[]) => any;
 
     static override from(input: object): any {
         try {
             const r = super.from(input) as Dto<unknown>;
 
-            if (input.hasOwnProperty(RPC_CALL_ENVIROMENT)) {
-                r[RPC_CALL_ENVIROMENT] = (input as any)[RPC_CALL_ENVIROMENT];
+            if (input.hasOwnProperty(RPC_CALL_ENVIRONMENT)) {
+                r[RPC_CALL_ENVIRONMENT] = (input as any)[RPC_CALL_ENVIRONMENT];
             }
 
             return r;

@@ -1,4 +1,4 @@
-import { RPCEnvelope, RPCHost, RPC_CALL_ENVIROMENT, RPC_REFLECT } from './base';
+import { RPCEnvelope, RPCHost, RPC_CALL_ENVIRONMENT, RPC_REFLECT } from './base';
 import { AsyncService } from '../lib/async-service';
 import {
     RPCMethodNotFoundError,
@@ -183,7 +183,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         const func = conf?._func;
 
         const params = this.fitInputToArgs(name, {
-            [RPC_CALL_ENVIROMENT]: env,
+            [RPC_CALL_ENVIRONMENT]: env,
             ...input,
             [RPC_REFLECT]: {
                 registry: this,
@@ -376,7 +376,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         const Param = this.Param.bind(this);
 
-        const Ctx = (...args: any[]) => Param(RPC_CALL_ENVIROMENT, ...args);
+        const Ctx = (...args: any[]) => Param(RPC_CALL_ENVIRONMENT, ...args);
         const RPCReflect = (...args: any[]) => Param(RPC_REFLECT, ...args);
 
         return { RPCMethod, Param, Ctx, RPCReflect };

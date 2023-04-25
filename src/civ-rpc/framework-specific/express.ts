@@ -13,7 +13,7 @@ import {
     LoggerInterface, mimeOf, NDJsonStream, parseContentType,
     restoreContentType, TimeoutError
 } from "../../lib";
-import { RPCHost, RPC_CALL_ENVIROMENT } from "../base";
+import { RPCHost, RPC_CALL_ENVIRONMENT } from "../base";
 import { DataStreamBrokenError } from "../errors";
 import { extractTransferProtocolMeta, TransferProtocolMetadata } from "../meta";
 import { AbstractRPCRegistry } from "../registry";
@@ -231,7 +231,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 ...req.params,
                 ...req.query,
                 ...req.body as any,
-                [RPC_CALL_ENVIROMENT]: { req, res }
+                [RPC_CALL_ENVIRONMENT]: { req, res }
             };
             
             res.statusCode = 404;
@@ -641,15 +641,15 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
 
 export interface ExpressRPCRegistry {
     on(event: 'run', listener: (name: string, input: {
-        [RPC_CALL_ENVIROMENT]: any;
+        [RPC_CALL_ENVIRONMENT]: any;
         [k: string]: any;
     }) => void): this;
     on(event: 'ran', listener: (name: string, input: {
-        [RPC_CALL_ENVIROMENT]: any;
+        [RPC_CALL_ENVIRONMENT]: any;
         [k: string]: any;
     }, result: unknown) => void, startTimeTs: number): this;
     on(event: 'fail', listener: (err: Error, name: string, input: {
-        [RPC_CALL_ENVIROMENT]: any;
+        [RPC_CALL_ENVIRONMENT]: any;
         [k: string]: any;
     }) => void, startTimeTs: number): this;
 

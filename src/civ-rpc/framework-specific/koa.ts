@@ -17,7 +17,7 @@ import {
     LoggerInterface, mimeOf, NDJsonStream, parseContentType,
     restoreContentType, TimeoutError
 } from "../../lib";
-import { RPCHost, RPC_CALL_ENVIROMENT } from "../base";
+import { RPCHost, RPC_CALL_ENVIRONMENT } from "../base";
 import { DataStreamBrokenError } from "../errors";
 import { extractTransferProtocolMeta, TransferProtocolMetadata } from "../meta";
 import { AbstractRPCRegistry } from "../registry";
@@ -246,7 +246,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 ...ctx.params,
                 ...ctx.query,
                 ...ctx.request.body as any,
-                [RPC_CALL_ENVIROMENT]: ctx
+                [RPC_CALL_ENVIRONMENT]: ctx
             };
 
             ctx.status = 404;
@@ -669,15 +669,15 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
 export interface KoaRPCRegistry {
     on(event: 'run', listener: (name: string, input: {
-        [RPC_CALL_ENVIROMENT]: any;
+        [RPC_CALL_ENVIRONMENT]: any;
         [k: string]: any;
     }) => void): this;
     on(event: 'ran', listener: (name: string, input: {
-        [RPC_CALL_ENVIROMENT]: any;
+        [RPC_CALL_ENVIRONMENT]: any;
         [k: string]: any;
     }, result: unknown) => void, startTimeTs: number): this;
     on(event: 'fail', listener: (err: Error, name: string, input: {
-        [RPC_CALL_ENVIROMENT]: any;
+        [RPC_CALL_ENVIRONMENT]: any;
         [k: string]: any;
     }) => void, startTimeTs: number): this;
 
