@@ -168,11 +168,19 @@ export class ApplicationError extends Error implements AutoCastable {
     [k: string]: any;
 
     get error() {
-        return this.err;
+        return this.cause as any;
     }
 
     set error(err: Error | undefined) {
-        this.err = err;
+        this.cause = err;
+    }
+
+    get err() {
+        return this.cause as any;
+    }
+
+    set err(err: Error | undefined) {
+        this.cause = err;
     }
 
     constructor(detail?: any) {
@@ -208,7 +216,7 @@ export class ApplicationError extends Error implements AutoCastable {
             const message_lines = (this.message.match(/\n/g) || []).length + 1;
             this.stack = this.stack.split('\n').slice(0, message_lines + 1).join('\n') +
                 '\n\nWhich was derived from:\n\n' +
-                this.err.stack;
+                (this.cause as Error).stack;
         }
     }
 

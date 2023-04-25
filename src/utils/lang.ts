@@ -177,11 +177,18 @@ export function marshalErrorLike(err: Error | { [k: string]: any; } | string | n
         return err;
     }
 
+    let r;
     if (typeof (err as any).toJSON === 'function') {
-        return (err as any).toJSON();
+        r = (err as any).toJSON();
+    } else {
+        r = { ...err, name: err.name, message: err.message };
     }
 
-    return { ...err, name: err.name, message: err.message };
+    if (r?.cause) {
+        r.cause = marshalErrorLike(r.cause);
+    }
+
+    return r;
 }
 
 export function sortObjectKeys(input: object) {
