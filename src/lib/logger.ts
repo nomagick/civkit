@@ -13,8 +13,10 @@ const logLevels = {
 } as const;
 
 export const TRACE_ID = Symbol('TraceID');
+export const TRACE_T0 = Symbol('TraceT0');
 export interface TraceableInterface {
     [TRACE_ID]?: string;
+    [TRACE_T0]?: Date;
 }
 
 export const tracerHook = createHook({
@@ -22,15 +24,17 @@ export const tracerHook = createHook({
         const currentResource: TraceableInterface = executionAsyncResource();
         if (currentResource?.[TRACE_ID]) {
             resource[TRACE_ID] = currentResource[TRACE_ID];
+            resource[TRACE_T0] = currentResource[TRACE_T0];
         }
     }
 });
 
-export function setupTraceId(traceId?: string) {
+export function setupTraceId(traceId?: string, t0?: Date) {
     tracerHook.enable();
     const currentResource: TraceableInterface = executionAsyncResource();
     if (currentResource) {
         currentResource[TRACE_ID] = traceId || randomUUID();
+        currentResource[TRACE_T0] = t0 || new Date();
 
         return currentResource[TRACE_ID];
     }
@@ -82,7 +86,10 @@ export abstract class AbstractLogger extends AsyncService {
 
         const resource: TraceableInterface = executionAsyncResource();
         if (resource?.[TRACE_ID]) {
-            objects.push({ 'traceId': resource[TRACE_ID] });
+            objects.push({
+                traceId: resource[TRACE_ID],
+                traceDt: Date.now() - resource[TRACE_T0]!.getTime()
+            });
         }
 
         return this._targetStream.write(Object.assign({ message: texts.join(' '), date: new Date() }, ...objects));
