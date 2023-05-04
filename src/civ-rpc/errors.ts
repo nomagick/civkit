@@ -5,7 +5,7 @@ import {
 } from '../lib/auto-castable';
 import {
     assignTransferProtocolMeta, extractTransferProtocolMeta,
-    RPC_TRANSFER_PROTOCOL_META_SYMBOL, RPC_MARSHALL
+    RPC_TRANSFER_PROTOCOL_META_SYMBOL, RPC_MARSHAL
 } from './meta';
 
 export enum APPLICATION_ERROR {
@@ -266,7 +266,7 @@ export class ApplicationError extends Error implements AutoCastable {
         return this.toObject();
     }
 
-    [RPC_MARSHALL]() {
+    [RPC_MARSHAL]() {
         const exportObj = this.toObject();
         return assignTransferProtocolMeta(
             {

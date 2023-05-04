@@ -11,7 +11,7 @@ import {
     transferProtocolMetaDecorated,
     TPM
 } from '../civ-rpc/meta';
-import { RPC_MARSHALL } from '../civ-rpc/meta';
+import { RPC_MARSHAL } from '../civ-rpc/meta';
 
 const PEEK_BUFFER_SIZE = 32 * 1024;
 
@@ -52,7 +52,7 @@ export class ResolvedFile {
         };
     }
 
-    [RPC_MARSHALL]() {
+    [RPC_MARSHAL]() {
         return transferProtocolMetaDecorated(
             this[RPC_TRANSFER_PROTOCOL_META_SYMBOL],
             this.createReadStream()
@@ -425,7 +425,7 @@ export class FancyFile {
         return fsp.unlink(fpath);
     }
 
-    [RPC_MARSHALL]() {
+    [RPC_MARSHAL]() {
         return this.resolve();
     }
 }

@@ -4,7 +4,7 @@ import type { RPCEnvelope } from './base';
 import { objHashMd5B64Of } from '../lib/hash';
 
 export const RPC_RESULT_META_SYMBOL = Symbol('RPC result metas');
-export const RPC_MARSHALL = Symbol('RPCMarshall');
+export const RPC_MARSHAL = Symbol('RPCMarshal');
 
 export function assignMeta<T extends object, P extends object>(target: T, meta: P): T {
     const curMeta = (target as any)[RPC_RESULT_META_SYMBOL];
@@ -59,7 +59,7 @@ export function assignTransferProtocolMeta<T extends any, P extends TransferProt
     }
 
     const target: any = (typeof inputTarget === 'object' || typeof inputTarget === 'function') ? inputTarget : {
-        [RPC_MARSHALL]() {
+        [RPC_MARSHAL]() {
             return inputTarget as any;
         }
     };

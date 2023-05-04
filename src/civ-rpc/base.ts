@@ -4,7 +4,7 @@ import { ParamValidationError, ApplicationError } from './errors';
 import { AsyncService } from '../lib/async-service';
 import {
     assignMeta, extractMeta, extractTransferProtocolMeta,
-    RPC_MARSHALL,
+    RPC_MARSHAL,
     RPC_TRANSFER_PROTOCOL_META_SYMBOL,
     TransferProtocolMetadata,
     TPM
@@ -36,7 +36,7 @@ export class RPCHost extends AsyncService {
 
 export class Dto<T = any> extends AutoCastable {
     protected [RPC_CALL_ENVIRONMENT]?: T;
-    protected [RPC_MARSHALL]?: (...args: any[]) => any;
+    protected [RPC_MARSHAL]?: (...args: any[]) => any;
 
     static override from(input: object): any {
         try {
@@ -69,8 +69,8 @@ export async function rpcExport(sth: any, stackDepth = 0): Promise<any> {
     if (stackDepth >= 10) {
         throw new Error('Maximum rpc export stack depth reached');
     }
-    if (typeof sth?.[RPC_MARSHALL] === 'function') {
-        return rpcExport(await sth[RPC_MARSHALL](), stackDepth + 1);
+    if (typeof sth?.[RPC_MARSHAL] === 'function') {
+        return rpcExport(await sth[RPC_MARSHAL](), stackDepth + 1);
     }
 
     return sth;
