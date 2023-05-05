@@ -11,7 +11,8 @@ import { Defer } from './defer';
 import { stringifyErrorLike } from '../utils/lang';
 
 import type { RequestInit, Response, File } from 'undici';
-import { Readable } from 'stream';
+import { Readable, isReadable } from 'stream';
+import { ReadableStream } from 'stream/web';
 
 export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void; };
 
@@ -386,6 +387,37 @@ export abstract class HTTPService<
         options?: To
     ) {
         return this.postMultipartWithSearchParams<T>(uri, undefined, multipart, options);
+    }
+
+    postBinaryWithSearchParams<T = any>(
+        uri: string,
+        searchParams: any = {},
+        binary: Readable | ReadableStream | Buffer | Blob | File | string,
+        options?: To
+    ) {
+        let thingToSend = binary;
+        if (isReadable(binary as any)) {
+            thingToSend = Readable.toWeb(binary as Readable);
+        } else if (Buffer.isBuffer(binary)) {
+            thingToSend = new Blob([binary]);
+        } else if (typeof binary === 'string') {
+            thingToSend = new Blob([Buffer.from(binary, 'utf-8')]);
+        }
+
+        return this.__request<T>(
+            'POST',
+            uri,
+            searchParams,
+            { body: thingToSend } as any,
+            options
+        );
+    }
+    postBinary<T = any>(
+        uri: string,
+        binary: Readable | ReadableStream | Buffer | Blob | File | string,
+        options?: To
+    ) {
+        return this.postBinaryWithSearchParams<T>(uri, undefined, binary, options);
     }
 
     postJsonWithSearchParams<T = any>(uri: string, searchParams?: any, data?: any, options?: To) {
