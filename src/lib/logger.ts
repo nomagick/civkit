@@ -1,6 +1,7 @@
 import { AsyncService } from './async-service';
 import { createHook, executionAsyncResource } from 'async_hooks';
 import { randomUUID } from 'crypto';
+import { hostname } from 'os';
 import { Writable } from 'stream';
 
 const logLevels = {
@@ -53,7 +54,7 @@ export abstract class AbstractLogger extends AsyncService {
 
     bindings: Record<string, any> = {
         pid: process.pid,
-        host: process.env.HOSTNAME || process.env.HOST || 'unknown',
+        host: hostname() || 'unknown',
     };
 
     constructor(...whatever: any[]) {
