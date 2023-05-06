@@ -11,6 +11,7 @@ import { Defer } from './defer';
 import { stringifyErrorLike } from '../utils/lang';
 
 import type { RequestInit, Response, File } from 'undici';
+import { fetch } from 'undici';
 import { Readable, isReadable } from 'stream';
 import { ReadableStream } from 'stream/web';
 
