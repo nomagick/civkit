@@ -11,11 +11,9 @@ import { Defer } from './defer';
 import { stringifyErrorLike } from '../utils/lang';
 
 import type { RequestInit, Response, File } from 'undici';
-import { fetch } from 'undici';
+import undici from 'undici';
 import { Readable, isReadable } from 'stream';
 import { ReadableStream } from 'stream/web';
-
-const fixedFetch = fetch.bind(fetch);
 
 export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void; };
 
@@ -237,7 +235,7 @@ export abstract class HTTPService<
                 (abortCtrl as any).abort(`Timeout of ${options.timeout}ms exceeded`);
             }, options.timeout);
         }
-        fixedFetch(url, options).then(
+        undici.fetch(url, options).then(
             async (r) => {
                 Object.defineProperties(r, {
                     serial: { value: serial },
