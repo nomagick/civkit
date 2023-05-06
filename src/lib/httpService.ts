@@ -15,6 +15,8 @@ import { fetch } from 'undici';
 import { Readable, isReadable } from 'stream';
 import { ReadableStream } from 'stream/web';
 
+const fixedFetch = fetch.bind(fetch);
+
 export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void; };
 
 export interface HTTPServiceRequestOptions extends RequestInit {
@@ -235,7 +237,7 @@ export abstract class HTTPService<
                 (abortCtrl as any).abort(`Timeout of ${options.timeout}ms exceeded`);
             }, options.timeout);
         }
-        fetch(url, options).then(
+        fixedFetch(url, options).then(
             async (r) => {
                 Object.defineProperties(r, {
                     serial: { value: serial },
