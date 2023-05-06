@@ -255,7 +255,7 @@ export abstract class HTTPService<
                 } catch (err: any) {
                     const newErr = new this.Error(serial, {
                         err,
-                        config,
+                        config: _.omit(config, ['body']),
                         response: r,
                         status: r.status || err.code || err.errno
                     });
@@ -268,7 +268,7 @@ export abstract class HTTPService<
             (err: any) => {
                 const newErr = new this.Error(serial, {
                     err,
-                    config,
+                    config: _.omit(config, ['body']),
                     status: err.code || err.errno
                 });
 
