@@ -1,6 +1,3 @@
-import { Agent as HTTPAgent } from 'http';
-import { Agent as HTTPSAgent } from 'https';
-
 import { URL, URLSearchParams } from 'url';
 
 import _ from 'lodash';
@@ -8,7 +5,7 @@ import { EventEmitter } from 'events';
 import { stringify as formDataStringify } from 'querystring';
 
 import { Defer } from './defer';
-import { stringifyErrorLike } from '../utils/lang';
+import { patchErrorCaptureStackTraceIfNeeded, stringifyErrorLike } from '../utils/lang';
 
 import type { RequestInit, Response, File } from 'undici';
 import { Readable, isReadable } from 'stream';
@@ -23,27 +20,7 @@ export interface HTTPServiceRequestOptions extends RequestInit {
     timeout?: number;
 }
 
-function getAgent(protocol: 'https'): HTTPSAgent;
-function getAgent(protocol: 'http'): HTTPAgent;
-function getAgent(protocol: 'http' | 'https') {
-    return protocol === 'http'
-        ? new HTTPAgent({
-            keepAlive: true,
-
-            keepAliveMsecs: 2 * 10 * 1000,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-        })
-        : new HTTPSAgent({
-            keepAlive: true,
-            keepAliveMsecs: 2 * 10 * 1000,
-            maxSockets: 100,
-            maxFreeSockets: 5,
-        });
-}
-
 export interface HTTPServiceConfig {
-    agent?: HTTPAgent | HTTPSAgent;
     requestOptions?: HTTPServiceRequestOptions;
 
     protocol?: 'http' | 'https';
@@ -110,9 +87,6 @@ export abstract class HTTPService<
     baseURL: URL;
     baseOptions: To;
 
-    httpAgent: HTTPAgent;
-    httpsAgent: HTTPSAgent;
-
     baseParams: { [k: string]: string | string[]; };
     baseHeaders: { [k: string]: string | string[]; };
 
@@ -123,8 +97,7 @@ export abstract class HTTPService<
 
     constructor(baseUrl: string, config: Tc = {} as any) {
         super();
-        this.httpAgent = getAgent('http');
-        this.httpsAgent = getAgent('https');
+        patchErrorCaptureStackTraceIfNeeded();
         this.config = _.defaults(config, {
             requestOptions: {},
             baseParams: {},
@@ -141,14 +114,6 @@ export abstract class HTTPService<
 
         this.baseParams = this.config.baseParams!;
         this.baseHeaders = this.config.baseHeaders!;
-    }
-
-    get poolSize() {
-        return (this.baseUrl.startsWith('https') ? this.httpsAgent : this.httpAgent).maxSockets;
-    }
-
-    set poolSize(size: number) {
-        (this.baseUrl.startsWith('https') ? this.httpsAgent : this.httpAgent).maxSockets = size;
     }
 
     urlOf(pathName: string, queryParams: any = {}) {
@@ -332,7 +297,7 @@ export abstract class HTTPService<
             return bodyParsed === null ? r : bodyParsed;
         }
 
-        throw bodyParsed === null ? r : bodyParsed;
+        throw bodyParsed === null ? r : (typeof bodyParsed === 'object' ? bodyParsed : new Error(`${bodyParsed}`));
     }
 
     getWithSearchParams<T = any>(uri: string, searchParams?: any, options?: To) {

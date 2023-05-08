@@ -206,3 +206,13 @@ export function parseUrl(input: string) {
         return undefined;
     }
 }
+
+export function patchErrorCaptureStackTraceIfNeeded() {
+    if (!Error.captureStackTrace.toString().includes('[native code]')) {
+        return;
+    }
+    const origCaptureStackTrace = Error.captureStackTrace;
+    Error.captureStackTrace = function captureStackTrace(err: any, ...args: any[]) {
+        return origCaptureStackTrace.call(this, typeof err === 'object' ? err : new Error(`${err}`), ...args);
+    };
+}
