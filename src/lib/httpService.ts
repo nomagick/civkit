@@ -11,7 +11,6 @@ import { Defer } from './defer';
 import { stringifyErrorLike } from '../utils/lang';
 
 import type { RequestInit, Response, File } from 'undici';
-import undici from 'undici';
 import { Readable, isReadable } from 'stream';
 import { ReadableStream } from 'stream/web';
 
@@ -235,7 +234,7 @@ export abstract class HTTPService<
                 (abortCtrl as any).abort(`Timeout of ${options.timeout}ms exceeded`);
             }, options.timeout);
         }
-        undici.fetch(url, options).then(
+        fetch(url, options).then(
             async (r) => {
                 Object.defineProperties(r, {
                     serial: { value: serial },
