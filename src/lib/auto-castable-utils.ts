@@ -4,7 +4,7 @@ import {
     AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL, AUTOCASTABLE_OPTIONS_SYMBOL,
     AutoConstructor, castToType, Constructor, Prop, PropOptions, __patchTypesEnumToSet
 } from './auto-castable';
-import { chainEntries, isPrimitiveType, reverseObjectKeys } from '../utils';
+import { chainEntriesSimple, chainEntriesDesc, isPrimitiveType, reverseObjectKeys } from '../utils';
 
 export type MangledConstructor<T extends Constructor<any>, F> = {
     [k in keyof T]: T[k];
@@ -44,7 +44,7 @@ export function Combine<T extends Constructor<any>[]>(
 
     for (const cls of arr) {
         const partialOpts: any = {};
-        for (const [k, v] of chainEntries((cls as any)?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
+        for (const [k, v] of chainEntriesSimple((cls as any)?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
             partialOpts[k] = { ...v, partOf: cls.name };
         }
         Object.assign(opts, reverseObjectKeys(partialOpts));
@@ -81,15 +81,15 @@ export function Combine<T extends Constructor<any>[]>(
             }
         }
 
-        for (const [k, v, desc] of chainEntries(cls.prototype, 'With Symbol')) {
-            Object.defineProperty(NaivelyMergedClass.prototype, k, desc || { value: v, enumerable: true });
+        for (const [k, desc] of chainEntriesDesc(cls.prototype, 'With Symbol')) {
+            Object.defineProperty(NaivelyMergedClass.prototype, k, desc);
         }
 
-        for (const [k, v, desc] of chainEntries(cls, 'With Symbol')) {
+        for (const [k, desc] of chainEntriesDesc(cls, 'With Symbol')) {
             if ((k === AUTOCASTABLE_OPTIONS_SYMBOL) || (k === AUTOCASTABLE_OPTIONS_SYMBOL)) {
                 continue;
             }
-            Object.defineProperty(NaivelyMergedClass, k, desc || { value: v, enumerable: true });
+            Object.defineProperty(NaivelyMergedClass, k, desc);
         }
     }
 
@@ -151,7 +151,7 @@ export function Partial<T extends typeof AutoCastableMetaClass>(
     abstract class PartialClass extends cls { }
 
     const partialOpts: any = {};
-    for (const [k, v] of chainEntries(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
+    for (const [k, v] of chainEntriesSimple(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
         partialOpts[k] = { ...v, partOf: cls.name, required: false };
     }
     Object.assign(opts, reverseObjectKeys(partialOpts));
@@ -194,7 +194,7 @@ export function Required<T extends typeof AutoCastableMetaClass>(
     abstract class RequiredClass extends cls { }
 
     const partialOpts: any = {};
-    for (const [k, v] of chainEntries(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
+    for (const [k, v] of chainEntriesSimple(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
         partialOpts[k] = { ...v, partOf: cls.name, required: true };
     }
     Object.assign(opts, reverseObjectKeys(partialOpts));
@@ -236,7 +236,7 @@ export function Omit<T extends typeof AutoCastableMetaClass, P extends (keyof In
     abstract class PartialClass extends cls { }
 
     const partialOpts: any = {};
-    for (const [k, v] of chainEntries(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
+    for (const [k, v] of chainEntriesSimple(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
         if (props.includes(k as any)) {
             continue;
         }
@@ -317,7 +317,7 @@ export function Literal<T extends Record<string | symbol, Constructor<any> | obj
     class AnonCls extends AutoCastable {
     }
 
-    for (const [k, v] of chainEntries(literal)) {
+    for (const [k, v] of chainEntriesSimple(literal)) {
         Prop({ type: v })(AnonCls.prototype, k);
     }
     if (additionalOpts) {
