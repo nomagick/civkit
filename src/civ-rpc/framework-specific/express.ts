@@ -1,8 +1,6 @@
 import { Readable } from 'stream';
 import os from 'os';
-import { randomUUID } from 'crypto';
 import http, { IncomingHttpHeaders } from 'http';
-import { createHook, executionAsyncResource } from 'async_hooks';
 
 import _ from 'lodash';
 import busboy from 'busboy';
@@ -20,7 +18,7 @@ import { AbstractRPCRegistry } from "../registry";
 import { OpenAPIManager } from "../openapi";
 import { runOnce } from "../../decorators";
 import { humanReadableDataSize } from "../../utils/readability";
-import { TraceableInterface, TRACE_ID } from "../../lib/logger";
+import { getTraceCtx, setupTraceId } from "../../lib/logger";
 import { marshalErrorLike } from '../../utils/lang';
 
 import { UploadedFile } from "./shared";
@@ -224,16 +222,16 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
         if (!conf) {
             throw new Error(`Unknown rpc method: ${methodName}`);
         }
-        
+
         return async (req: express.Request, res: express.Response) => {
-            
+
             const jointInput = {
                 ...req.params,
                 ...req.query,
                 ...req.body as any,
                 [RPC_CALL_ENVIRONMENT]: { req, res }
             };
-            
+
             res.statusCode = 404;
             const keepAliveTimer = setTimeout(() => {
                 if (res.socket) {
@@ -274,12 +272,9 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     }
                     res.once('close', () => {
                         if (!output.readableEnded) {
-                            this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`, {
-                                traceId: Reflect.get(res, TRACE_ID)
-                            });
+                            this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`);
                             output.once('error', (err: any) => {
                                 this.logger.warn(`Error occurred in response stream: ${err}`, {
-                                    traceId: Reflect.get(res, TRACE_ID),
                                     err
                                 });
                             });
@@ -312,7 +307,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             } catch (err: any) {
                 // Note that the shim controller doesn't suppose to throw any error.
                 clearTimeout(keepAliveTimer);
-                this.logger.warn(`Error serving incoming request`, { brief: this.briefExpressRequest(req, res), err:  marshalErrorLike(err) });
+                this.logger.warn(`Error serving incoming request`, { brief: this.briefExpressRequest(req, res), err: marshalErrorLike(err) });
                 if (err?.stack) {
                     this.logger.warn(`Stacktrace: \n`, err?.stack);
                 }
@@ -357,7 +352,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             method: req.method,
             url: req.originalUrl,
             headers: this.briefHeaders(req.headers),
-            traceId: Reflect.get(res, TRACE_ID)
+            ...getTraceCtx(),
         };
     }
 
@@ -791,20 +786,8 @@ export abstract class ExpressServer extends AsyncService {
 
     @runOnce()
     insertAsyncHookMiddleware() {
-        createHook({
-            init(_asyncId, _type, _triggerAsyncId, resource: TraceableInterface) {
-                const currentResource: TraceableInterface = executionAsyncResource();
-                if (currentResource) {
-                    resource[TRACE_ID] = currentResource[TRACE_ID];
-                }
-            }
-        }).enable();
-
         const asyncHookMiddleware = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
-            const currentResource: TraceableInterface = executionAsyncResource();
-            if (currentResource) {
-                currentResource[TRACE_ID] = req.get('x-request-id') || req.get('request-id') as string || randomUUID();
-            }
+            setupTraceId(req.get('x-request-id') || req.get('request-id'));
 
             return next();
         };

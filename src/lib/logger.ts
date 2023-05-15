@@ -13,40 +13,60 @@ const logLevels = {
     TRACE: 'trace'
 } as const;
 
-export const TRACE_ID = Symbol('TraceID');
-export const TRACE_T0 = Symbol('TraceT0');
+export const TRACE_CTX = Symbol('TraceCtx');
+export interface TraceCtx {
+    traceId?: string;
+    traceT0?: Date;
+    [k: string]: any;
+}
 export interface TraceableInterface {
-    [TRACE_ID]?: string;
-    [TRACE_T0]?: Date;
+    [TRACE_CTX]?: TraceCtx;
 }
 
 export const tracerHook = createHook({
     init(_asyncId, _type, _triggerAsyncId, resource: TraceableInterface) {
         const currentResource: TraceableInterface = executionAsyncResource();
-        if (currentResource?.[TRACE_ID]) {
-            resource[TRACE_ID] = currentResource[TRACE_ID];
-            resource[TRACE_T0] = currentResource[TRACE_T0];
+        if (currentResource?.[TRACE_CTX]) {
+            resource[TRACE_CTX] = currentResource[TRACE_CTX];
         }
     }
 });
 
-export function setupTraceId(traceId?: string, t0?: Date) {
+export function setupTraceCtx(input: Partial<TraceCtx> = {}) {
     tracerHook.enable();
     const currentResource: TraceableInterface = executionAsyncResource();
     if (currentResource) {
-        currentResource[TRACE_ID] = traceId || randomUUID();
-        currentResource[TRACE_T0] = t0 || new Date();
+        if (!currentResource[TRACE_CTX]) {
+            currentResource[TRACE_CTX] = {
+                ...input,
+            };
+        }
 
-        return currentResource[TRACE_ID];
+        const ctx = currentResource[TRACE_CTX]!;
+        Object.assign(ctx, {
+            ...input
+        });
+        ctx.traceId ??= randomUUID();
+        ctx.traceT0 ??= new Date();
+
+        return ctx;
     }
 
     return undefined;
 }
 
-export function getTraceId() {
+export function setupTraceId(traceId?: string, traceT0?: Date) {
+    return setupTraceCtx({ traceId, traceT0 });
+}
+
+export function getTraceCtx() {
     const currentResource: TraceableInterface = executionAsyncResource();
 
-    return currentResource?.[TRACE_ID];
+    return currentResource?.[TRACE_CTX];
+}
+
+export function getTraceId() {
+    return getTraceCtx()?.traceId;
 }
 
 export abstract class AbstractLogger extends AsyncService {
@@ -86,10 +106,10 @@ export abstract class AbstractLogger extends AsyncService {
         }
 
         const resource: TraceableInterface = executionAsyncResource();
-        if (resource?.[TRACE_ID]) {
+        if (resource?.[TRACE_CTX]) {
             objects.push({
-                traceId: resource[TRACE_ID],
-                traceDt: Date.now() - resource[TRACE_T0]!.getTime()
+                traceId: resource[TRACE_CTX].id,
+                traceDt: Date.now() - resource[TRACE_CTX].t0!.getTime()
             });
         }
 

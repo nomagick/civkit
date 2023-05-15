@@ -3,7 +3,6 @@ import _ from "lodash";
 import busboy from 'busboy';
 
 import os from 'os';
-import { randomUUID } from "crypto";
 
 import { Readable } from 'stream';
 import type { Context, Middleware } from 'koa';
@@ -24,10 +23,9 @@ import { AbstractRPCRegistry } from "../registry";
 import { OpenAPIManager } from "../openapi";
 import http, { IncomingHttpHeaders } from "http";
 import { runOnce } from "../../decorators";
-import { createHook, executionAsyncResource } from "async_hooks";
 import { humanReadableDataSize } from "../../utils/readability";
 import { marshalErrorLike } from "../../utils/lang";
-import { TraceableInterface, TRACE_ID } from "../../lib/logger";
+import { getTraceCtx, setupTraceId } from "../../lib/logger";
 import { UploadedFile } from "./shared";
 
 
@@ -289,12 +287,9 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     }
                     ctx.res.once('close', () => {
                         if (!output.readableEnded) {
-                            this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`, {
-                                traceId: Reflect.get(ctx, TRACE_ID)
-                            });
+                            this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`);
                             output.once('error', (err: any) => {
                                 this.logger.warn(`Error occurred in response stream: ${err}`, {
-                                    traceId: Reflect.get(ctx, TRACE_ID),
                                     err
                                 });
                             });
@@ -378,7 +373,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             method: ctx.method,
             url: ctx.request.originalUrl,
             headers: this.briefHeaders(ctx.request.headers),
-            traceId: Reflect.get(ctx, TRACE_ID)
+            ...getTraceCtx(),
         };
     }
 
@@ -818,20 +813,8 @@ export abstract class KoaServer extends AsyncService {
 
     @runOnce()
     insertAsyncHookMiddleware() {
-        createHook({
-            init(_asyncId, _type, _triggerAsyncId, resource: TraceableInterface) {
-                const currentResource: TraceableInterface = executionAsyncResource();
-                if (currentResource) {
-                    resource[TRACE_ID] = currentResource[TRACE_ID];
-                }
-            }
-        }).enable();
-
-        const asyncHookMiddleware = async (ctx: Context, next: () => Promise<void>) => {
-            const currentResource: TraceableInterface = executionAsyncResource();
-            if (currentResource) {
-                currentResource[TRACE_ID] = ctx.get('x-request-id') || ctx.get('request-id') as string || randomUUID();
-            }
+       const asyncHookMiddleware = async (ctx: Context, next: () => Promise<void>) => {
+            setupTraceId(ctx.get('x-request-id') || ctx.get('request-id'));
 
             return next();
         };

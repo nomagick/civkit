@@ -110,12 +110,12 @@ export function StatusCode(status: APPLICATION_ERROR | number) {
 })
 @StatusCode(50000)
 export class ApplicationError extends Error implements AutoCastable {
-    static from(input: string | object, status: number, detail?: any) {
+    static from(input: string | object) {
         let _input = input;
         if (typeof input === 'string') {
             _input = { message: input };
         }
-        const instance = autoConstructor.call(this, _input, status, detail) as ApplicationError;
+        const instance = autoConstructor.call(this, _input) as ApplicationError;
 
         Error.captureStackTrace(instance, this.from);
         instance._fixStack();

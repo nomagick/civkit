@@ -1,6 +1,6 @@
 {
     "name": "civkit",
-    "version": "0.6.1",
+    "version": "0.6.2",
     "description": "Sets of tools, in typescript",
     "main": "index.js",
     "types": "index.d.ts",
