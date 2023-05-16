@@ -105,11 +105,11 @@ export abstract class AbstractLogger extends AsyncService {
             }
         }
 
-        const resource: TraceableInterface = executionAsyncResource();
-        if (resource?.[TRACE_CTX]) {
+        const traceCtx = getTraceCtx();
+        if (traceCtx) {
             objects.push({
-                traceId: resource[TRACE_CTX].id,
-                traceDt: Date.now() - resource[TRACE_CTX].t0!.getTime()
+                ...traceCtx,
+                traceDt: Date.now() - traceCtx.traceT0!.getTime()
             });
         }
 
