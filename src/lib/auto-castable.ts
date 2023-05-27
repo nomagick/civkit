@@ -788,13 +788,6 @@ export function inputSingle<T>(
     }
 
     if (item === NOT_RESOLVED || item === undefined) {
-        if (config.default) {
-            return config.default;
-        }
-        if ((typeof config.defaultFactory) === 'function') {
-            return config.defaultFactory!.call(undefined, input, access);
-        }
-
         if (config.required || inputProp !== undefined) {
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new AutoCastingError({
