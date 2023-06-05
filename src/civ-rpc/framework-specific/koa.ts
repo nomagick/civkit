@@ -243,7 +243,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             const jointInput = {
                 ...ctx.params,
                 ...ctx.query,
-                ...ctx.request.body as any,
+                ...(_.isPlainObject(ctx.request.body) ? ctx.request.body : {} as any),
                 [RPC_CALL_ENVIRONMENT]: ctx
             };
 
@@ -255,7 +255,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 await this.serviceReady();
                 const rpcHost = this.host(methodName) as RPCHost;
                 const hostIsAsyncService = rpcHost instanceof AsyncService;
-                
+
                 if (hostIsAsyncService && rpcHost.serviceStatus !== 'ready') {
                     // RPC host may be crippled, if this is the case, assert its back up again.
                     this.logger.info(`${rpcHost.constructor.name} is not ready upon a request, trying to bring it up...`);
@@ -813,7 +813,7 @@ export abstract class KoaServer extends AsyncService {
 
     @runOnce()
     insertAsyncHookMiddleware() {
-       const asyncHookMiddleware = async (ctx: Context, next: () => Promise<void>) => {
+        const asyncHookMiddleware = async (ctx: Context, next: () => Promise<void>) => {
             setupTraceId(ctx.get('x-request-id') || ctx.get('request-id'));
 
             return next();

@@ -228,7 +228,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             const jointInput = {
                 ...req.params,
                 ...req.query,
-                ...req.body as any,
+                ...(_.isPlainObject(req.body) ? req.body : {}),
                 [RPC_CALL_ENVIRONMENT]: { req, res }
             };
 
