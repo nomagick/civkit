@@ -261,6 +261,10 @@ export abstract class HTTPService<
             if (options.raw) {
                 break;
             }
+            if (r.status === 204) {
+                bodyParsed = '';
+                break;
+            }
             if (options.responseType === 'json') {
                 bodyParsed = await r.json();
                 break;
