@@ -187,7 +187,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 const content = this.openAPIManager.createOpenAPIObject(baseURL.toString(), {
                     info: {
                         title: this.title,
-                        description: `${this.title} openapi document`,
+                        description: `${this.title} openAPI documentations`,
                         'x-logo': {
                             url: this.logoUrl || `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
                         }

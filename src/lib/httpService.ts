@@ -166,10 +166,9 @@ export abstract class HTTPService<
             ..._moreOptions
         );
 
+        const headers = new Headers(options.headers);
+        options.headers = headers;
         if (options.responseType) {
-            const headers = new Headers(options.headers);
-            options.headers = headers;
-
             if (!headers.has('Accept')) {
                 switch (options.responseType) {
                     case 'json': {
