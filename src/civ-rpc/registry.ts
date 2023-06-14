@@ -72,6 +72,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     static envelope: typeof RPCEnvelope = RPCEnvelope;
 
     private __tick: number = 1;
+    protected __preparedFlag = new WeakSet<InternalRPCOptions>();
 
     abstract container: typeof DIContainer;
 
@@ -90,15 +91,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     }
 
     register(options: RPCOptions) {
-        const name = Array.isArray(options.name) ? options.name.join('.') : options.name;
-
-        if (!name) {
-            throw new ParamValidationError('RPC name is required');
-        }
-
-        if (this.conf.has(name)) {
-            throw new Error(`Duplicated RPC: ${name}`);
-        }
+        const names = Array.isArray(options.name) ? options.name : [options.name];
 
         if (!options.method && !(options.hostProto && options.nameOnProto)) {
             throw new Error(`Unable to resolve RPC ${options.name}: could not find api function.`);
@@ -110,26 +103,37 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         (options as any).paramOptions = [];
 
-        this.conf.set(name, options as InternalRPCOptions & { paramOptions: PropOptions<unknown>[]; });
+        for (const name of names) {
+            if (!name) {
+                throw new ParamValidationError('RPC name is required');
+            }
+
+            if (this.conf.has(name)) {
+                throw new Error(`Duplicated RPC: ${name}`);
+            }
+            this.conf.set(name, options as InternalRPCOptions & { paramOptions: PropOptions<unknown>[]; });
+        }
 
         if (this.__tick === 1) {
             // Dont do the wrapping in tick 1.
             // Postpone it to tick 2.
             // Stuff could be not ready yet.
             setImmediate(() => {
-                this.prepare(name);
+                this.prepare(options);
             });
             return;
         }
 
-        return this.prepare(name);
+        return this.prepare(options);
     }
 
-    prepare(name: string) {
-        const conf = this.conf.get(name);
-
+    prepare(conf: InternalRPCOptions) {
         if (!conf) {
-            throw new Error(`Unknown method: ${name}`);
+            throw new Error(`RPCOptions required for prepare`);
+        }
+
+        if (this.__preparedFlag.has(conf)) {
+            return conf._func;
         }
 
         const host = this.container.resolve(conf!.hostProto.constructor);
@@ -169,13 +173,18 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         conf._host = conf.host;
         conf._func = func;
 
+        this.__preparedFlag.add(conf);
+
         return func;
     }
 
     dump() {
-        return Array.from(this.conf.keys()).map((x) => {
-            return [x, this.prepare(x), this.conf.get(x)];
-        }) as [string, Function, InternalRPCOptions][];
+        return Array.from(this.conf.values()).map((x) => {
+            const names = Array.isArray(x.name) ? x.name : [x.name];
+            const prepared = this.prepare(x);
+
+            return names.map((n) => [n, prepared, x]);
+        }).flat(1) as [string, Function, InternalRPCOptions][];
     }
 
     exec(name: string, input: object, env?: object) {

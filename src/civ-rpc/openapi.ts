@@ -42,6 +42,8 @@ function describeTypes(inputTypes: Function | Function[], joinText = '|') {
 
 export class OpenAPIManager {
 
+    enrichDescriptions: boolean = true;
+
     classToSchemaMapInput = new Map<any, any>();
     classToSchemaMapOutput = new Map<any, any>();
     refToConstructorMap = new Map<string, any>();
@@ -196,55 +198,58 @@ export class OpenAPIManager {
         const descVecs: string[] = [];
         const incompatibles: PropOptionsLike = schema.incompatibles;
 
-        if (schema.deprecated || incompatibles.deprecated) {
-            descVecs.push(`[DEPRECATED]`);
-        }
-
-        if (schema.required || incompatibles.required) {
-            descVecs.push(`[REQUIRED]`);
-        }
-        if (schema.description) {
-            descVecs.push(schema.description);
-        }
-
-        if (incompatibles.typeDescription) {
-            descVecs.push(htmlEscape`- Cast to: < **${incompatibles.typeDescription}** >`);
-        }
-        if (incompatibles.paramOf) {
-            descVecs.push(htmlEscape`- Endpoint parameter of *${incompatibles.paramOf}*`);
-        }
-        if (incompatibles.partOf) {
-            descVecs.push(htmlEscape`- Member of <${incompatibles.partOf}>`);
-        }
-
-        if (incompatibles.validate) {
-            const validatorNames = (Array.isArray(incompatibles.validate) ?
-                incompatibles.validate : [incompatibles.validate])
-                .map(describeAnonymousValidateFunction).filter(Boolean);
-
-            descVecs.push(htmlEscape`- Some validators will be applied on value(s): ${validatorNames}`);
-        }
-
-        if (incompatibles.validateCollection) {
-            const validatorNames = (Array.isArray(incompatibles.validateCollection) ?
-                incompatibles.validateCollection : [incompatibles.validateCollection])
-                .map(describeAnonymousValidateFunction).filter(Boolean);
-
-            descVecs.push(htmlEscape`- Some validators will be applied on the collection: ${validatorNames}`);
-        }
-
-        if (incompatibles.default) {
-            descVecs.push(htmlEscape`- Defaults to: ${inspect(incompatibles.default, { depth: 6 })}`);
-        }
-        if (incompatibles.defaultFactory) {
-            if (incompatibles.defaultFactory.name) {
-                descVecs.push(htmlEscape`- A dynamic default value will be provided on server side based on: ${incompatibles.defaultFactory.name}`);
-            } else {
-                descVecs.push(`- A dynamic default value will be provided on server side`);
+        if (this.enrichDescriptions) {
+            if (schema.deprecated || incompatibles.deprecated) {
+                descVecs.push(`[DEPRECATED]`);
             }
+
+            if (schema.required || incompatibles.required) {
+                descVecs.push(`[REQUIRED]`);
+            }
+            if (schema.description) {
+                descVecs.push(schema.description);
+            }
+
+            if (incompatibles.typeDescription) {
+                descVecs.push(htmlEscape`- Cast to: < **${incompatibles.typeDescription}** >`);
+            }
+            if (incompatibles.paramOf) {
+                descVecs.push(htmlEscape`- Endpoint parameter of *${incompatibles.paramOf}*`);
+            }
+            if (incompatibles.partOf) {
+                descVecs.push(htmlEscape`- Member of <${incompatibles.partOf}>`);
+            }
+
+            if (incompatibles.validate) {
+                const validatorNames = (Array.isArray(incompatibles.validate) ?
+                    incompatibles.validate : [incompatibles.validate])
+                    .map(describeAnonymousValidateFunction).filter(Boolean);
+
+                descVecs.push(htmlEscape`- Some validators will be applied on value(s): ${validatorNames}`);
+            }
+
+            if (incompatibles.validateCollection) {
+                const validatorNames = (Array.isArray(incompatibles.validateCollection) ?
+                    incompatibles.validateCollection : [incompatibles.validateCollection])
+                    .map(describeAnonymousValidateFunction).filter(Boolean);
+
+                descVecs.push(htmlEscape`- Some validators will be applied on the collection: ${validatorNames}`);
+            }
+
+            if (incompatibles.default) {
+                descVecs.push(htmlEscape`- Defaults to: ${inspect(incompatibles.default, { depth: 6 })}`);
+            }
+            if (incompatibles.defaultFactory) {
+                if (incompatibles.defaultFactory.name) {
+                    descVecs.push(htmlEscape`- A dynamic default value will be provided on server side based on: ${incompatibles.defaultFactory.name}`);
+                } else {
+                    descVecs.push(`- A dynamic default value will be provided on server side`);
+                }
+            }
+
+            schema.description = descVecs.join('\n\n');
         }
 
-        schema.description = descVecs.join('\n\n');
 
         for (const prop of this.predefined.incompatibleProp) {
             delete schema[prop];
@@ -422,7 +427,8 @@ export class OpenAPIManager {
 
     constructorToOpenAPISchema(
         input: any = Object,
-        direction: 'input' | 'output' = 'input'
+        direction: 'input' | 'output' = 'input',
+        useRef: boolean = true
     ) {
         let final: any = undefined;
 
@@ -442,7 +448,7 @@ export class OpenAPIManager {
                 let considerProps = true;
                 if (additionalOptions?.arrayOf) {
                     considerProps = false;
-                    const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, true);
+                    const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, useRef);
                     if (schema) {
                         openAPIDesc.type = schema.type;
                         openAPIDesc.items = schema.items;
@@ -451,14 +457,14 @@ export class OpenAPIManager {
                         }
                     }
                 } else if (additionalOptions?.dictOf) {
-                    const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, true);
+                    const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, useRef);
                     if (schema) {
                         openAPIDesc.type = schema.type;
                         openAPIDesc.additionalProperties = schema.additionalProperties;
                     }
                 } else if (additionalOptions?.type) {
                     considerProps = false;
-                    const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, true);
+                    const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, useRef);
                     if (schema) {
                         Object.assign(
                             openAPIDesc,
@@ -475,7 +481,7 @@ export class OpenAPIManager {
                         if (typeof prop !== 'string') {
                             continue;
                         }
-                        properties[prop] = this.propOptionsLikeToOpenAPISchema(v, direction, true);
+                        properties[prop] = this.propOptionsLikeToOpenAPISchema(v, direction, useRef);
                         if (properties[prop]) {
                             this.applyMeta(properties[prop], {
                                 partOf: input.name,
@@ -599,11 +605,11 @@ export class OpenAPIManager {
             if (input.length === 1) {
                 return useRef ?
                     this.getSchemaRef(input[0], direction) :
-                    this.constructorToOpenAPISchema(input[0], direction);
+                    this.constructorToOpenAPISchema(input[0], direction, false);
             }
             const schemas = input.map((x) => useRef ?
                 this.getSchemaRef(x, direction) :
-                this.constructorToOpenAPISchema(x, direction)
+                this.constructorToOpenAPISchema(x, direction, false)
             ).filter(Boolean);
 
             if (!schemas.length) {
@@ -617,7 +623,7 @@ export class OpenAPIManager {
 
         return useRef ?
             this.getSchemaRef(input, direction) :
-            this.constructorToOpenAPISchema(input, direction);
+            this.constructorToOpenAPISchema(input, direction, false);
     }
 
     protected autoCollectMetaFromTypes(
@@ -859,7 +865,7 @@ export class OpenAPIManager {
 
     }
 
-    protected createRequestBodyObject(rpcOptions: InternalRPCOptions) {
+    createRequestBodyObject(rpcOptions: InternalRPCOptions) {
         const paramPickerMeta = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, rpcOptions.hostProto);
         const paramPickerConf = (paramPickerMeta ? paramPickerMeta[rpcOptions.nameOnProto] : undefined) || [];
 
@@ -868,7 +874,7 @@ export class OpenAPIManager {
         const nonDtoParams: any = {};
         const nonDtoParamsRequired: string[] = [];
 
-        const recursiveDetector = new Set<string>();
+        const recurrenceDetector = new Set<string>();
 
         if (Array.isArray(rpcOptions.paramTypes)) {
             for (const [i, x] of rpcOptions.paramTypes.entries()) {
@@ -925,7 +931,7 @@ export class OpenAPIManager {
 
             const ref = this.getRef(v);
             if (ref) {
-                recursiveDetector.add(ref);
+                recurrenceDetector.add(ref);
             }
 
             this.consumeIncompatibles(v);
@@ -939,7 +945,7 @@ export class OpenAPIManager {
 
             const ref = this.getRef(v);
             if (ref) {
-                recursiveDetector.add(ref);
+                recurrenceDetector.add(ref);
             }
 
             this.consumeIncompatibles(v);
@@ -955,7 +961,7 @@ export class OpenAPIManager {
                 return x;
             }
 
-            if (recursiveDetector.has(ref)) {
+            if (recurrenceDetector.has(ref)) {
                 return this.unRefSchema(x);
             }
 
@@ -999,7 +1005,91 @@ export class OpenAPIManager {
         };
     }
 
-    protected createResponsesObject(inputRpcOptions: InternalRPCOptions, inputEnvelopeClass: typeof RPCEnvelope) {
+    createRPCParametersSchemaObject(rpcOptions: InternalRPCOptions) {
+        const paramPickerMeta = Reflect.getMetadata(PICK_RPC_PARAM_DECORATION_META_KEY, rpcOptions.hostProto);
+        const paramPickerConf = (paramPickerMeta ? paramPickerMeta[rpcOptions.nameOnProto] : undefined) || [];
+
+        let openAPISchemas: any[] = [];
+        const nonDtoParams: any = {};
+        const nonDtoParamsRequired: string[] = [];
+
+        const recurrenceDetector = new Set<string>();
+
+        if (Array.isArray(rpcOptions.paramTypes)) {
+            for (const [i, x] of rpcOptions.paramTypes.entries()) {
+                const conf = {
+                    type: x,
+                    path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
+                    paramOf: rpcOptions.name,
+                    ...paramPickerConf[i]
+                } as PropOptionsLike;
+
+                const partialSchema = this.propOptionsLikeToOpenAPISchema(conf, 'input', false);
+
+                if (!partialSchema) {
+                    continue;
+                }
+
+                if (conf.path) {
+                    nonDtoParams[conf.path] = _.cloneDeep(partialSchema);
+                    this.applyMeta(nonDtoParams[conf.path], conf, 'request');
+                    if (nonDtoParams[conf.path].required && typeof conf.path === 'string') {
+                        nonDtoParamsRequired.push(conf.path);
+                    }
+
+                    continue;
+                }
+
+                openAPISchemas.push(partialSchema);
+            }
+        }
+
+        if (!_.isEmpty(nonDtoParams)) {
+            openAPISchemas.push({
+                type: 'object', properties: nonDtoParams,
+                required: nonDtoParamsRequired.length ? nonDtoParamsRequired : undefined
+            });
+        }
+
+        for (const [k, v] of Object.entries<any>(nonDtoParams)) {
+            if (v.omitted) {
+                delete nonDtoParams[k];
+                continue;
+            }
+
+            const ref = this.getRef(v);
+            if (ref) {
+                recurrenceDetector.add(ref);
+            }
+
+            this.consumeIncompatibles(v);
+        }
+
+        openAPISchemas = openAPISchemas.map((x) => {
+            const ref = this.getRef(x);
+
+            if (!ref) {
+                return x;
+            }
+
+            if (recurrenceDetector.has(ref)) {
+                return this.unRefSchema(x);
+            }
+
+            if (
+                Object.keys(x).length === 1 &&
+                x.allOf?.length === 1
+            ) {
+                return x.allOf[0];
+            }
+
+            return x;
+        });
+
+        return openAPISchemas.length === 1 ? openAPISchemas[0] : { allOf: openAPISchemas };
+    }
+
+    createResponsesObject(inputRpcOptions: InternalRPCOptions, inputEnvelopeClass: typeof RPCEnvelope) {
         const codeTypeMap = new Map<string, [object, object | undefined][]>();
         const codeHeaderMap = new Map<string, [string, string][]>();
 
