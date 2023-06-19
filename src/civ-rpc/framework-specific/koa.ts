@@ -83,7 +83,9 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
             const theController = this.makeShimController(methodName);
 
-            if (httpConfig?.path) {
+            const httpRegistered = new WeakSet();
+            if (httpConfig?.path && !httpRegistered.has(methodConfig)) {
+                httpRegistered.add(methodConfig);
                 const regUrl = `/${httpConfig.path}`.replace(/^\/+/, '/');
                 koaRouter.register(
                     regUrl,
@@ -121,79 +123,77 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 );
             }
 
-            const methodNames = typeof methodConfig.name === 'string' ? [methodConfig.name] : methodConfig.name;
-            for (const name of methodNames) {
+            const name = methodName;
 
-                const apiPath = `/${name.split('.').join('/')}`;
+            const apiPath = `/${name.split('.').join('/')}`;
+            koaRouter.register(
+                apiPath,
+                methods,
+                this.wipeBehindKoaRouter(
+                    ...this.koaMiddlewares,
+                    theController
+                )
+            );
+
+            this.openAPIManager.document(
+                apiPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
+                methods,
+                methodConfig,
+                {
+                    style: 'http',
+                    tags: methodName.split('.').filter(Boolean)
+                }
+            );
+
+            const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
+            if (methodsToFillNoop.length) {
                 koaRouter.register(
                     apiPath,
-                    methods,
+                    methodsToFillNoop,
                     this.wipeBehindKoaRouter(
                         ...this.koaMiddlewares,
-                        theController
+                        this.__noop
                     )
-                );
-
-                this.openAPIManager.document(
-                    apiPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
-                    methods,
-                    methodConfig,
-                    {
-                        style: 'http',
-                        tags: methodName.split('.').filter(Boolean)
-                    }
-                );
-
-                const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
-                if (methodsToFillNoop.length) {
-                    koaRouter.register(
-                        apiPath,
-                        methodsToFillNoop,
-                        this.wipeBehindKoaRouter(
-                            ...this.koaMiddlewares,
-                            this.__noop
-                        )
-                    );
-                }
-
-                this.logger.debug(
-                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${apiPath} => rpc(${methodName})`,
-                    { httpConfig }
-                );
-
-                const rpcPath = `/rpc/${name}`;
-                koaRouter.register(
-                    rpcPath,
-                    methods,
-                    this.wipeBehindKoaRouter(
-                        ...this.koaMiddlewares,
-                        theController
-                    )
-                );
-                this.openAPIManager.document(
-                    rpcPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
-                    methods,
-                    methodConfig,
-                    {
-                        style: 'rpc',
-                        tags: methodName.split('.').filter(Boolean)
-                    }
-                );
-                if (methodsToFillNoop.length) {
-                    koaRouter.register(
-                        rpcPath,
-                        methodsToFillNoop,
-                        this.wipeBehindKoaRouter(
-                            ...this.koaMiddlewares,
-                            this.__noop
-                        )
-                    );
-                }
-                this.logger.debug(
-                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${rpcPath} => rpc(${methodName})`,
-                    { httpConfig }
                 );
             }
+
+            this.logger.debug(
+                `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${apiPath} => rpc(${methodName})`,
+                { httpConfig }
+            );
+
+            const rpcPath = `/rpc/${name}`;
+            koaRouter.register(
+                rpcPath,
+                methods,
+                this.wipeBehindKoaRouter(
+                    ...this.koaMiddlewares,
+                    theController
+                )
+            );
+            this.openAPIManager.document(
+                rpcPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
+                methods,
+                methodConfig,
+                {
+                    style: 'rpc',
+                    tags: methodName.split('.').filter(Boolean)
+                }
+            );
+            if (methodsToFillNoop.length) {
+                koaRouter.register(
+                    rpcPath,
+                    methodsToFillNoop,
+                    this.wipeBehindKoaRouter(
+                        ...this.koaMiddlewares,
+                        this.__noop
+                    )
+                );
+            }
+            this.logger.debug(
+                `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${rpcPath} => rpc(${methodName})`,
+                { httpConfig }
+            );
 
         }
 

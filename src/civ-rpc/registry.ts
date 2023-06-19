@@ -179,12 +179,11 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     }
 
     dump() {
-        return Array.from(this.conf.values()).map((x) => {
-            const names = Array.isArray(x.name) ? x.name : [x.name];
-            const prepared = this.prepare(x);
+        return Array.from(this.conf.entries()).map(([k, conf]) => {
+            const prepared = this.prepare(conf);
 
-            return names.map((n) => [n, prepared, x]);
-        }).flat(1) as [string, Function, InternalRPCOptions][];
+            return [k, prepared, conf];
+        }) as [string, Function, InternalRPCOptions][];
     }
 
     exec(name: string, input: object, env?: object) {

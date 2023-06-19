@@ -75,7 +75,9 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
 
             const theController = this.makeShimController(methodName);
 
-            if (httpConfig?.path) {
+            const httpRegistered = new WeakSet();
+            if (httpConfig?.path && !httpRegistered.has(methodConfig)) {
+                httpRegistered.add(methodConfig);
                 const regUrl = `/${httpConfig.path}`.replace(/^\/+/, '/');
                 this.__routerRegister(
                     expressRouter,
@@ -109,71 +111,68 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 );
             }
 
-            const methodNames = typeof methodConfig.name === 'string' ? [methodConfig.name] : methodConfig.name;
-            for (const name of methodNames) {
+            const name = methodName;
+            const apiPath = `/${name.split('.').join('/')}`;
+            this.__routerRegister(
+                expressRouter,
+                apiPath,
+                methods,
+                theController
+            );
 
-                const apiPath = `/${name.split('.').join('/')}`;
+            this.openAPIManager.document(
+                apiPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
+                methods,
+                methodConfig,
+                {
+                    style: 'http',
+                    tags: methodName.split('.').filter(Boolean)
+                }
+            );
+
+            const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
+            if (methodsToFillNoop.length) {
                 this.__routerRegister(
                     expressRouter,
                     apiPath,
-                    methods,
-                    theController
+                    methodsToFillNoop,
+                    this.__noop
                 );
+            }
 
-                this.openAPIManager.document(
-                    apiPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
-                    methods,
-                    methodConfig,
-                    {
-                        style: 'http',
-                        tags: methodName.split('.').filter(Boolean)
-                    }
-                );
+            this.logger.debug(
+                `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${apiPath} => rpc(${methodName})`,
+                { httpConfig }
+            );
 
-                const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
-                if (methodsToFillNoop.length) {
-                    this.__routerRegister(
-                        expressRouter,
-                        apiPath,
-                        methodsToFillNoop,
-                        this.__noop
-                    );
+            const rpcPath = `/rpc/${name}`;
+            this.__routerRegister(
+                expressRouter,
+                rpcPath,
+                methods,
+                theController
+            );
+            this.openAPIManager.document(
+                rpcPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
+                methods,
+                methodConfig,
+                {
+                    style: 'rpc',
+                    tags: methodName.split('.').filter(Boolean)
                 }
-
-                this.logger.debug(
-                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${apiPath} => rpc(${methodName})`,
-                    { httpConfig }
-                );
-
-                const rpcPath = `/rpc/${name}`;
+            );
+            if (methodsToFillNoop.length) {
                 this.__routerRegister(
                     expressRouter,
                     rpcPath,
-                    methods,
-                    theController
-                );
-                this.openAPIManager.document(
-                    rpcPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
-                    methods,
-                    methodConfig,
-                    {
-                        style: 'rpc',
-                        tags: methodName.split('.').filter(Boolean)
-                    }
-                );
-                if (methodsToFillNoop.length) {
-                    this.__routerRegister(
-                        expressRouter,
-                        rpcPath,
-                        methodsToFillNoop,
-                        this.__noop
-                    );
-                }
-                this.logger.debug(
-                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${rpcPath} => rpc(${methodName})`,
-                    { httpConfig }
+                    methodsToFillNoop,
+                    this.__noop
                 );
             }
+            this.logger.debug(
+                `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${rpcPath} => rpc(${methodName})`,
+                { httpConfig }
+            );
 
         }
 
