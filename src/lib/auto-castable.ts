@@ -874,28 +874,14 @@ export interface PropOptions<T> {
 
 const ENUM_TO_SET_MAP = new WeakMap<object, Set<string> | Set<number>>();
 
-export function enumToSet(enumObj: object, designType?: any) {
+export function enumToSet(enumObj: object, _designType?: any) {
     if (ENUM_TO_SET_MAP.has(enumObj)) {
         return ENUM_TO_SET_MAP.get(enumObj)!;
     }
 
     const result = new Set<any>();
-    if (designType === String) {
-        for (const x of Object.values(enumObj as any)) {
-            if (typeof x === 'string') {
-                result.add(x);
-            }
-        }
-    } else if (designType === Number) {
-        for (const x of Object.values(enumObj as any)) {
-            if (typeof x === 'number') {
-                result.add(x);
-            }
-        }
-    } else {
-        for (const x of Object.values(enumObj as any)) {
-            result.add(x as any);
-        }
+    for (const x of Object.values(enumObj as any)) {
+        result.add(x as any);
     }
 
     result.toString = enumToString;
