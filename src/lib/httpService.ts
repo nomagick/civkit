@@ -154,7 +154,7 @@ export abstract class HTTPService<
         queryParams?: any,
         _options?: To,
         ..._moreOptions: Array<To | undefined>
-    ): PromiseWithCancel<Response & { data: T; } & FetchPatch<To>> {
+    ): PromiseWithCancel<Response & { data: T; parsed: T; } & FetchPatch<To>> {
         const abortCtrl = new AbortController();
         const url = this.urlOf(uri, queryParams);
         const options = this.__composeOption(
@@ -209,6 +209,7 @@ export abstract class HTTPService<
                     const parsed = await this.__processResponse(options, r);
                     Object.defineProperties(r, {
                         data: { value: parsed, writable: true },
+                        parsed: { value: parsed, writable: true },
                     });
 
                     this.emit('parsed', parsed, r, serial);
