@@ -150,17 +150,18 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             const propOps = paramPickerConf?.[i];
             const propName = paramNames[i];
 
-            if (!propOps) {
+            if (!propOps && isAutoCastableClass(t)) {
                 const paramOptions: PropOptions<unknown> = { type: t };
 
                 conf.paramOptions[i] = paramOptions;
 
-                if (!isAutoCastableClass(t) && propName) {
-                    paramOptions.path = propName;
-                }
-
                 continue;
+            } else if (propOps) {
+                if (!propOps.path && propName) {
+                    propOps.path = propName;
+                }
             }
+
 
             conf.paramOptions[i] = { type: t, ...propOps };
         }
@@ -353,6 +354,8 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             }
         } else if (typeof path === 'object') {
             conf = path;
+        } else {
+            conf ??= {};
         }
         const PickCtxParamDecorator = (tgt: typeof RPCHost.prototype, methodName: string, paramIdx: number) => {
             // design:type come from TypeScript compile time decorator-metadata.

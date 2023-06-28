@@ -244,6 +244,10 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 ...ctx.params,
                 ...ctx.query,
                 ...(_.isPlainObject(ctx.request.body) ? ctx.request.body : {} as any),
+                __body__: ctx.request.body,
+                __rawBody__: ctx.request.rawBody,
+                __params__: ctx.params,
+                __query__: ctx.query,
                 [RPC_CALL_ENVIRONMENT]: ctx
             };
 

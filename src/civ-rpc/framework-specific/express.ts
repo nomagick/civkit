@@ -228,7 +228,11 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 ...req.params,
                 ...req.query,
                 ...(_.isPlainObject(req.body) ? req.body : {}),
-                [RPC_CALL_ENVIRONMENT]: { req, res }
+                [RPC_CALL_ENVIRONMENT]: { req, res },
+                __body__: req.body,
+                __rawBody__: (req as any).rawBody,
+                __params__: req.params,
+                __query__: req.query,
             };
 
             res.statusCode = 404;
