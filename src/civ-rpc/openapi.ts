@@ -1150,7 +1150,7 @@ export class OpenAPIManager {
                     const codeKey = `${wrappedTpm?.code || 200}`;
                     const codeTypeKey = `${codeKey}::${wrappedTpm?.contentType || 'application/json'}`;
                     const codeTypeValue = codeTypeMap.get(codeTypeKey);
-                    const partialSchema = this.propOptionsLikeToOpenAPISchema(wrappedRpcOptions, 'output');
+                    const partialSchema = this.autoTypesToOpenAPISchema(wrappedRpcOptions, 'output');
                     this.applySceneMeta(partialSchema, rpcOptions, 'response');
                     this.consumeIncompatibles(partialSchema);
                     if (codeTypeValue) {
