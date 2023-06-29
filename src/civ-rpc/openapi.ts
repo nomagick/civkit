@@ -1093,7 +1093,7 @@ export class OpenAPIManager {
         const codeTypeMap = new Map<string, [object, object | undefined][]>();
         const codeHeaderMap = new Map<string, [string, string][]>();
 
-        let rpcOptions = inputRpcOptions;
+        const rpcOptions = inputRpcOptions;
 
         let defaultEnvelope = new inputEnvelopeClass();
         if (inputRpcOptions?.envelope) {
@@ -1102,16 +1102,20 @@ export class OpenAPIManager {
             defaultEnvelope = new RPCEnvelope();
         }
 
+        const defaultWrappedOptions = defaultEnvelope.describeWrap(rpcOptions) as InternalRPCOptions;
+
         const defaultReturnTypes = rpcOptions.returnArrayOf ||
             rpcOptions.returnDictOf;
         if (defaultReturnTypes) {
-            rpcOptions = defaultEnvelope.describeWrap(rpcOptions) as InternalRPCOptions;
-            const partialSchema = this.propOptionsLikeToOpenAPISchema(rpcOptions, 'output');
-            this.applySceneMeta(partialSchema, rpcOptions, 'response');
+            const partialSchema = this.propOptionsLikeToOpenAPISchema(defaultWrappedOptions, 'output');
+            this.applySceneMeta(partialSchema, defaultWrappedOptions, 'response');
             this.consumeIncompatibles(partialSchema);
             codeTypeMap.set(`200::application/json`, [[partialSchema, undefined]]);
         } else if (rpcOptions.returnType) {
             const returnTypes = Array.isArray(rpcOptions.returnType) ? rpcOptions.returnType : [rpcOptions.returnType];
+
+            const wrappedOptions = [];
+            let allUsingDefaultEnvelope = true;
             for (const x of returnTypes) {
                 const tpm = extractTransferProtocolMeta(x?.prototype);
 
@@ -1120,9 +1124,23 @@ export class OpenAPIManager {
                     tpm?.envelope === null ?
                         new RPCEnvelope() :
                         defaultEnvelope;
+                if (envelope !== defaultEnvelope) {
+                    allUsingDefaultEnvelope = false;
+                    const partialWrappedRpcOptions = envelope.describeWrap({
+                        ...rpcOptions,
+                        returnType: x,
+                        throws: undefined,
+                        returnArrayOf: undefined,
+                        returnDictOf: undefined
+                    }) as InternalRPCOptions;
+                    wrappedOptions.push(partialWrappedRpcOptions);
+                }
+            }
+            if (allUsingDefaultEnvelope) {
+                wrappedOptions.push(defaultWrappedOptions);
+            }
 
-                const wrappedRpcOptions = envelope.describeWrap({ ...rpcOptions, returnType: x }) as InternalRPCOptions;
-
+            for (const wrappedRpcOptions of wrappedOptions) {
                 const wrappedTypes = Array.isArray(wrappedRpcOptions?.returnType) ?
                     wrappedRpcOptions.returnType :
                     [wrappedRpcOptions.returnType];
@@ -1158,10 +1176,7 @@ export class OpenAPIManager {
             }
         }
         if (rpcOptions.throws) {
-            const wrappedRpcOptions = defaultEnvelope.describeWrap(rpcOptions);
-            const wrappedErrors = Array.isArray(wrappedRpcOptions?.throws) ?
-                wrappedRpcOptions.throws :
-                [wrappedRpcOptions.throws];
+            const wrappedErrors = Array.isArray(defaultWrappedOptions.throws) ? defaultWrappedOptions.throws : [defaultWrappedOptions.throws];
             for (const wrappedError of wrappedErrors) {
                 const wrappedTpm = extractTransferProtocolMeta(wrappedError?.prototype);
                 const codeKey = `${wrappedTpm?.code || 500}`;
