@@ -271,8 +271,7 @@ export class ApplicationError extends Error implements AutoCastable {
         return assignTransferProtocolMeta(
             {
                 data: null,
-                ...exportObj,
-                message: `${exportObj.name}: ${exportObj.message}`,
+                ...exportObj
             },
             extractTransferProtocolMeta(this)
         );
