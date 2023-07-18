@@ -10,7 +10,6 @@ import {
     AutoCastableMetaClass, AutoCastingError,
     inputSingle, isAutoCastableClass, PropOptions, __patchPropOptionsEnumToSet
 } from '../lib/auto-castable';
-import { Defer } from '../lib/defer';
 import { RestParameters, shallowDetectRestParametersKeys } from './magic';
 import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 import { get } from 'lodash';
@@ -67,7 +66,10 @@ export interface RPCReflection<T = any> {
     conf: InternalRPCOptions & {
         paramOptions: PropOptions<unknown>[];
     };
-    exec: Promise<T>;
+
+    then: (resolve: (value: T) => any, reject?: (reason?: any) => any) => void;
+    catch: (reject: (reason?: any) => any) => void;
+    finally: (onfinally?: (() => any) | undefined) => void;
 }
 
 export abstract class AbstractRPCRegistry extends AsyncService {
@@ -189,11 +191,22 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         }) as [string, Function, InternalRPCOptions][];
     }
 
-    exec(name: string, input: object, env?: object) {
+    async exec(name: string, input: object, env?: object) {
         const conf = this.conf.get(name);
         const func = conf?._func;
 
-        const deferred = Defer();
+        const afterExecHooks: Function[] = [];
+        const catchExecHooks: Function[] = [];
+
+        const addToHooks = (resolve?: (value: any) => void, reject?: (reason?: any) => void) => {
+            if (resolve) {
+                afterExecHooks.push(resolve);
+            }
+            if (reject) {
+                catchExecHooks.push(reject);
+            }
+        };
+
         const params = this.fitInputToArgs(name, {
             [RPC_CALL_ENVIRONMENT]: env,
             ...input,
@@ -201,29 +214,35 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 registry: this,
                 name,
                 conf,
-                exec: deferred.promise,
+                then: addToHooks,
+                catch: addToHooks,
+                finally: addToHooks,
             } as RPCReflection,
         });
-        deferred.promise.catch(() => '_swallowed');
+
 
         if (!(conf && func)) {
             throw new RPCMethodNotFoundError({ message: `Could not find method of name: ${name}.`, method: name });
         }
         try {
-            const r = func.call(conf._host, ...params);
-            if (r instanceof Promise || (typeof r?.then) === 'function') {
-                r.then(deferred.resolve, deferred.reject);
-            } else {
-                deferred.resolve(r);
+            const r = await func.call(conf._host, ...params);
+            
+            if (afterExecHooks.length) {
+                for (const x of afterExecHooks) {
+                    await x(r);
+                }
             }
 
-            return deferred.promise;
+            return r;
         } catch (err) {
-            deferred.reject(err);
+            if (catchExecHooks.length) {
+                for (const x of catchExecHooks) {
+                    await x(err);
+                }
+            }
 
             throw err;
         }
-
     }
 
     fitInputToArgs(name: string, input: object) {
