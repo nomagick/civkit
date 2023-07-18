@@ -211,13 +211,13 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         }
         try {
             const r = func.call(conf._host, ...params);
-            if ((typeof r?.then) === 'function') {
+            if (r instanceof Promise || (typeof r?.then) === 'function') {
                 r.then(deferred.resolve, deferred.reject);
             } else {
                 deferred.resolve(r);
             }
 
-            return r;
+            return deferred.promise;
         } catch (err) {
             deferred.reject(err);
 
