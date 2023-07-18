@@ -10,6 +10,7 @@ import {
     AutoCastableMetaClass, AutoCastingError,
     inputSingle, isAutoCastableClass, PropOptions, __patchPropOptionsEnumToSet
 } from '../lib/auto-castable';
+import { Defer } from '../lib/defer';
 import { RestParameters, shallowDetectRestParametersKeys } from './magic';
 import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 import { get } from 'lodash';
@@ -60,12 +61,13 @@ export interface InternalRPCOptions extends RPCOptions {
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
 
-export interface RPCReflection {
+export interface RPCReflection<T = any> {
     registry: AbstractRPCRegistry;
     name: string;
     conf: InternalRPCOptions & {
         paramOptions: PropOptions<unknown>[];
     };
+    exec: Promise<T>;
 }
 
 export abstract class AbstractRPCRegistry extends AsyncService {
@@ -191,21 +193,37 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         const conf = this.conf.get(name);
         const func = conf?._func;
 
+        const deferred = Defer();
         const params = this.fitInputToArgs(name, {
             [RPC_CALL_ENVIRONMENT]: env,
             ...input,
             [RPC_REFLECT]: {
                 registry: this,
                 name,
-                conf
-            },
+                conf,
+                exec: deferred.promise,
+            } as RPCReflection,
         });
+        deferred.promise.catch(() => '_swallowed');
 
         if (!(conf && func)) {
             throw new RPCMethodNotFoundError({ message: `Could not find method of name: ${name}.`, method: name });
         }
+        try {
+            const r = func.call(conf._host, ...params);
+            if ((typeof r?.then) === 'function') {
+                r.then(deferred.resolve, deferred.reject);
+            } else {
+                deferred.resolve(r);
+            }
 
-        return func.call(conf._host, ...params);
+            return r;
+        } catch (err) {
+            deferred.reject(err);
+
+            throw err;
+        }
+
     }
 
     fitInputToArgs(name: string, input: object) {
