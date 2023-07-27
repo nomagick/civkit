@@ -460,6 +460,7 @@ export class OpenAPIManager {
                     const schema = this.propOptionsLikeToOpenAPISchema(additionalOptions, direction, useRef);
                     if (schema) {
                         openAPIDesc.type = schema.type;
+                        openAPIDesc.properties ??= {};
                         openAPIDesc.additionalProperties = schema.additionalProperties;
                     }
                 } else if (additionalOptions?.type) {
@@ -685,7 +686,8 @@ export class OpenAPIManager {
             const schema = this.autoTypesToOpenAPISchema(conf.dictOf, direction, useRef);
             final = schema ? {
                 type: 'object',
-                additionalProperties: schema
+                additionalProperties: schema,
+                properties: {},
             } : undefined;
         } else if (conf.returnArrayOf) {
             const schema = this.autoTypesToOpenAPISchema(conf.returnArrayOf, direction, useRef);
@@ -697,7 +699,8 @@ export class OpenAPIManager {
             const schema = this.autoTypesToOpenAPISchema(conf.returnDictOf, direction, useRef);
             final = schema ? {
                 type: 'object',
-                additionalProperties: schema
+                additionalProperties: schema,
+                properties: {},
             } : undefined;
         } else if (conf.returnType) {
             const schema = this.autoTypesToOpenAPISchema(conf.returnType, direction, useRef);
