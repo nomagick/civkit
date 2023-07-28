@@ -13,7 +13,6 @@ export type AdditionalPropOptions<T> = Pick<
     PropOptions<T>,
     | 'dictOf'
     | 'validate'
-    | 'validateCollection'
     | 'desc'
     | 'openapi'
     | 'ext'
@@ -73,6 +72,52 @@ export function autoConstructor(
             const dict = inputSingle(undefined, _.omit(input, ...namedEntryKeys), undefined, additionalConf);
 
             Object.assign(instance, dict);
+        }
+        if (additionalConf?.validate) {
+            const validators = Array.isArray(additionalConf.validate) ? additionalConf.validate : [additionalConf.validate];
+
+            for (const validator of validators) {
+                let result;
+                try {
+                    result = validator(instance, input);
+                } catch (err: any) {
+                    throw new AutoCastingError({
+                        reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
+                        path: makePropNameArr(undefined, undefined, undefined),
+                        hostName: this.name,
+                        propName: makePropNameArr(undefined, undefined, undefined),
+                        value: input,
+                        validator: describeAnonymousValidateFunction(validator),
+                        desc: additionalConf.desc,
+                        cause: err,
+                    });
+                }
+
+                if (result instanceof Error) {
+                    throw new AutoCastingError({
+                        reason: `Rejected by validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
+                        path: makePropNameArr(undefined, undefined, undefined),
+                        hostName: this.name,
+                        propName: makePropNameArr(undefined, undefined, undefined),
+                        value: input,
+                        validator: describeAnonymousValidateFunction(validator),
+                        desc: additionalConf.desc,
+                        cause: result,
+                    });
+                }
+
+                if (!result) {
+                    throw new AutoCastingError({
+                        reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
+                        path: makePropNameArr(undefined, undefined, undefined),
+                        hostName: this.name,
+                        propName: makePropNameArr(undefined, undefined, undefined),
+                        value: input,
+                        validator: describeAnonymousValidateFunction(validator),
+                        desc: additionalConf.desc,
+                    });
+                }
+            }
         }
     }
 
