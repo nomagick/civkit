@@ -473,23 +473,27 @@ export function describeType(x: any) {
     return name;
 }
 
-@Also({ type: [String, Number, Boolean, undefined, null] })
-class _JSONPrimitive extends AutoCastableMetaClass {
-    @AutoConstructor
-    static from(input: any) {
-        if (typeof input === 'object') {
-            if (input !== null) {
-                return `${input}`;
-            }
-        }
 
-        return input;
-    }
-}
-Object.defineProperty(_JSONPrimitive, 'name', {
-    value: `JSONPrimitive`,
-    writable: false,
-});
 
 export type JSONPrimitive = string | number | boolean | undefined | null;
-export const JSONPrimitive = _JSONPrimitive;
+export const JSONPrimitive = function () {
+    @Also({ type: [String, Number, Boolean, undefined, null] })
+    class _JSONPrimitive extends AutoCastableMetaClass {
+        @AutoConstructor
+        static from(input: any) {
+            if (typeof input === 'object') {
+                if (input !== null) {
+                    return `${input}`;
+                }
+            }
+
+            return input;
+        }
+    }
+    Object.defineProperty(_JSONPrimitive, 'name', {
+        value: `JSONPrimitive`,
+        writable: false,
+    });
+
+    return _JSONPrimitive as any as JSONPrimitive;
+}();
