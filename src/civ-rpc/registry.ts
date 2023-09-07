@@ -13,6 +13,7 @@ import {
 import { RestParameters, shallowDetectRestParametersKeys } from './magic';
 import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 import { get } from 'lodash';
+import { NATIVE_CLASS_PROTOTYPES, isPrimitiveType } from 'utils';
 
 const REMOVE_COMMENTS_REGEXP = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/gm;
 export function getParamNames(func: Function): string[] {
@@ -161,7 +162,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
                 continue;
             } else if (propOps) {
-                if (!propOps.path && propName) {
+                if (!propOps.path && propName && NATIVE_CLASS_PROTOTYPES.has(t?.prototype)) {
                     propOps.path = propName;
                 }
             }
