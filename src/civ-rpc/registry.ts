@@ -162,7 +162,9 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
                 continue;
             } else if (propOps) {
-                if (!propOps.path && propName && NATIVE_CLASS_PROTOTYPES.has(t?.prototype)) {
+                if (!propOps.path && propName &&
+                    (t !== Object && t !== Promise && NATIVE_CLASS_PROTOTYPES.has(t?.prototype))
+                ) {
                     propOps.path = propName;
                 }
             }
@@ -227,7 +229,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         }
         try {
             const r = await func.call(conf._host, ...params);
-            
+
             if (afterExecHooks.length) {
                 for (const x of afterExecHooks) {
                     await x(r);
