@@ -13,7 +13,7 @@ import {
 import { RestParameters, shallowDetectRestParametersKeys } from './magic';
 import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 import { get } from 'lodash';
-import { NATIVE_CLASS_PROTOTYPES } from 'utils';
+import { NATIVE_CLASS_PROTOTYPES } from '../utils/lang';
 
 const REMOVE_COMMENTS_REGEXP = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/gm;
 export function getParamNames(func: Function): string[] {
