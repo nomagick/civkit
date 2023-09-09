@@ -98,9 +98,13 @@ export abstract class AbstractAsyncContext extends AsyncService {
     }
 
     set<T = any>(k: string | symbol, v: T) {
-        this.ctx[k] = v;
+        try {
+            this.ctx[k] = v;
 
-        return v;
+            return v;
+        } catch (err) {
+            return undefined;
+        }
     }
 
 }
