@@ -18,15 +18,16 @@ import { AbstractRPCRegistry } from "../registry";
 import { OpenAPIManager } from "../openapi";
 import { runOnce } from "../../decorators";
 import { humanReadableDataSize } from "../../utils/readability";
-import { getTraceCtx, setupTraceId } from "../../lib/logger";
 import { marshalErrorLike } from '../../utils/lang';
 
 import { UploadedFile } from "./shared";
+import { AbstractAsyncContext, setupTraceId } from '../../lib/async-context';
 
 
 export abstract class ExpressRegistry extends AbstractRPCRegistry {
     abstract logger: LoggerInterface;
     abstract tempFileManager: AbstractTempFileManger;
+    abstract ctxMgr: AbstractAsyncContext;
     abstract title: string;
     logoUrl?: string;
 
@@ -228,12 +229,13 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 ...req.params,
                 ...req.query,
                 ...(_.isPlainObject(req.body) ? req.body : {}),
-                [RPC_CALL_ENVIRONMENT]: { req, res },
                 __body__: req.body,
                 __rawBody__: (req as any).rawBody,
                 __params__: req.params,
                 __query__: req.query,
             };
+
+            const env = this.ctxMgr.setup({ req, res });
 
             res.statusCode = 404;
             const keepAliveTimer = setTimeout(() => {
@@ -252,7 +254,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     this.logger.info(`${rpcHost.constructor.name} recovered successfully`);
                 }
 
-                const result = await this.call(methodName, jointInput);
+                const result = await this.call(methodName, jointInput, { env });
                 const output = result.output;
                 clearTimeout(keepAliveTimer);
 
@@ -355,7 +357,8 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             method: req.method,
             url: req.originalUrl,
             headers: this.briefHeaders(req.headers),
-            ...getTraceCtx(),
+            traceId: this.ctxMgr.get('traceId'),
+            traceT0: this.ctxMgr.get('traceT0'),
         };
     }
 

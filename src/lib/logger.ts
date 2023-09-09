@@ -1,8 +1,7 @@
 import { AsyncService } from './async-service';
-import { createHook, executionAsyncResource } from 'async_hooks';
-import { randomUUID } from 'crypto';
 import { hostname } from 'os';
 import { Writable } from 'stream';
+import { getTraceCtx } from './async-context';
 
 const logLevels = {
     FATAL: 'fatal',
@@ -13,61 +12,6 @@ const logLevels = {
     TRACE: 'trace'
 } as const;
 
-export const TRACE_CTX = Symbol('TraceCtx');
-export interface TraceCtx {
-    traceId?: string;
-    traceT0?: Date;
-    [k: string]: any;
-}
-export interface TraceableInterface {
-    [TRACE_CTX]?: TraceCtx;
-}
-
-export const tracerHook = createHook({
-    init(_asyncId, _type, _triggerAsyncId, resource: TraceableInterface) {
-        const currentResource: TraceableInterface = executionAsyncResource();
-        if (currentResource?.[TRACE_CTX]) {
-            resource[TRACE_CTX] = currentResource[TRACE_CTX];
-        }
-    }
-});
-
-export function setupTraceCtx(input: Partial<TraceCtx> = {}) {
-    tracerHook.enable();
-    const currentResource: TraceableInterface = executionAsyncResource();
-    if (currentResource) {
-        if (!currentResource[TRACE_CTX]) {
-            currentResource[TRACE_CTX] = {
-                ...input,
-            };
-        }
-
-        const ctx = currentResource[TRACE_CTX]!;
-        Object.assign(ctx, {
-            ...input
-        });
-        ctx.traceId ??= randomUUID();
-        ctx.traceT0 ??= new Date();
-
-        return ctx;
-    }
-
-    return undefined;
-}
-
-export function setupTraceId(traceId?: string, traceT0?: Date) {
-    return setupTraceCtx({ traceId, traceT0 });
-}
-
-export function getTraceCtx() {
-    const currentResource: TraceableInterface = executionAsyncResource();
-
-    return currentResource?.[TRACE_CTX];
-}
-
-export function getTraceId() {
-    return getTraceCtx()?.traceId;
-}
 
 export abstract class AbstractLogger extends AsyncService {
     abstract _targetStream: Writable;

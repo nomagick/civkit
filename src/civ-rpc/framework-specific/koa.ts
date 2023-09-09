@@ -25,8 +25,8 @@ import http, { IncomingHttpHeaders } from "http";
 import { runOnce } from "../../decorators";
 import { humanReadableDataSize } from "../../utils/readability";
 import { marshalErrorLike } from "../../utils/lang";
-import { getTraceCtx, setupTraceId } from "../../lib/logger";
 import { UploadedFile } from "./shared";
+import { AbstractAsyncContext, setupTraceId } from "../../lib/async-context";
 
 
 export type ParsedContext = Context & {
@@ -37,6 +37,7 @@ export type ParsedContext = Context & {
 export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     abstract logger: LoggerInterface;
     abstract tempFileManager: AbstractTempFileManger;
+    abstract ctxMgr: AbstractAsyncContext;
     abstract title: string;
     logoUrl?: string;
 
@@ -248,9 +249,10 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 __rawBody__: ctx.request.rawBody,
                 __params__: ctx.params,
                 __query__: ctx.query,
-                [RPC_CALL_ENVIRONMENT]: ctx
             };
 
+            const ctx2 = this.ctxMgr.setup(ctx);
+            
             ctx.status = 404;
             const keepAliveTimer = setTimeout(() => {
                 ctx.socket.setKeepAlive(true, 2 * 1000);
@@ -267,7 +269,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     this.logger.info(`${rpcHost.constructor.name} recovered successfully`);
                 }
 
-                const result = await this.call(methodName, jointInput);
+                const result = await this.call(methodName, jointInput, { env: ctx2 });
                 const output = result.output;
                 clearTimeout(keepAliveTimer);
 
@@ -377,7 +379,8 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             method: ctx.method,
             url: ctx.request.originalUrl,
             headers: this.briefHeaders(ctx.request.headers),
-            ...getTraceCtx(),
+            traceId: this.ctxMgr.get('traceId'),
+            traceT0: this.ctxMgr.get('traceT0'),
         };
     }
 

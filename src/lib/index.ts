@@ -12,6 +12,7 @@ export * from './routed-nested-proxy';
 export * from './sub-process';
 export * from './throttle';
 export * from './temp';
+export * from './async-context';
 export * from './logger';
 export * from './pino-logger';
 export * from './file-storage';
