@@ -295,7 +295,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
                 continue theLoop;
             }
 
-            // Object/Array is the type of all mixed/any/T[] types.
+            // Object/Array/Function is the type of all mixed/any/T[] types.
             case Array: {
                 if (Array.isArray(inputProp)) {
                     val = inputProp;
@@ -305,6 +305,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
 
                 break theLoop;
             }
+            case Function:
             case Object: {
                 val = inputProp;
 

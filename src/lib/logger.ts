@@ -52,7 +52,7 @@ export abstract class AbstractLogger extends AsyncService {
         const traceCtx = getTraceCtx();
         if (traceCtx) {
             objects.push({
-                ...traceCtx,
+                traceId: traceCtx.traceId,
                 traceDt: Date.now() - traceCtx.traceT0!.getTime()
             });
         }
