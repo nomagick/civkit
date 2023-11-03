@@ -19,7 +19,7 @@ export abstract class AbstractTempFileManger extends AsyncService {
             this.remove(x).catch(() => 'swallow');
         });
 
-        let exitTimer: NodeJS.Timer | undefined;
+        let exitTimer: ReturnType<typeof setTimeout>;
         const cleanupFunc = (code: any) => {
             for (const x of this.trackedPaths) {
                 try {

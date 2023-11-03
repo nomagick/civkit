@@ -4,7 +4,7 @@ let i = 1;
 
 interface DebounceConf {
     initAt?: number;
-    timer?: NodeJS.Timeout;
+    timer?: ReturnType<typeof setTimeout>;
     deferred?: Deferred<any>;
 }
 

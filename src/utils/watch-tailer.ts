@@ -24,8 +24,8 @@ export class FileTailer extends EventEmitter {
     textChunks: string[] = [];
 
     _shutdown: boolean = false;
-    _aftershots?: NodeJS.Timeout;
-    _clearAftershots?: NodeJS.Timeout;
+    _aftershots?: ReturnType<typeof setTimeout>;
+    _clearAftershots?: ReturnType<typeof setTimeout>;
 
     constructor(public path: string, private options?: { encoding?: BufferEncoding; fromStart?: boolean }) {
         super();

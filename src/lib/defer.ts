@@ -24,7 +24,7 @@ export function TimedDefer<T = any>(timeout: number = 5000): Deferred<T> {
     const self: any = {};
 
     self.promise = new Promise<T>((resolve, reject) => {
-        let timeoutHandle: NodeJS.Timer | null = setTimeout(() => {
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = setTimeout(() => {
             self.reject(new TimeoutError(`Timed out after ${timeout}ms.`));
         }, timeout);
 

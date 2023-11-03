@@ -407,7 +407,7 @@ export abstract class AbstractX509Manager extends AsyncService {
         };
 
         const dirWatcher = fs.watch(dir, { encoding: 'utf-8', persistent: false });
-        let debounceTimeout: NodeJS.Timeout | undefined;
+        let debounceTimeout: ReturnType<typeof setTimeout>;
 
         dirWatcher.on('change', (_eventType, _filename: string) => {
             if (debounceTimeout) {

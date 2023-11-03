@@ -192,7 +192,7 @@ export abstract class HTTPService<
         const serial = this.counter++;
         const config = { ...options, url };
         this.emit('request', config, serial);
-        let timeoutTimer: NodeJS.Timer;
+        let timeoutTimer: ReturnType<typeof setTimeout>;
         if (options.timeout) {
             timeoutTimer = setTimeout(() => {
                 (abortCtrl as any).abort(`Timeout of ${options.timeout}ms exceeded`);
