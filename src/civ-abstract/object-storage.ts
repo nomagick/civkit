@@ -30,7 +30,18 @@ export abstract class AbstractObjectStorageService extends AsyncService {
         Object.assign(this.options, options);
 
         this.minioClient = new minio.Client(_.omit(this.options, 'bucket'));
+    }
 
+    get bucket() {
+        return this.options.bucket;
+    }
+
+    get region() {
+        return this.options.region;
+    }
+
+    async ensureBucket() {
+        await this.serviceReady();
         const r = await this.minioClient.bucketExists(this.bucket);
 
         if (!r) {
@@ -44,14 +55,6 @@ export abstract class AbstractObjectStorageService extends AsyncService {
                 { bucket: this.bucket, region: this.region }
             );
         }
-    }
-
-    get bucket() {
-        return this.options.bucket;
-    }
-
-    get region() {
-        return this.options.region;
     }
 
     async putSingleFile(inputFileHandle: string | FancyFile, objectName: string, meta: minio.ItemBucketMetadata = {}) {
