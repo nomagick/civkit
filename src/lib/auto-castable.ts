@@ -13,6 +13,8 @@ export type AdditionalPropOptions<T> = Pick<
     PropOptions<T>,
     | 'dictOf'
     | 'validate'
+    | 'validateCollection'
+    | 'memberNullable'
     | 'desc'
     | 'openapi'
     | 'ext'
@@ -73,7 +75,7 @@ export function autoConstructor(
 
             Object.assign(instance, dict);
         }
-        if (additionalConf?.validate) {
+        if (additionalConf?.validate && !additionalConf.dictOf) {
             const validators = Array.isArray(additionalConf.validate) ? additionalConf.validate : [additionalConf.validate];
 
             for (const validator of validators) {
@@ -503,11 +505,16 @@ export function inputSingle<T>(
             return undefined;
         }
 
+        const memberNullable = Boolean(config.memberNullable);
         const arrayInput = Array.isArray(inputProp) ? inputProp : [inputProp];
 
         const values: T[] = [];
 
         for (const [i, x] of arrayInput.entries()) {
+            if (memberNullable && x === null) {
+                values.push(null as any);
+                continue;
+            }
             let elem: any = NOT_RESOLVED;
             try {
                 elem = castToType(types, x);
@@ -661,9 +668,15 @@ export function inputSingle<T>(
             return {};
         }
 
+        const memberNullable = Boolean(config.memberNullable);
         const values: { [k: string]: T; } = {};
 
         for (const [k, v] of Object.entries(dictInput)) {
+            if (memberNullable && v === null) {
+                values[k] = null as any;
+                continue;
+            }
+
             let elem: any = NOT_RESOLVED;
             try {
                 elem = castToType(types, v);
@@ -911,6 +924,7 @@ export interface PropOptions<T> {
     markdown?: string;
 
     nullable?: boolean;
+    memberNullable?: boolean;
     deprecated?: boolean;
     partOf?: string;
 
