@@ -81,7 +81,7 @@ export function autoConstructor(
             for (const validator of validators) {
                 let result;
                 try {
-                    result = validator(instance, input);
+                    result = (validator as Function).call(this, instance, input);
                 } catch (err: any) {
                     throw new AutoCastingError({
                         reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
@@ -428,8 +428,9 @@ function makePropNameArr(superName?: string, propName?: string | symbol, arrIdx?
 }
 
 export function inputSingle<T>(
-    hostName: string | undefined, input: any, prop: string | symbol | undefined, config: PropOptions<T>
+    host: string | undefined | Function, input: any, prop: string | symbol | undefined, config: PropOptions<T>
 ) {
+    const hostName = typeof host === 'string' ? host : host?.name;
     let types: any;
     let isArray = false;
     let isDict = false;
@@ -558,7 +559,7 @@ export function inputSingle<T>(
                 for (const validator of validators) {
                     let result;
                     try {
-                        result = validator(elem, input);
+                        result = (validator as Function).call(host, elem, input);
                     } catch (err: any) {
                         throw new AutoCastingError({
                             reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
@@ -613,7 +614,7 @@ export function inputSingle<T>(
             for (const validator of validators) {
                 let result;
                 try {
-                    result = validator(values, input);
+                    result = (validator as Function).call(host, values, input);
                 } catch (err: any) {
                     throw new AutoCastingError({
                         reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
@@ -720,7 +721,7 @@ export function inputSingle<T>(
                 for (const validator of validators) {
                     let result;
                     try {
-                        result = validator(elem, input);
+                        result = (validator as Function).call(host, elem, input);
                     } catch (err: any) {
                         throw new AutoCastingError({
                             reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
@@ -775,7 +776,7 @@ export function inputSingle<T>(
             for (const validator of validators) {
                 let result;
                 try {
-                    result = validator(values, input);
+                    result = (validator as Function).call(host, values, input);
                 } catch (err: any) {
                     throw new AutoCastingError({
                         reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
@@ -869,7 +870,7 @@ export function inputSingle<T>(
         for (const validator of validators) {
             let result;
             try {
-                result = validator(item, input);
+                result = (validator as Function).call(host, item, input);
             } catch (err: any) {
                 throw new AutoCastingError({
                     reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
