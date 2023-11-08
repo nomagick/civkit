@@ -60,7 +60,7 @@ export function autoConstructor(
     const entryVecs = chainEntriesSimple((this as typeof AutoCastableMetaClass)[AUTOCASTABLE_OPTIONS_SYMBOL] || {});
 
     for (const [prop, config] of entryVecs) {
-        const val = inputSingle(undefined, input, prop, config);
+        const val = inputSingle(undefined, input, prop, config, this);
         if (val === undefined) {
             continue;
         }
@@ -71,7 +71,7 @@ export function autoConstructor(
         const additionalConf = this[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
         if (additionalConf?.dictOf && _.isObjectLike(input)) {
             const namedEntryKeys = entryVecs.map(([k]) => k);
-            const dict = inputSingle(undefined, _.omit(input, ...namedEntryKeys), undefined, additionalConf);
+            const dict = inputSingle(undefined, _.omit(input, ...namedEntryKeys), undefined, additionalConf, this);
 
             Object.assign(instance, dict);
         }
@@ -428,9 +428,8 @@ function makePropNameArr(superName?: string, propName?: string | symbol, arrIdx?
 }
 
 export function inputSingle<T>(
-    host: string | undefined | Function, input: any, prop: string | symbol | undefined, config: PropOptions<T>
+    hostName: string | undefined, input: any, prop: string | symbol | undefined, config: PropOptions<T>, host?: Function
 ) {
-    const hostName = typeof host === 'string' ? host : host?.name;
     let types: any;
     let isArray = false;
     let isDict = false;
