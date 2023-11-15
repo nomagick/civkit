@@ -155,22 +155,25 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             const propOps = paramPickerConf?.[i];
             const propName = paramNames[i];
 
-            if (!propOps && isAutoCastableClass(t)) {
-                const paramOptions: PropOptions<unknown> = { type: t };
-
-                conf.paramOptions[i] = paramOptions;
-
-                continue;
-            } else if (propOps) {
+            if (propOps) {
                 if (!propOps.path && propName &&
                     (t !== Object && t !== Promise && NATIVE_CLASS_PROTOTYPES.has(t?.prototype))
                 ) {
                     propOps.path = propName;
                 }
+
+                conf.paramOptions[i] = { type: t, ...propOps };
+            } else if (isAutoCastableClass(t)) {
+                const paramOptions: PropOptions<unknown> = { type: t };
+
+                conf.paramOptions[i] = paramOptions;
             }
 
+            // Otherwise we just leave it undefined.
+            // It's important to drop the default types from paramTypes, which is injected by TypeScript compiler.
+            // Or the default input context would be injected into the RPC call.
+            // This would be a surprise and a problematic behavior.
 
-            conf.paramOptions[i] = { type: t, ...propOps };
         }
 
         const detectEtc = paramTypes.find((x) => (x?.prototype instanceof RestParameters || x === RestParameters));
