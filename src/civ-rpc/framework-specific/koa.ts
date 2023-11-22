@@ -316,7 +316,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     if (output.size) {
                         ctx.set('content-length', `${output.size}`);
                     }
-                    const fname = (output as any).filename;
+                    const fname = (output as any).name;
                     if (fname) {
                         ctx.set('content-disposition', `attachment; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(fname)}`);
                     }
