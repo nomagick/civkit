@@ -309,6 +309,29 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     }
                     this.applyTransferProtocolMeta(ctx, result.tpm);
                     ctx.body = output;
+                } else if (output instanceof Blob) {
+                    if (output.type) {
+                        ctx.set('content-type', output.type);
+                    }
+                    const fname = (output as any).filename;
+                    if (fname) {
+                        ctx.set('content-disposition', `attachment; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(fname)}`);
+                    }
+                    ctx.socket?.setKeepAlive(true, 1000);
+                    this.applyTransferProtocolMeta(ctx, result.tpm);
+                    const nodeStream = Readable.fromWeb(output.stream());
+                    nodeStream.pipe(ctx.res, { end: true });
+                    ctx.res.once('close', () => {
+                        if (!nodeStream.readableEnded) {
+                            this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`);
+                            nodeStream.once('error', (err: any) => {
+                                this.logger.warn(`Error occurred in response stream: ${err}`, {
+                                    err
+                                });
+                            });
+                            nodeStream.destroy(new Error('Downstream socket closed'));
+                        }
+                    });
                 } else if (typeof output === 'string') {
                     ctx.set('content-type', 'text/plain');
                     this.applyTransferProtocolMeta(ctx, result.tpm);
