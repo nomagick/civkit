@@ -297,6 +297,9 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     if (output.type) {
                         res.set('content-type', output.type);
                     }
+                    if (output.size) {
+                        res.set('content-length', `${output.size}`);
+                    }
                     const fname = (output as any).filename;
                     if (fname) {
                         res.set('content-disposition', `attachment; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(fname)}`);
