@@ -203,13 +203,25 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         const afterExecHooks: Function[] = [];
         const catchExecHooks: Function[] = [];
+        const finallyExecHooks: Function[] = [];
 
-        const addToHooks = (resolve?: (value: any) => void, reject?: (reason?: any) => void) => {
+        const addToThenHooks = (resolve?: (value: any) => void, reject?: (reason?: any) => void) => {
             if (resolve) {
                 afterExecHooks.push(resolve);
             }
             if (reject) {
                 catchExecHooks.push(reject);
+            }
+        };
+
+        const addToCatchHook = (reject: (reason?: any) => void) => {
+            if (reject) {
+                catchExecHooks.push(reject);
+            }
+        };
+        const addToFinallyHook = (handler: () => void) => {
+            if (handler) {
+                finallyExecHooks.push(handler);
             }
         };
 
@@ -220,9 +232,9 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 registry: this,
                 name,
                 conf,
-                then: addToHooks,
-                catch: addToHooks,
-                finally: addToHooks,
+                then: addToThenHooks,
+                catch: addToCatchHook,
+                finally: addToFinallyHook,
             } as RPCReflection,
         });
 
@@ -230,25 +242,39 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         if (!(conf && func)) {
             throw new RPCMethodNotFoundError({ message: `Could not find method of name: ${name}.`, method: name });
         }
+
         try {
             const r = await func.call(conf._host, ...params);
 
             if (afterExecHooks.length) {
+                const rTHooks = [];
                 for (const x of afterExecHooks) {
-                    await x(r);
+                    rTHooks.push(x(r));
                 }
+                await Promise.allSettled(rTHooks);
             }
 
             return r;
         } catch (err) {
             if (catchExecHooks.length) {
+                const rEHooks = [];
                 for (const x of catchExecHooks) {
-                    await x(err);
+                    rEHooks.push(x(err));
                 }
+                await Promise.allSettled(rEHooks);
             }
 
             throw err;
+        } finally {
+            if (finallyExecHooks.length) {
+                const rFHooks = [];
+                for (const x of finallyExecHooks) {
+                    rFHooks.push(x());
+                }
+                await Promise.allSettled(rFHooks);
+            }
         }
+
     }
 
     fitInputToArgs(name: string, input: object) {
