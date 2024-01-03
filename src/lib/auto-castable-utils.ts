@@ -405,19 +405,19 @@ export function OneOf<T extends Constructor<any>[]>(...classes: T): Constructor<
     const patchedClasses = __patchTypesEnumToSet(classes);
 
     @Also({ type: classes })
-    class DictClass extends AutoCastableMetaClass {
+    class OneOfClass extends AutoCastableMetaClass {
         @AutoConstructor
         static from(input: any) {
             return castToType(patchedClasses, input);
         }
     }
 
-    Object.defineProperty(DictClass, 'name', {
+    Object.defineProperty(OneOfClass, 'name', {
         value: `${patchedClasses.map(describeType).join('|')}`,
         writable: false,
     });
 
-    return DictClass as any;
+    return OneOfClass as any;
 }
 
 const TYPE_NAME_MAP = new WeakMap<any, string>();

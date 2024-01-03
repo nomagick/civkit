@@ -383,12 +383,12 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         return conf.host;
     }
 
-    RPCMethod(options: Partial<RPCOptions> | string = {}) {
+    Method(options: Partial<RPCOptions> | string = {}) {
         const _options = typeof options === 'string' ? { name: options } : options;
 
-        const RPCDecorator = (tgt: typeof RPCHost.prototype, methodName: string, desc: PropertyDescriptor) => {
+        const MethodDecorator = (tgt: typeof RPCHost.prototype, methodName: string, desc: PropertyDescriptor) => {
             if (!desc.value || (typeof desc.value !== 'function')) {
-                throw new Error(`RPCMethod decorator can only be used on simple method.`);
+                throw new Error(`Method decorator can only be used on simple method.`);
             }
             const finalOps: InternalRPCOptions = {
                 ..._options,
@@ -411,7 +411,11 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             this.register(finalOps);
         };
 
-        return RPCDecorator;
+        return MethodDecorator;
+    }
+
+    RPCMethod(options: Partial<RPCOptions> | string = {}) {
+        return this.Method(options);
     }
 
     Param<T>(path?: string | symbol | PropOptions<T>, conf?: PropOptions<T>) {
@@ -452,14 +456,14 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     }
 
     decorators() {
-        const RPCMethod = this.RPCMethod.bind(this);
+        const Method = this.Method.bind(this);
 
         const Param = this.Param.bind(this);
 
         const Ctx = (...args: any[]) => Param(RPC_CALL_ENVIRONMENT, ...args);
         const RPCReflect = (...args: any[]) => Param(RPC_REFLECT, ...args);
 
-        return { RPCMethod, Param, Ctx, RPCReflect };
+        return { Method, RPCMethod: Method, Param, Ctx, RPCReflect };
     }
 }
 
