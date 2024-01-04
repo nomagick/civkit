@@ -1,5 +1,6 @@
 import { RPCEnvelope, RPCHost, RPC_CALL_ENVIRONMENT, RPC_REFLECT } from './base';
 import { AsyncService } from '../lib/async-service';
+import { Defer } from '../lib/defer';
 import {
     RPCMethodNotFoundError,
     ParamValidationError,
@@ -14,6 +15,8 @@ import { RestParameters, shallowDetectRestParametersKeys } from './magic';
 import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 import { get } from 'lodash';
 import { NATIVE_CLASS_PROTOTYPES } from '../utils/lang';
+
+const NOTHING = Symbol('NOTHING');
 
 const REMOVE_COMMENTS_REGEXP = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/gm;
 export function getParamNames(func: Function): string[] {
@@ -68,9 +71,12 @@ export interface RPCReflection<T = any> {
         paramOptions: PropOptions<unknown>[];
     };
 
-    then: (resolve: (value: T) => any, reject?: (reason?: any) => any) => void;
-    catch: (reject: (reason?: any) => any) => void;
-    finally: (onfinally?: (() => any) | undefined) => void;
+    // Note that hook functions here are intentionally designed to return void instead of Promise of future events.
+    // This is to avoid creating a dead lock of promises.
+    return: (anything: any) => void;
+    then: (resolve: (value: T) => any, reject?: (reason?: any, returnedValueDespiteFailure?: any) => any) => void;
+    catch: (reject: (reason?: any, returnedValueDespiteFailure?: any) => any) => void;
+    finally: (onfinally?: ((returnedValueRegardlessOfFailure?: any) => any) | undefined) => void;
 }
 
 export abstract class AbstractRPCRegistry extends AsyncService {
@@ -203,27 +209,39 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
         const afterExecHooks: Function[] = [];
         const catchExecHooks: Function[] = [];
-        const finallyExecHooks: Function[] = [];
 
-        const addToThenHooks = (resolve?: (value: any) => void, reject?: (reason?: any) => void) => {
+        const addToThenHooks = (
+            resolve?: (value: any) => void,
+            reject?: (reason?: any, returnedValueDespiteFailure?: any) => void
+        ) => {
             if (resolve) {
-                afterExecHooks.push(resolve);
+                afterExecHooks.unshift(resolve);
             }
             if (reject) {
-                catchExecHooks.push(reject);
+                catchExecHooks.unshift(reject);
             }
         };
 
         const addToCatchHook = (reject: (reason?: any) => void) => {
             if (reject) {
-                catchExecHooks.push(reject);
+                catchExecHooks.unshift(reject);
             }
         };
-        const addToFinallyHook = (handler: () => void) => {
+
+
+        // Note finally hook is merged with then/catch hook for the sake of deferred run sequence.
+        const addToFinallyHook = (handler: (returnedValueRegardlessOfFailure?: any) => void) => {
             if (handler) {
-                finallyExecHooks.push(handler);
+                afterExecHooks.unshift(handler);
+                catchExecHooks.unshift((_err: any, despiteErrorSomethingReturned: any) => handler(despiteErrorSomethingReturned));
             }
         };
+
+        const returnDeferred = Defer<any>();
+        const reflectReturnHook = (thingToReturn: any) => {
+            returnDeferred.resolve(thingToReturn);
+        };
+        const pr = returnDeferred.promise;
 
         const params = this.fitInputToArgs(name, {
             [RPC_CALL_ENVIRONMENT]: env,
@@ -232,6 +250,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 registry: this,
                 name,
                 conf,
+                return: reflectReturnHook,
                 then: addToThenHooks,
                 catch: addToCatchHook,
                 finally: addToFinallyHook,
@@ -244,35 +263,70 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         }
 
         try {
-            const r = await func.call(conf._host, ...params);
+            const px = func.call(conf._host, ...params);
 
-            if (afterExecHooks.length) {
-                const rTHooks = [];
-                for (const x of afterExecHooks) {
-                    rTHooks.push(x(r));
-                }
-                await Promise.allSettled(rTHooks);
+            if (px instanceof Promise || (typeof px?.then === 'function')) {
+                (px as Promise<unknown>).then(async (rx) => {
+                    returnDeferred.resolve(rx);
+                    if (afterExecHooks.length) {
+                        const r = await pr;
+                        const rTHooks = [];
+                        for (const x of afterExecHooks) {
+                            rTHooks.push(x(r));
+                        }
+                        await Promise.allSettled(rTHooks);
+                    }
+                }).catch(async (err: any) => {
+                    returnDeferred.reject(err);
+                    const despiteErrorSomethingReturned = await pr.catch(() => NOTHING);
+                    if (catchExecHooks.length) {
+                        const rEHooks = [];
+                        const thing = despiteErrorSomethingReturned === NOTHING ? undefined : despiteErrorSomethingReturned;
+                        for (const x of catchExecHooks) {
+                            rEHooks.push(x(err, thing));
+                        }
+                        await Promise.allSettled(rEHooks);
+                    }
+
+                    if (despiteErrorSomethingReturned !== NOTHING) {
+                        return;
+                    }
+
+                    return Promise.reject(err);
+                });
+
+                return pr;
             }
 
-            return r;
-        } catch (err) {
-            if (catchExecHooks.length) {
-                const rEHooks = [];
-                for (const x of catchExecHooks) {
-                    rEHooks.push(x(err));
+            // From here px is not a promise
+            returnDeferred.resolve(px);
+
+            pr.then(async (r) => {
+                if (afterExecHooks.length) {
+                    const rTHooks = [];
+                    for (const x of afterExecHooks) {
+                        rTHooks.push(x(r));
+                    }
+                    await Promise.allSettled(rTHooks);
                 }
-                await Promise.allSettled(rEHooks);
+            });
+
+            return pr;
+        } catch (err) {
+            // Note this branch only executes if rpc method did not return a promise and thrown directly.
+            returnDeferred.reject(err);
+            const despiteErrorSomethingReturned = await pr.catch(() => NOTHING);
+            const thing = despiteErrorSomethingReturned === NOTHING ? undefined : despiteErrorSomethingReturned;
+            if (catchExecHooks.length) {
+                for (const x of catchExecHooks) {
+                    x(err, thing);
+                }
+            }
+            if (despiteErrorSomethingReturned !== NOTHING) {
+                return despiteErrorSomethingReturned;
             }
 
             throw err;
-        } finally {
-            if (finallyExecHooks.length) {
-                const rFHooks = [];
-                for (const x of finallyExecHooks) {
-                    rFHooks.push(x());
-                }
-                await Promise.allSettled(rFHooks);
-            }
         }
 
     }
