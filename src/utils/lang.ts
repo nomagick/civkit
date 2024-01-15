@@ -120,13 +120,18 @@ export function chainStringPropsDesc(o: object) {
             break;
         }
         const ptrIsConstructor = isConstructor(ptr);
+        const ptrIsPrototypeObject = isConstructor(ptr?.constructor);
         const keys = Object.getOwnPropertyNames(ptr);
         for (const x of keys) {
             if (keySet.has(x)) {
                 continue;
             }
             const desc = Object.getOwnPropertyDescriptor(ptr, x);
-            if (!desc || (!desc.enumerable && !ptrIsConstructor) || (ptrIsConstructor && sampleClass.hasOwnProperty(x))) {
+            if (!desc ||
+                (!desc.enumerable && !(ptrIsConstructor || ptrIsPrototypeObject)) ||
+                (ptrIsConstructor && sampleClass.hasOwnProperty(x)) ||
+                (ptrIsPrototypeObject && sampleClass.prototype.hasOwnProperty(x))
+            ) {
                 continue;
             }
             chain.push([x, desc]);
