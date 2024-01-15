@@ -228,7 +228,6 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             }
         };
 
-
         // Note finally hook is merged with then/catch hook for the sake of deferred run sequence.
         const addToFinallyHook = (handler: (returnedValueRegardlessOfFailure?: any) => void) => {
             if (handler) {
@@ -266,34 +265,32 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             const px = func.call(conf._host, ...params);
 
             if (px instanceof Promise || (typeof px?.then === 'function')) {
-                (px as Promise<unknown>).then(async (rx) => {
-                    returnDeferred.resolve(rx);
-                    if (afterExecHooks.length) {
-                        const r = await pr;
-                        const rTHooks = [];
-                        for (const x of afterExecHooks) {
-                            rTHooks.push(x(r));
+                (px as Promise<unknown>).then(
+                    async (rx) => {
+                        returnDeferred.resolve(rx);
+                        if (afterExecHooks.length) {
+                            const r = await pr;
+                            for (const x of afterExecHooks) {
+                                await x(r);
+                            }
                         }
-                        await Promise.allSettled(rTHooks);
-                    }
-                }).catch(async (err: any) => {
-                    returnDeferred.reject(err);
-                    const despiteErrorSomethingReturned = await pr.catch(() => NOTHING);
-                    if (catchExecHooks.length) {
-                        const rEHooks = [];
-                        const thing = despiteErrorSomethingReturned === NOTHING ? undefined : despiteErrorSomethingReturned;
-                        for (const x of catchExecHooks) {
-                            rEHooks.push(x(err, thing));
+                    },
+                    async (err: any) => {
+                        try {
+                            if (catchExecHooks.length) {
+                                for (const x of catchExecHooks) {
+                                    const thing = await Promise.race([pr, NOTHING]).catch(() => NOTHING);
+                                    // By design hooks here may end up in unhandled rejection/exception;
+                                    await x(err, thing === NOTHING ? undefined : thing);
+                                }
+                            }
+                        } finally {
+                            // Return deferred is on purposely delayed to reject here.
+                            // Previous catch hooks could decide to return something else.
+                            returnDeferred.reject(err);
                         }
-                        await Promise.allSettled(rEHooks);
                     }
-
-                    if (despiteErrorSomethingReturned !== NOTHING) {
-                        return;
-                    }
-
-                    return Promise.reject(err);
-                });
+                );
 
                 return pr;
             }
@@ -303,30 +300,27 @@ export abstract class AbstractRPCRegistry extends AsyncService {
 
             pr.then(async (r) => {
                 if (afterExecHooks.length) {
-                    const rTHooks = [];
                     for (const x of afterExecHooks) {
-                        rTHooks.push(x(r));
+                        // By design hooks here may end up in unhandled rejection/exception;
+                        await x(r);
                     }
-                    await Promise.allSettled(rTHooks);
                 }
             });
 
             return pr;
         } catch (err) {
             // Note this branch only executes if rpc method did not return a promise and thrown directly.
-            returnDeferred.reject(err);
-            const despiteErrorSomethingReturned = await pr.catch(() => NOTHING);
-            const thing = despiteErrorSomethingReturned === NOTHING ? undefined : despiteErrorSomethingReturned;
             if (catchExecHooks.length) {
+                const rEHooks = [];
                 for (const x of catchExecHooks) {
-                    x(err, thing);
+                    const thing = await Promise.race([pr, NOTHING]).catch(() => NOTHING);
+                    rEHooks.push(x(err, thing === NOTHING ? undefined : thing));
                 }
+                await Promise.allSettled(rEHooks);
             }
-            if (despiteErrorSomethingReturned !== NOTHING) {
-                return despiteErrorSomethingReturned;
-            }
+            returnDeferred.reject(err);
 
-            throw err;
+            return pr;
         }
 
     }
