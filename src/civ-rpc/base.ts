@@ -122,7 +122,8 @@ export class IntegrityEnvelope extends RPCEnvelope {
         if (
             draft instanceof Readable ||
             (typeof draft?.pipe === 'function') ||
-            Buffer.isBuffer(draft)
+            Buffer.isBuffer(draft) ||
+            draft instanceof Blob
         ) {
             wrapOutput = false;
         }
