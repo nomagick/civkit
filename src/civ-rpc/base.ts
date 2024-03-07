@@ -14,8 +14,8 @@ import {
     AutoCastingError, Prop, PropOptions
 } from '../lib/auto-castable';
 import { Combine } from '../lib/auto-castable-utils';
-import { marshalErrorLike } from '../utils';
-import { Readable } from 'stream';
+import { isPrimitiveLike, marshalErrorLike } from '../utils';
+import { Readable, isReadable } from 'stream';
 import { RPCOptions } from './registry';
 import _, { get } from 'lodash';
 
@@ -71,6 +71,51 @@ export async function rpcExport(sth: any, stackDepth = 0): Promise<any> {
     }
     if (typeof sth?.[RPC_MARSHAL] === 'function') {
         return rpcExport(await sth[RPC_MARSHAL](), stackDepth + 1);
+    }
+
+    return sth;
+}
+
+export async function rpcExportDeep(sth: any, stackDepth = 0): Promise<any> {
+    if (stackDepth >= 10) {
+        throw new Error('Maximum rpc export stack depth reached');
+    }
+
+    if (typeof sth?.[RPC_MARSHAL] === 'function') {
+        return rpcExport(await sth[RPC_MARSHAL](), stackDepth + 1);
+    }
+
+    if (isPrimitiveLike(sth)) {
+        return sth;
+    }
+
+    if (isReadable(sth)) {
+        return sth;
+    }
+
+    if (Array.isArray(sth)) {
+        if (Object.getPrototypeOf(sth) !== Array.prototype) {
+            // Attempted array
+            const r: any = Object.create(sth);
+            const chunks = await Promise.all(sth.map(async ([v, idx]) => [idx, await rpcExport(v)]));
+            for (const [k, v] of chunks) {
+                r[k] = v;
+            }
+
+            return r;
+        }
+
+        return Promise.all(sth.map((x) => rpcExport(x, stackDepth)));
+    }
+
+    if (sth && typeof sth === 'object') {
+        const r: any = Object.create(sth);
+        const chunks = await Promise.all(Object.entries(sth).map(async ([k, v]) => [k, await rpcExport(v)]));
+        for (const [k, v] of chunks) {
+            r[k] = v;
+        }
+
+        return r;
     }
 
     return sth;
