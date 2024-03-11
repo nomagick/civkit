@@ -6,12 +6,28 @@ import { objHashMd5B64Of } from '../lib/hash';
 export const RPC_RESULT_META_SYMBOL = Symbol('RPC result metas');
 export const RPC_MARSHAL = Symbol('RPCMarshal');
 
-export function assignMeta<T extends object, P extends object>(target: T, meta: P): T {
-    const curMeta = (target as any)[RPC_RESULT_META_SYMBOL];
+export function assignMeta<T, P extends object>(inputTarget: T, meta: P):
+    T extends object ? T : T extends { (): any } ? T : { toJSON(key?: string): T; } {
+
+    const target: any = (typeof inputTarget === 'object' || typeof inputTarget === 'function') ? inputTarget : {
+        [RPC_MARSHAL]() {
+            return inputTarget as any;
+        },
+        toJSON() {
+            return inputTarget as any;
+        }
+    };
+
+    let curMeta = (target as any)[RPC_RESULT_META_SYMBOL];
     if (!curMeta) {
         (target as any)[RPC_RESULT_META_SYMBOL] = meta;
 
         return target;
+    }
+
+    if (!target.hasOwnProperty(RPC_RESULT_META_SYMBOL)) {
+        curMeta = cloneDeep(curMeta);
+        (target as any)[RPC_RESULT_META_SYMBOL] = curMeta;
     }
 
     _.merge(curMeta, meta);
@@ -53,7 +69,7 @@ function patchTransferProtocolMeta(meta: TransferProtocolMetadata) {
 
 export function assignTransferProtocolMeta<T extends any, P extends TransferProtocolMetadata>(
     inputTarget: T, meta?: P
-): T extends object ? T : P extends object ? object : T {
+): T extends object ? T : T extends { (): any } ? T : { toJSON(key?: string): T; } {
     if (!meta) {
         return inputTarget as any;
     }
@@ -61,10 +77,13 @@ export function assignTransferProtocolMeta<T extends any, P extends TransferProt
     const target: any = (typeof inputTarget === 'object' || typeof inputTarget === 'function') ? inputTarget : {
         [RPC_MARSHAL]() {
             return inputTarget as any;
+        },
+        toJSON() {
+            return inputTarget as any;
         }
     };
 
-    const curMeta = (target as any)[RPC_TRANSFER_PROTOCOL_META_SYMBOL];
+    let curMeta = (target as any)[RPC_TRANSFER_PROTOCOL_META_SYMBOL];
     if (!curMeta) {
         patchTransferProtocolMeta(meta);
         (target as any)[RPC_TRANSFER_PROTOCOL_META_SYMBOL] = meta;
@@ -73,7 +92,8 @@ export function assignTransferProtocolMeta<T extends any, P extends TransferProt
     }
 
     if (!target.hasOwnProperty(RPC_TRANSFER_PROTOCOL_META_SYMBOL)) {
-        (target as any)[RPC_TRANSFER_PROTOCOL_META_SYMBOL] = cloneDeep(curMeta);
+        curMeta = cloneDeep(curMeta);
+        (target as any)[RPC_TRANSFER_PROTOCOL_META_SYMBOL] = curMeta;
     }
 
     patchTransferProtocolMeta(meta);
