@@ -66,9 +66,6 @@ export abstract class AbstractAsyncContext extends AsyncService {
 
     setup(base: object = {}) {
         const ctx = setupTraceCtx();
-        if (Object.getPrototypeOf(ctx) !== Object.prototype) {
-            throw new Error('Duplicate async context setup');
-        }
 
         Object.setPrototypeOf(ctx, base);
 
