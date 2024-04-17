@@ -7,11 +7,11 @@ import { stringify as formDataStringify } from 'querystring';
 import { Defer } from './defer';
 import { patchErrorCaptureStackTraceIfNeeded, stringifyErrorLike } from '../utils/lang';
 
-import type { RequestInit, Response, File } from 'undici';
 import { Readable, isReadable } from 'stream';
 import { ReadableStream } from 'stream/web';
 
-export type PromiseWithCancel<T> = Promise<T> & { cancel: () => void; };
+export type PromiseWithCancel<T> = Promise<T> & { cancel: (reason?: any) => void; };
+export type ReadableWithCancel = Readable & { cancel: (reason?: any) => void; };
 
 export interface HTTPServiceRequestOptions extends RequestInit {
     url?: string;
@@ -279,7 +279,9 @@ export abstract class HTTPService<
                 break;
             } else if (options.responseType === 'stream' && r.body) {
                 // WebStream sucks. Node stream is the real stream.
-                bodyParsed = Readable.fromWeb(r.body);
+                const abortCtrl = new AbortController();
+                bodyParsed = Readable.fromWeb(r.body, { signal: abortCtrl.signal });
+                bodyParsed.cancel = abortCtrl.abort.bind(abortCtrl);
                 break;
             }
             if (contentType?.startsWith('application/json')) {

@@ -44,8 +44,7 @@
         "pino": "^8.11.0",
         "reflect-metadata": "^0.1.13",
         "smtp-server": "^3.11.0",
-        "tld-extract": "^2.1.0",
-        "undici": "^5.22.0"
+        "tld-extract": "^2.1.0"
     },
     "peerDependencies": {
         "mongodb": "^5.2.0",
@@ -60,7 +59,7 @@
         "@types/lodash": "^4.14.194",
         "@types/mime": "^3.0.1",
         "@types/minio": "^7.0.18",
-        "@types/node": "^18.15.11",
+        "@types/node": "^20.12.7",
         "@types/node-schedule": "^2.1.0",
         "@types/nodemailer": "^6.4.7",
         "@types/smtp-server": "^3.5.7",
