@@ -341,6 +341,12 @@ export abstract class HTTPService<
         const form = new FormData();
 
         for (const [k, v, o] of multipart) {
+            if (v === null || v === undefined) {
+                continue;
+            }
+            if (o === undefined) {
+                form.append(k, v);
+            }
             form.append(k, v, o);
         }
 
