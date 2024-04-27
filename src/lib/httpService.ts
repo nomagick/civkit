@@ -346,6 +346,7 @@ export abstract class HTTPService<
             }
             if (o === undefined) {
                 form.append(k, v);
+                continue;
             }
             form.append(k, v, o);
         }
