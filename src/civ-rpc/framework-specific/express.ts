@@ -266,6 +266,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 const output = result.output;
                 clearTimeout(keepAliveTimer);
                 if (this._hack_block_unauthorized_send) {
+                    Reflect.set(res, '_header', null);
                     Reflect.deleteProperty(res, '_send');
                 }
 
