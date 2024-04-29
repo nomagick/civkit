@@ -40,6 +40,8 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
     };
     _BODY_PARSER_LIMIT = '50mb';
 
+    _hack_block_unauthorized_send = false;
+
     expressMiddlewares = [
         express.json(),
         express.urlencoded({ extended: true }),
@@ -224,6 +226,12 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
         }
 
         return async (req: express.Request, res: express.Response) => {
+            if (this._hack_block_unauthorized_send) {
+                Reflect.set(res, '_send', () => {
+                    // eslint-disable-next-line prefer-rest-params
+                    this.logger.warn(`Unauthorized send detected`, { arguments });
+                });
+            }
 
             const jointInput = {
                 ...req.params,
@@ -257,6 +265,9 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 const result = await this.call(methodName, jointInput, { env });
                 const output = result.output;
                 clearTimeout(keepAliveTimer);
+                if (this._hack_block_unauthorized_send) {
+                    Reflect.deleteProperty(res, '_send');
+                }
 
                 // eslint-disable-next-line @typescript-eslint/no-magic-numbers
                 if (res.statusCode === 404) {
