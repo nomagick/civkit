@@ -229,7 +229,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             if (this._hack_block_unauthorized_send) {
                 Reflect.set(res, '_send', () => {
                     // eslint-disable-next-line prefer-rest-params
-                    this.logger.warn(`Unauthorized send detected, headers: ${(res as any)._headers}`, { arguments, headers: (res as any)._headers });
+                    this.logger.warn(`Unauthorized send detected, headers: ${JSON.stringify((res as any)._headers)}`, { arguments, headers: (res as any)._headers });
                 });
             }
 
