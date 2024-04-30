@@ -227,10 +227,12 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
 
         return async (req: express.Request, res: express.Response) => {
             if (this._hack_block_unauthorized_send) {
-                Reflect.set(res, '_send', () => {
+                const hdl = () => {
                     // eslint-disable-next-line prefer-rest-params
                     this.logger.warn(`Unauthorized send detected, headers: ${JSON.stringify((res as any)._headers)}`, { arguments, headers: (res as any)._headers });
-                });
+                };
+                Reflect.set(res, '_send', hdl);
+                Reflect.set(res, 'end', hdl);
             }
 
             const jointInput = {
@@ -268,6 +270,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 if (this._hack_block_unauthorized_send) {
                     Reflect.set(res, '_header', null);
                     Reflect.deleteProperty(res, '_send');
+                    Reflect.deleteProperty(res, 'end');
                 }
 
                 // eslint-disable-next-line @typescript-eslint/no-magic-numbers
