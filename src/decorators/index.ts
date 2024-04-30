@@ -11,3 +11,4 @@ export { retry, patchRetry, TRIES_SYMBOL } from './retry';
 export { serialOperation } from './serial-op';
 
 export { throttle } from './throttle';
+export { maxConcurrency } from './max-concurrency';
