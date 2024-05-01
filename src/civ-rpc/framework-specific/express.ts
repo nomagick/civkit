@@ -232,6 +232,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     this.logger.warn(`Unauthorized send detected, headers: ${JSON.stringify((res as any)._headers)}`, { arguments, headers: (res as any)._headers });
                 };
                 Reflect.set(res, '_send', hdl);
+                Reflect.set(res, 'send', hdl);
                 Reflect.set(res, 'end', hdl);
             }
 
@@ -270,6 +271,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 if (this._hack_block_unauthorized_send) {
                     Reflect.set(res, '_header', null);
                     Reflect.deleteProperty(res, '_send');
+                    Reflect.deleteProperty(res, 'send');
                     Reflect.deleteProperty(res, 'end');
                 }
 
