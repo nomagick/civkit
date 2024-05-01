@@ -353,6 +353,11 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     }
                 }
             } catch (err: any) {
+                if (this._hack_block_unauthorized_send) {
+                    Reflect.deleteProperty(res, '_send');
+                    Reflect.deleteProperty(res, 'send');
+                    Reflect.deleteProperty(res, 'end');
+                }
                 // Note that the shim controller doesn't suppose to throw any error.
                 clearTimeout(keepAliveTimer);
                 this.logger.warn(`Error serving incoming request`, { brief: this.briefExpressRequest(req, res), err: marshalErrorLike(err) });
