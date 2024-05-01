@@ -94,8 +94,11 @@ export abstract class AsyncService extends EventEmitter {
             this.__status = 'pending';
 
             this.__serviceReady = new Promise((_resolve, _reject) => {
-                this.once('ready', () => _resolve(this));
                 this.once('error', _reject);
+                this.once('ready', () => {
+                    _resolve(this);
+                    this.removeListener('error', _reject);
+                });
                 this.dependencyReady().catch((err) => this.emit('error', err));
             });
 
