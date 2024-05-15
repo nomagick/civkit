@@ -7,7 +7,8 @@ import {
     AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL, AUTOCASTABLE_OPTIONS_SYMBOL,
     isAutoCastableClass,
     PropOptions,
-    describeAnonymousValidateFunction
+    describeAnonymousValidateFunction,
+    isZodType
 } from '../lib/auto-castable';
 import {
     chainEntriesSimple as chainEntries, htmlEscape, isConstructor, isPrimitiveType
@@ -471,7 +472,7 @@ export class OpenAPIManager {
                             openAPIDesc,
                             _.omit(schema, 'title', 'description'),
                             {
-                                title: `${input.name}&${schema.title}`,
+                                title: schema.title ? `${input.name}&${schema.title}` : `${input.name}`,
                             }
                         );
                     }
@@ -537,6 +538,10 @@ export class OpenAPIManager {
                     shouldAddToPrimitives = true;
                 }
                 break;
+            } else if (isZodType(input)) {
+                if (typeof input.openai === 'function') {
+                    final = input.openai({ unionOneOf: true });
+                }
             } else if (input?.prototype instanceof Readable) {
                 final = {
                     type: 'string', format: 'binary',

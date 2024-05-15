@@ -98,7 +98,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
         query: Filter<T>,
         options?: FindOneAndDeleteOptions & { bypassDocumentValidation?: boolean | undefined; }
     ): Promise<T | undefined> {
-        const r = await this.collection.findOneAndDelete(query, options!);
+        const r = await this.collection.findOneAndDelete(query, { ...options, includeResultMetadata: true });
 
         return (r.value as T) || undefined;
     }
@@ -120,7 +120,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
         update: UpdateFilter<T> | T,
         options?: FindOneAndUpdateOptions,
     ) {
-        const r = await this.collection.findOneAndUpdate(filter, update, { returnDocument: 'after', ...options });
+        const r = await this.collection.findOneAndUpdate(filter, update, { returnDocument: 'after', ...options, includeResultMetadata: true });
 
         if (!r.ok) {
             throw r.lastErrorObject;
@@ -147,7 +147,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
         const r = await this.collection.findOneAndUpdate(
             filter,
             update,
-            { upsert: true, returnDocument: 'after', ...options });
+            { upsert: true, returnDocument: 'after', ...options, includeResultMetadata: true });
 
         if (!r.ok) {
             throw r.lastErrorObject;
@@ -164,7 +164,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
         const r = await this.collection.findOneAndReplace(
             filter,
             _.omit(replace, '_id') as WithoutId<T>,
-            { upsert: true, returnDocument: 'after', ...options });
+            { upsert: true, returnDocument: 'after', ...options, includeResultMetadata: true });
 
         if (!r.ok) {
             throw r.lastErrorObject;
@@ -219,7 +219,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
         const r = await this.collection.findOneAndUpdate(
             { _id } as Filter<T>,
             { $set: vectorize2({ ...data, updatedAt: now }), $setOnInsert: { createdAt: now } } as any,
-            { upsert: true, returnDocument: 'after', ...options }
+            { upsert: true, returnDocument: 'after', ...options, includeResultMetadata: true }
         );
         if (!r.ok) {
             throw r.lastErrorObject;
@@ -232,7 +232,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
         const r = await this.collection.findOneAndUpdate(
             { _id } as Filter<T>,
             { $set: { ..._.omit(data, '_id'), updatedAt: now }, $setOnInsert: { createdAt: now } } as any,
-            { upsert: true, returnDocument: 'after', ...options }
+            { upsert: true, returnDocument: 'after', ...options, includeResultMetadata: true }
         );
         if (!r.ok) {
             throw r.lastErrorObject;
@@ -324,6 +324,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
                 upsert: true,
                 returnDocument: 'after',
                 ...options,
+                includeResultMetadata: true
             });
 
         if (!r.ok) {

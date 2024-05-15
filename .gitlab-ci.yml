@@ -32,3 +32,5 @@ tskit-publish:
         - npm run publish:latest
     dependencies:
         - tskit-build-pub
+    only:
+        - master

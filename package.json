@@ -1,6 +1,6 @@
 {
     "name": "civkit",
-    "version": "0.6.5",
+    "version": "0.7.0",
     "description": "Sets of tools, in typescript",
     "main": "index.js",
     "types": "index.d.ts",
@@ -44,11 +44,13 @@
         "pino": "^8.11.0",
         "reflect-metadata": "^0.1.13",
         "smtp-server": "^3.11.0",
-        "tld-extract": "^2.1.0"
+        "tld-extract": "^2.1.0",
+        "zod": "*",
+        "zod-openai": "*"
     },
     "peerDependencies": {
-        "mongodb": "^5.2.0",
-        "tsyringe": "^4.7.0"
+        "mongodb": "^6",
+        "tsyringe": "^4"
     },
     "devDependencies": {
         "@types/busboy": "^1.5.0",

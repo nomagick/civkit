@@ -3,6 +3,8 @@ import { isConstructor, chainEntriesSimple } from '../utils/lang';
 
 import _ from 'lodash';
 
+import type { ZodType } from 'zod';
+
 export const AUTO_CONSTRUCTOR_SYMBOL = Symbol('AutoConstructor');
 export const AUTOCASTABLE_OPTIONS_SYMBOL = Symbol('AutoCastable options');
 export const AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL = Symbol('AutoCastable additional options');
@@ -184,6 +186,22 @@ export function isAutoCastableClass(cls: any): boolean {
     return false;
 }
 
+// Duck typing check for Zod types. To avoid direct dependency on Zod.
+export function isZodType(cls: any): boolean {
+    if (!cls || typeof cls !== 'object') {
+        return false;
+    }
+    if (!Object.hasOwn(cls, '_def')) {
+        return false;
+    }
+
+    if (typeof cls.parse !== 'function') {
+        return false;
+    }
+
+    return true;
+}
+
 export class AutoCastingError extends Error {
     path: string;
     desc?: string;
@@ -255,7 +273,19 @@ export function castToType(ensureTypes: any[], inputProp: any) {
                 lastErr = err;
                 continue;
             }
+        } else if (isZodType(typeShouldBe)) {
+            // Zod types
+            const zodType = typeShouldBe as ZodType;
+            const zodParsed = zodType.safeParse(inputProp);
 
+            if (!zodParsed.success) {
+                lastErr = zodParsed.error;
+                continue;
+            }
+
+            val = zodParsed.data;
+
+            break;
         } else if (typeShouldBe instanceof Set) {
             // Enums would end up here
             if (!typeShouldBe.has(inputProp)) {
@@ -460,6 +490,10 @@ export function inputSingle<T>(
         if (t === null) {
             return 'null';
         }
+        if (isZodType(t)) {
+            return `ZodType`;
+        }
+
         return (t.name ? t.name : t).toString();
     });
 

@@ -109,7 +109,7 @@ export function Combine<T extends Constructor<any>[]>(
             writable: false,
         },
         [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]: {
-            value: reverseObjectKeys(extOpts),
+            value: extOpts,
             configurable: true,
             enumerable: false,
             writable: false,
@@ -165,7 +165,7 @@ export function Partial<T extends typeof AutoCastableMetaClass>(
             writable: false,
         },
         [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]: {
-            value: reverseObjectKeys(extOpts),
+            value: extOpts,
             configurable: true,
             enumerable: false,
             writable: false,
@@ -208,7 +208,7 @@ export function Required<T extends typeof AutoCastableMetaClass>(
             writable: false,
         },
         [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]: {
-            value: reverseObjectKeys(extOpts),
+            value: extOpts,
             configurable: true,
             enumerable: false,
             writable: false,
@@ -253,7 +253,7 @@ export function Omit<T extends typeof AutoCastableMetaClass, P extends (keyof In
             writable: false,
         },
         [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]: {
-            value: reverseObjectKeys(extOpts),
+            value: extOpts,
             configurable: true,
             enumerable: false,
             writable: false,
@@ -292,7 +292,7 @@ export function Pick<T extends typeof AutoCastableMetaClass, P extends (keyof In
             writable: false,
         },
         [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]: {
-            value: reverseObjectKeys(extOpts),
+            value: extOpts,
             configurable: true,
             enumerable: false,
             writable: false,
