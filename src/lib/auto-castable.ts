@@ -3,7 +3,7 @@ import { isConstructor, chainEntriesSimple } from '../utils/lang';
 
 import _ from 'lodash';
 
-import type { ZodType } from 'zod';
+import type { ZodArray, ZodIntersection, ZodObject, ZodType, ZodUnion } from 'zod';
 
 export const AUTO_CONSTRUCTOR_SYMBOL = Symbol('AutoConstructor');
 export const AUTOCASTABLE_OPTIONS_SYMBOL = Symbol('AutoCastable options');
@@ -25,7 +25,7 @@ export type AdditionalPropOptions<T> = Pick<
 export type InternalAdditionalPropOptions<T> = AdditionalPropOptions<T> & Pick<PropOptions<T>,
     | 'type'
     | 'arrayOf'
->;
+> & { zod?: ZodObject<any> | ZodArray<any> | ZodUnion<any> | ZodIntersection<any, any> };
 
 export type Constructor<T> = { new(...args: any[]): T; };
 export type Constructed<T> = T extends Partial<infer U> ? U : T extends object ? T : object;
@@ -45,15 +45,12 @@ export type AutoConstructorType<T extends Constructor<unknown>> =
 /**
  * Retrieve and verify an object based on the props (required, type, default and so on)
  */
-export function autoConstructor<T extends AutoCastableMetaClass>(
+export function autoConstructor<T extends object>(
     this: Constructor<T>, input: any, ...args: ConstructorParameters<typeof this>
 ): T;
-export function autoConstructor<T extends AutoCastableMetaClass>(
-    this: Constructor<Partial<T>>, input: any, ...args: ConstructorParameters<typeof this>
-): T;
-export function autoConstructor<T, U extends Constructor<AutoCastableMetaClass>>(
+export function autoConstructor<T, U extends Constructor<object>>(
     this: U, input: T, ...args: ConstructorParameters<typeof this>
-): Constructed<T>;
+): T;
 export function autoConstructor(
     this: typeof AutoCastableMetaClass, input: object, ...args: unknown[]
 ) {

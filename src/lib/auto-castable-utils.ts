@@ -2,21 +2,22 @@ import _ from 'lodash';
 import {
     AdditionalPropOptions, Also, AutoCastable, AutoCastableMetaClass,
     AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL, AUTOCASTABLE_OPTIONS_SYMBOL,
-    AutoConstructor, castToType, Constructor, Prop, PropOptions, __patchTypesEnumToSet
+    AutoConstructor, castToType, Constructor, Prop, PropOptions, __patchTypesEnumToSet, InternalAdditionalPropOptions, isZodType
 } from './auto-castable';
 import { chainEntriesSimple, chainEntriesDesc, isPrimitiveType, reverseObjectKeys } from '../utils';
+import type { ZodIntersection, ZodObject } from 'zod';
 
 export type MangledConstructor<T extends Constructor<any>, F> = {
     [k in keyof T]: T[k];
 } & Constructor<F>;
 
-export type Combine<T extends Constructor<any>[]> =
+export type Combine<T extends Function[]> =
     T extends [infer A, ...infer B] ?
     ((A extends Constructor<any> ? A : never) &
         (B extends Constructor<any>[] ? Combine<B> : never)) :
     (T extends readonly [infer D] ? (D extends Constructor<any> ? D : never) : unknown);
 
-export function Combine<T extends Constructor<any>[]>(
+export function Combine<T extends typeof AutoCastableMetaClass[]>(
     ...autoCastableClasses: T
 ): Combine<T> {
     const argArr = autoCastableClasses;
@@ -30,8 +31,8 @@ export function Combine<T extends Constructor<any>[]>(
     const arr = argArr.reverse();
 
     const opts: { [k: string | symbol]: PropOptions<unknown>; } = {};
-    const extOpts: AdditionalPropOptions<unknown> & { type?: any; arrayOf?: any; } = {};
-    class NaivelyMergedClass extends AutoCastableMetaClass {
+    const extOpts: InternalAdditionalPropOptions<unknown> & { type?: any; arrayOf?: any; } = {};
+    class NaivelyMergedClass extends AutoCastable {
         constructor(...args: any[]) {
             super();
             for (const cls of arr) {
@@ -49,7 +50,7 @@ export function Combine<T extends Constructor<any>[]>(
         }
         Object.assign(opts, reverseObjectKeys(partialOpts));
 
-        const sourceOpts: any = (cls as any)?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {};
+        const sourceOpts: InternalAdditionalPropOptions<unknown> = (cls as any)?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {};
         _.merge(extOpts, _.cloneDeep(_.omit(sourceOpts, 'type', 'arrayOf', 'dictOf', 'openapi', 'desc')));
         if (sourceOpts.desc) {
             extOpts.desc = extOpts.desc ? `${extOpts.desc}\n\n${sourceOpts.desc}` : sourceOpts.desc;
@@ -78,6 +79,18 @@ export function Combine<T extends Constructor<any>[]>(
                 extOpts[prop] = _.uniq([...extOpts[prop], ...arrOpts]);
             } else {
                 extOpts[prop] = _.uniq([extOpts[prop], ...arrOpts]);
+            }
+        }
+
+        if (sourceOpts.zod) {
+            if (extOpts.zod) {
+                if ((extOpts.zod as ZodObject<any>).shape && (sourceOpts.zod as ZodObject<any>).shape) {
+                    extOpts.zod = (extOpts.zod as ZodObject<any>).merge(sourceOpts.zod as ZodObject<any>);
+                } else {
+                    extOpts.zod = (extOpts.zod as ZodIntersection<any, any>).and(sourceOpts.zod);
+                }
+            } else {
+                extOpts.zod = sourceOpts.zod;
             }
         }
 
@@ -147,19 +160,17 @@ export function Partial<T extends typeof AutoCastableMetaClass>(
         return partialTrackMap.get(cls) as any;
     }
     const opts: { [k: string | symbol]: PropOptions<unknown>; } = {};
-    const extOpts: AdditionalPropOptions<unknown> = {};
+    const extOpts: InternalAdditionalPropOptions<unknown> = {};
     abstract class PartialClass extends cls { }
 
-    const partialOpts: any = {};
     for (const [k, v] of chainEntriesSimple(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
-        partialOpts[k] = { ...v, partOf: cls.name, required: false };
+        opts[k] = { ...v, partOf: cls.name, required: false };
     }
-    Object.assign(opts, reverseObjectKeys(partialOpts));
     Object.assign(extOpts, cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {});
 
     Object.defineProperties(PartialClass, {
         [AUTOCASTABLE_OPTIONS_SYMBOL]: {
-            value: reverseObjectKeys(opts),
+            value: opts,
             configurable: true,
             enumerable: false,
             writable: false,
@@ -171,6 +182,9 @@ export function Partial<T extends typeof AutoCastableMetaClass>(
             writable: false,
         },
     });
+    if (extOpts.zod && isZodType(extOpts.zod) && (extOpts.zod as ZodObject<any>).shape) {
+        extOpts.zod = (extOpts.zod as ZodObject<any>).partial();
+    }
 
     Object.defineProperty(PartialClass, 'name', {
         value: `Partial<${cls.name}>`,
@@ -190,19 +204,17 @@ export function Required<T extends typeof AutoCastableMetaClass>(
         return requiredTrackMap.get(cls) as any;
     }
     const opts: { [k: string | symbol]: PropOptions<unknown>; } = {};
-    const extOpts: AdditionalPropOptions<unknown> = {};
+    const extOpts: InternalAdditionalPropOptions<unknown> = {};
     abstract class RequiredClass extends cls { }
 
-    const partialOpts: any = {};
     for (const [k, v] of chainEntriesSimple(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
-        partialOpts[k] = { ...v, partOf: cls.name, required: true };
+        opts[k] = { ...v, partOf: cls.name, required: true };
     }
-    Object.assign(opts, reverseObjectKeys(partialOpts));
     Object.assign(extOpts, cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {});
 
     Object.defineProperties(RequiredClass, {
         [AUTOCASTABLE_OPTIONS_SYMBOL]: {
-            value: reverseObjectKeys(opts),
+            value: opts,
             configurable: true,
             enumerable: false,
             writable: false,
@@ -214,6 +226,10 @@ export function Required<T extends typeof AutoCastableMetaClass>(
             writable: false,
         },
     });
+
+    if (extOpts.zod && isZodType(extOpts.zod) && (extOpts.zod as ZodObject<any>).shape) {
+        extOpts.zod = (extOpts.zod as ZodObject<any>).required();
+    }
 
     Object.defineProperty(RequiredClass, 'name', {
         value: `Required<${cls.name}>`,
@@ -232,22 +248,20 @@ export function Omit<T extends typeof AutoCastableMetaClass, P extends (keyof In
         return cls as any;
     }
     const opts: { [k: string | symbol]: PropOptions<unknown>; } = {};
-    const extOpts: AdditionalPropOptions<unknown> = {};
+    const extOpts: InternalAdditionalPropOptions<unknown> = {};
     abstract class PartialClass extends cls { }
 
-    const partialOpts: any = {};
     for (const [k, v] of chainEntriesSimple(cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {})) {
         if (props.includes(k as any)) {
             continue;
         }
-        partialOpts[k] = { ...v, partOf: cls.name };
+        opts[k] = { ...v, partOf: cls.name };
     }
-    Object.assign(opts, reverseObjectKeys(partialOpts));
     Object.assign(extOpts, cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {});
 
     Object.defineProperties(PartialClass, {
         [AUTOCASTABLE_OPTIONS_SYMBOL]: {
-            value: reverseObjectKeys(opts),
+            value: opts,
             configurable: true,
             enumerable: false,
             writable: false,
@@ -259,6 +273,14 @@ export function Omit<T extends typeof AutoCastableMetaClass, P extends (keyof In
             writable: false,
         },
     });
+
+    if (extOpts.zod && isZodType(extOpts.zod) && (extOpts.zod as ZodObject<any>).shape) {
+        const p: Record<typeof props[number], true> = {} as any;
+        for (const x of props) {
+            p[x] = true;
+        }
+        extOpts.zod = (extOpts.zod as ZodObject<any>).omit(props as any);
+    }
 
     Object.defineProperty(PartialClass, 'name', {
         value: `Omit<${cls.name}, ${props.join('|')}>`,
@@ -275,18 +297,22 @@ export function Pick<T extends typeof AutoCastableMetaClass, P extends (keyof In
         return cls as any;
     }
     const opts: { [k: string | symbol]: PropOptions<unknown>; } = {};
-    const extOpts: AdditionalPropOptions<unknown> = {};
+    const extOpts: InternalAdditionalPropOptions<unknown> = {};
     abstract class PartialClass extends cls { }
 
     const sourceOpts = cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || {};
     for (const k of props) {
-        opts[k] = { ...sourceOpts[k], partOf: cls.name };
+        const sourceOpt = sourceOpts[k];
+        if (!sourceOpt) {
+            continue;
+        }
+        opts[k] = { ...sourceOpt, partOf: cls.name };
     }
     Object.assign(extOpts, cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL] || {});
 
     Object.defineProperties(PartialClass, {
         [AUTOCASTABLE_OPTIONS_SYMBOL]: {
-            value: reverseObjectKeys(opts),
+            value: opts,
             configurable: true,
             enumerable: false,
             writable: false,
@@ -298,6 +324,14 @@ export function Pick<T extends typeof AutoCastableMetaClass, P extends (keyof In
             writable: false,
         },
     });
+
+    if (extOpts.zod && isZodType(extOpts.zod) && (extOpts.zod as ZodObject<any>).shape) {
+        const p: Record<typeof props[number], true> = {} as any;
+        for (const x of props) {
+            p[x] = true;
+        }
+        extOpts.zod = (extOpts.zod as ZodObject<any>).pick(props as any);
+    }
 
     Object.defineProperty(PartialClass, 'name', {
         value: `Pick<${cls.name}, ${props.join('|')}>`,
@@ -344,7 +378,7 @@ export function ArrayOf<P extends (Constructor<any> | object)[]>(...classes: P):
     const patchedClasses = __patchTypesEnumToSet(classes);
 
     @Also({ arrayOf: classes })
-    class ArrayClass extends AutoCastableMetaClass {
+    class ArrayClass extends AutoCastable {
         constructor() {
             super();
 
@@ -352,7 +386,7 @@ export function ArrayOf<P extends (Constructor<any> | object)[]>(...classes: P):
         }
 
         @AutoConstructor
-        static from(input: any) {
+        static override from(input: any) {
             if (input?.[Symbol.iterator]) {
                 if (typeof input === 'string') {
                     return [castToType(patchedClasses, input)];
@@ -405,9 +439,9 @@ export function OneOf<T extends Constructor<any>[]>(...classes: T): Constructor<
     const patchedClasses = __patchTypesEnumToSet(classes);
 
     @Also({ type: classes })
-    class OneOfClass extends AutoCastableMetaClass {
+    class OneOfClass extends AutoCastable {
         @AutoConstructor
-        static from(input: any) {
+        static override from(input: any) {
             return castToType(patchedClasses, input);
         }
     }
@@ -478,9 +512,9 @@ export function describeType(x: any) {
 export type JSONPrimitive = string | number | boolean | undefined | null;
 export const JSONPrimitive = function () {
     @Also({ type: [String, Number, Boolean, undefined, null] })
-    class _JSONPrimitive extends AutoCastableMetaClass {
+    class _JSONPrimitive extends AutoCastable {
         @AutoConstructor
-        static from(input: any) {
+        static override from(input: any) {
             if (typeof input === 'object') {
                 if (input !== null) {
                     return `${input}`;
@@ -497,3 +531,4 @@ export const JSONPrimitive = function () {
 
     return _JSONPrimitive as any as JSONPrimitive;
 }();
+

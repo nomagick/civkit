@@ -19,6 +19,7 @@ export * from './file-storage';
 
 export * from './auto-castable';
 export * from './auto-castable-utils';
+export * from './auto-castable-utils-zod';
 
 export * from './progress-stream';
 export * from './schedule-service';

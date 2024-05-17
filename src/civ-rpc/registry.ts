@@ -8,7 +8,7 @@ import {
 } from './errors';
 import type { container as DIContainer } from 'tsyringe';
 import {
-    AutoCastableMetaClass, AutoCastingError,
+    AutoCastingError,
     inputSingle, isAutoCastableClass, PropOptions, __patchPropOptionsEnumToSet
 } from '../lib/auto-castable';
 import { RestParameters, shallowDetectRestParametersKeys } from './magic';
@@ -37,7 +37,7 @@ export interface RPCOptions {
     returnType?: Function | Function[];
     returnArrayOf?: Function | Function[];
     returnDictOf?: Function | Function[];
-    returnMetaType?: (typeof AutoCastableMetaClass) | (typeof AutoCastableMetaClass)[];
+    returnMetaType?: Function | Function[];
     desc?: string;
     markdown?: string;
     ext?: { [k: string]: any; };

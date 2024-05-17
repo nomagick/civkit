@@ -10,7 +10,7 @@ import {
     TPM
 } from './meta';
 import {
-    Also, AutoCastable, AutoCastableMetaClass,
+    Also, AutoCastable,
     AutoCastingError, Prop, PropOptions
 } from '../lib/auto-castable';
 import { Combine } from '../lib/auto-castable-utils';
@@ -212,7 +212,7 @@ export class IntegrityEnvelope extends RPCEnvelope {
                     primitive: true
                 }
             })
-            class WrappedOutput extends AutoCastableMetaClass {
+            class WrappedOutput extends AutoCastable {
                 @Prop({
                     type: Number, default: 200, required: true,
                     desc: 'Envelope code.\n\nMirror of HTTP status code',
@@ -237,7 +237,7 @@ export class IntegrityEnvelope extends RPCEnvelope {
                 @Prop({
                     type:
                         Array.isArray(rpcOptions.returnMetaType) ?
-                            Combine(...rpcOptions.returnMetaType) :
+                            Combine(...rpcOptions.returnMetaType as any) :
                             rpcOptions.returnMetaType,
                     desc: 'The metadata that the payload sometimes came with',
                     partOf: envelopeClassName,
@@ -281,7 +281,7 @@ export class IntegrityEnvelope extends RPCEnvelope {
                     primitive: true
                 }
             })
-            class WrappedOutput extends AutoCastableMetaClass {
+            class WrappedOutput extends AutoCastable {
 
                 protected get [RPC_TRANSFER_PROTOCOL_META_SYMBOL]() {
                     return {
@@ -316,7 +316,7 @@ export class IntegrityEnvelope extends RPCEnvelope {
                 @Prop({
                     type:
                         Array.isArray(rpcOptions.returnMetaType) ?
-                            Combine(...rpcOptions.returnMetaType) :
+                            Combine(...rpcOptions.returnMetaType as any) :
                             rpcOptions.returnMetaType,
                     partOf: envelopeClassName,
                     desc: 'The metadata that the payload sometimes came with',

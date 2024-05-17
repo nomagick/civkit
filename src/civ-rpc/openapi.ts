@@ -282,7 +282,7 @@ export class OpenAPIManager {
                 ...this.primitiveSchemaMap.get(inputClass)
             };
         }
-        if (!isConstructor(inputClass) && !(inputClass instanceof Set)) {
+        if (!isConstructor(inputClass) && !(inputClass instanceof Set) && !isZodType(inputClass)) {
             return undefined;
         }
         const theMap = direction === 'input' ? this.classToSchemaMapInput : this.classToSchemaMapOutput;
@@ -606,7 +606,6 @@ export class OpenAPIManager {
         direction: 'input' | 'output' = 'input',
         useRef: boolean = true
     ) {
-
         if (Array.isArray(input)) {
             if (input.length === 1) {
                 return useRef ?
