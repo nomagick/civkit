@@ -5,7 +5,7 @@ import {
     CountDocumentsOptions, DeleteOptions, Document, Filter,
     FindOneAndDeleteOptions, FindOneAndReplaceOptions, FindOneAndUpdateOptions,
     FindOptions, InsertOneOptions, MatchKeysAndValues,
-    OptionalId, UpdateFilter, UpdateOptions, WithTransactionCallback, WithoutId, CollectionInfo
+    OptionalId, UpdateFilter, UpdateOptions, WithTransactionCallback, WithoutId, CollectionInfo, CreateIndexesOptions, IndexSpecification, CreateCollectionOptions
 } from 'mongodb';
 
 import { AsyncService } from '../lib/async-service';
@@ -21,7 +21,12 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
     abstract mongo: AbstractMongoDB;
     abstract logger: LoggerInterface;
 
-    abstract typeclass?: { new(): T; };
+    typeclass?: { new(): T; };
+
+    indexes?: Array<
+        readonly [string, IndexSpecification] |
+        readonly [string, IndexSpecification, Omit<CreateIndexesOptions, 'name' | 'session'>]
+    >;
 
     collection!: Collection<T>;
 
@@ -42,11 +47,29 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async createIndexes(_options?: { session?: ClientSession; }) {
-        this.logger.warn(`CreateIndexes for ${this.constructor.name}(${this.collectionName}) is not implemented`);
+    async createIndexes(allIndexesOptions?: Partial<CreateIndexesOptions>) {
+        if (!this.indexes?.length) {
+            this.logger.warn(`No indexes defined for ${this.constructor.name}(${this.collectionName})`);
+            return;
+        }
+
+        let i = 0;
+        for (const [name, spec, options] of this.indexes) {
+            if (await this.collection.indexExists(name)) {
+                this.logger.info(`Index ${name} for ${this.constructor.name}(${this.collectionName}) already exists`);
+                continue;
+            }
+
+            this.logger.info(`Creating index ${name} for ${this.constructor.name}(${this.collectionName})...`);
+            await this.collection.createIndex(spec, { ...allIndexesOptions, ...options, name });
+            this.logger.info(`Index created: ${name} for ${this.constructor.name}(${this.collectionName})`);
+            i++;
+        }
+
+        this.logger.info(`Created ${i} indexes for ${this.constructor.name}(${this.collectionName})`);
     }
 
-    async ensureCollection(options?: { session?: ClientSession; }) {
+    async ensureCollection(options?: Partial<CreateCollectionOptions>) {
         this.logger.info(`Ensuring collection ${this.constructor.name}(${this.collectionName})...`);
         const r = await this.mongo.db.listCollections(
             { name: this.collectionName },
@@ -60,7 +83,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
 
         if (r.length <= 0) {
             this.logger.warn(`Creating collection ${this.constructor.name}(${this.collectionName})...`);
-            await this.mongo.db.createCollection(this.collectionName);
+            await this.mongo.db.createCollection(this.collectionName, options);
 
             this.logger.info(`Collection created: ${this.constructor.name}(${this.collectionName})`);
         }

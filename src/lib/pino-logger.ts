@@ -16,8 +16,8 @@ class PinoTargetStream extends Writable {
 }
 
 export abstract class AbstractPinoLogger extends AbstractLogger {
-    abstract logger: pino.Logger;
     abstract loggerOptions: pino.LoggerOptions;
+    logger!: pino.Logger;
     _targetStream!: PinoTargetStream;
 
     override init(stream?: pino.DestinationStream) {

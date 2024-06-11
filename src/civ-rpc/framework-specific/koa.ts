@@ -35,9 +35,9 @@ export type ParsedContext = Context & {
 };
 
 export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
-    abstract logger: LoggerInterface;
-    abstract tempFileManager: AbstractTempFileManger;
-    abstract ctxMgr: AbstractAsyncContext;
+    protected abstract logger: LoggerInterface;
+    protected abstract tempFileManager: AbstractTempFileManger;
+    protected abstract ctxMgr: AbstractAsyncContext;
     abstract title: string;
     logoUrl?: string;
 
