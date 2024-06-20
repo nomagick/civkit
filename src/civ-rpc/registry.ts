@@ -64,17 +64,20 @@ export interface InternalRPCOptions extends RPCOptions {
 
 export const PICK_RPC_PARAM_DECORATION_META_KEY = 'PickPram';
 
-export interface RPCReflection<T = any> {
+export interface RPCReflection<I = Record<string, any>, O = any, ENV = Record<string, any>> {
     registry: AbstractRPCRegistry;
     name: string;
     conf: InternalRPCOptions & {
         paramOptions: PropOptions<unknown>[];
     };
 
+    env: ENV;
+    input: I;
+
     // Note that hook functions here are intentionally designed to return void instead of Promise of future events.
     // This is to avoid creating a dead lock of promises.
     return: (anything: any) => void;
-    then: (resolve: (value: T) => any, reject?: (reason?: any, returnedValueDespiteFailure?: any) => any) => void;
+    then: (resolve: (value: O) => any, reject?: (reason?: any, returnedValueDespiteFailure?: any) => any) => void;
     catch: (reject: (reason?: any, returnedValueDespiteFailure?: any) => any) => void;
     finally: (onfinally?: ((returnedValueRegardlessOfFailure?: any) => any) | undefined) => void;
 }
@@ -249,6 +252,8 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 registry: this,
                 name,
                 conf,
+                input,
+                env,
                 return: reflectReturnHook,
                 then: addToThenHooks,
                 catch: addToCatchHook,
