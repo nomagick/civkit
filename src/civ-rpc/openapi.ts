@@ -285,6 +285,13 @@ export class OpenAPIManager {
         if (!isConstructor(inputClass) && !(inputClass instanceof Set) && !isZodType(inputClass)) {
             return undefined;
         }
+        if (inputClass.prototype instanceof String) {
+            return { type: 'string', format: inputClass.name };
+        } else if (inputClass.prototype instanceof Number) {
+            return { type: 'number' };
+        } else if (inputClass.prototype instanceof Boolean) {
+            return { type: 'boolean' };
+        }
         const theMap = direction === 'input' ? this.classToSchemaMapInput : this.classToSchemaMapOutput;
         if (!theMap.has(inputClass)) {
             // Placeholder to break circular reference
