@@ -2,13 +2,21 @@ import mime from 'mime';
 
 import _ from 'lodash';
 
-import { LibmagicIO } from 'libmagic-ffi';
+import type { LibmagicIO } from 'libmagic-ffi';
 
-const mimeDetector = new LibmagicIO({
-    returnContentType: true,
-    followSymlink: true,
-    noCheckCompressedFiles: true,
-});
+let mimeDetector: LibmagicIO | undefined;
+
+function readyMimeDetector() {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { LibmagicIO } = require('libmagic-ffi');
+    mimeDetector ??= new LibmagicIO({
+        returnContentType: true,
+        followSymlink: true,
+        noCheckCompressedFiles: true,
+    });
+
+    return mimeDetector!;
+}
 
 export const CUSTOM_MIME: { [key: string]: string[]; } = {};
 
@@ -44,11 +52,11 @@ export function extOfMime(mimeType: string) {
 }
 
 export function detectFile(path: string) {
-    return mimeDetector.detectFile(path);
+    return readyMimeDetector().detectFile(path);
 }
 
 export function detectBuff(buff: Buffer) {
-    return mimeDetector.detectBuffer(buff);
+    return readyMimeDetector().detectBuffer(buff);
 }
 
 export async function mimeOf(data: string | Buffer) {
