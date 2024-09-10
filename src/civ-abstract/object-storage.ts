@@ -138,7 +138,7 @@ export abstract class AbstractObjectStorageService extends AsyncService {
 
                 if (objBuff.length >= this.serialOpBatchSize) {
                     metaStream.pause();
-                    lastPromise = batchRemove(objBuff.map((x) => x.name)).finally(() => {
+                    lastPromise = batchRemove(objBuff.map((x) => x.name!)).finally(() => {
                         metaStream.resume();
                     });
                     objBuff.length = 0;
@@ -147,7 +147,7 @@ export abstract class AbstractObjectStorageService extends AsyncService {
 
             metaStream.on('end', () => {
                 if (objBuff.length) {
-                    lastPromise = batchRemove(objBuff.map((x) => x.name));
+                    lastPromise = batchRemove(objBuff.map((x) => x.name!));
                     objBuff.length = 0;
                 }
 

@@ -4,7 +4,7 @@ import {
     AutoCastableMetaClass, AutoConstructor, Constructor, PropOptions, isAutoCastableClass, isZodType
 } from "./auto-castable";
 import { describeType } from './auto-castable-utils';
-import { chainEntriesSimple } from '../utils/lang';
+import { chainEntriesSimple } from '../../utils/lang';
 
 export function CastZod<T extends ZodType>(z: T) {
 

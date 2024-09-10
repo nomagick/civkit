@@ -1,11 +1,11 @@
 import _ from 'lodash';
+import type { ZodIntersection, ZodObject } from 'zod';
 import {
     AdditionalPropOptions, Also, AutoCastable, AutoCastableMetaClass,
     AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL, AUTOCASTABLE_OPTIONS_SYMBOL,
     AutoConstructor, castToType, Constructor, Prop, PropOptions, __patchTypesEnumToSet, InternalAdditionalPropOptions, isZodType
 } from './auto-castable';
-import { chainEntriesSimple, chainEntriesDesc, isPrimitiveType, reverseObjectKeys } from '../utils';
-import type { ZodIntersection, ZodObject } from 'zod';
+import { chainEntriesDesc, chainEntriesSimple, isPrimitiveType, reverseObjectKeys } from '../../utils/lang';
 
 export type MangledConstructor<T extends Constructor<any>, F> = {
     [k in keyof T]: T[k];

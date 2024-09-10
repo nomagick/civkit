@@ -11,9 +11,9 @@ import {
 } from './meta';
 import {
     Also, AutoCastable,
-    AutoCastingError, Prop, PropOptions
+    AutoCastingError, Prop, 
+    PropOptions, Combine,
 } from '../lib/auto-castable';
-import { Combine } from '../lib/auto-castable-utils';
 import { isPrimitiveLike, marshalErrorLike } from '../utils';
 import { Readable, isReadable } from 'stream';
 import { RPCOptions } from './registry';

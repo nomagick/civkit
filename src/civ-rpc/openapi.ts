@@ -8,7 +8,8 @@ import {
     isAutoCastableClass,
     PropOptions,
     describeAnonymousValidateFunction,
-    isZodType
+    isZodType,
+    describeType
 } from '../lib/auto-castable';
 import {
     chainEntriesSimple as chainEntries, htmlEscape, isConstructor, isPrimitiveType
@@ -16,7 +17,6 @@ import {
 import { PICK_RPC_PARAM_DECORATION_META_KEY, InternalRPCOptions } from './registry';
 import { extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 import { RPCEnvelope } from './base';
-import { describeType } from '../lib/auto-castable-utils';
 
 type PropOptionsLike = Partial<PropOptions<any>> & Partial<InternalRPCOptions> & {
     paramOf?: string;

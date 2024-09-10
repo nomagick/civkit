@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { isConstructor, chainEntriesSimple } from '../utils/lang';
+import { isConstructor, chainEntriesSimple } from '../../utils/lang';
 
 import _ from 'lodash';
 

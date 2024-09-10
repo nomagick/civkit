@@ -5,5 +5,3 @@ export * from './registry';
 export * from '../lib/auto-castable';
 export * from './magic';
 export * from './openapi';
-
-export * from './framework-specific';
