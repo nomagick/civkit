@@ -114,6 +114,8 @@
         "./temp": "./lib/temp.js",
         "./throttle": "./lib/throttle.js",
         "./x509": "./lib/x509.js",
+        "./pseudo-transfer": "./lib/pseudo-transfer.js",
+        "./threaded": "./lib/threaded.js",
         "./base32": "./utils/base32.js",
         "./change-case": "./utils/change-case.js",
         "./defuse": "./utils/defuse.js",
