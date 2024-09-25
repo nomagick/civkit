@@ -5,35 +5,35 @@ import path from 'path';
 import { FancyFile } from './fancy-file';
 import { promisify } from 'util';
 
+import fsp from 'fs/promises';
 import fs from 'fs';
 import { randomBytes as originalRandomBytes } from 'crypto';
 import { AsyncService } from './async-service';
-import { ensureDir } from '../utils/filesystem';
+import { ensureDir } from '../utils/file-system';
 
-const fstat = promisify(fs.stat);
-const funlink = promisify(fs.unlink);
 const randomBytes = promisify(originalRandomBytes);
 
-const RANDOM_BYTE_LENGTH = 24;
-const DEFAULT_FILE_NAME = 'DEFAULT';
 
-function pathScatter(dirName: string) {
-    const l1 = dirName.slice(0, 2);
-    const l2 = dirName.slice(2, 4);
-    const l3 = dirName.slice(4);
 
-    return path.join(l1, l2, l3);
-}
 
 export abstract class AbstractStorageManager extends AsyncService {
     abstract storageRoot: string;
 
     dirGrid: Map<string, boolean> = new Map();
-    defaultFileName: string = DEFAULT_FILE_NAME;
+    defaultFileName: string = 'DEFAULT';
 
     override async init() {
         await this._ensureDir('');
     }
+
+    pathScatter(dirName: string) {
+        const l1 = dirName.slice(0, 2);
+        const l2 = dirName.slice(2, 4);
+        const l3 = dirName.slice(4);
+
+        return path.join(l1, l2, l3);
+    }
+
 
     _ensureDir(dir: string) {
         if (this.dirGrid.get(dir)) {
@@ -46,13 +46,13 @@ export abstract class AbstractStorageManager extends AsyncService {
     }
 
     async securePathFor(pathName: string, fileName?: string) {
-        await this._ensureDir(pathScatter(pathName));
+        await this._ensureDir(this.pathScatter(pathName));
 
         return this.fullPath(pathName, fileName);
     }
 
     _statOf(fpath: string): Promise<fs.Stats> {
-        return fstat(fpath);
+        return fsp.stat(fpath);
     }
 
     async _sizeOf(targetPath: string) {
@@ -178,7 +178,7 @@ export abstract class AbstractStorageManager extends AsyncService {
     erase(dirName: string, fileName: string) {
         const fpath = this.fullPath(dirName, fileName);
 
-        return funlink(fpath);
+        return fsp.unlink(fpath);
     }
 
     fullPath(dirName: string, fileName?: string) {
@@ -186,7 +186,7 @@ export abstract class AbstractStorageManager extends AsyncService {
             throw new Error('Illegal path names.');
         }
 
-        const scatteredPath = pathScatter(dirName);
+        const scatteredPath = this.pathScatter(dirName);
 
         if (fileName) {
             return path.join(this.storageRoot, scatteredPath, fileName);
@@ -196,7 +196,7 @@ export abstract class AbstractStorageManager extends AsyncService {
     }
 
     async randomName() {
-        const randomBuff = await randomBytes(RANDOM_BYTE_LENGTH);
+        const randomBuff = await randomBytes(24);
 
         return randomBuff.toString('hex');
     }
@@ -213,7 +213,7 @@ export abstract class AbstractStorageManager extends AsyncService {
                 if (err) {
                     return reject(err);
                 }
-                
+
                 const theStream = fs.createReadStream(fpath, options);
 
                 return resolve(theStream);

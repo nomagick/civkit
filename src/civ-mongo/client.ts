@@ -9,7 +9,7 @@ export abstract class AbstractMongoDB extends AsyncService {
     db!: Db;
     abstract url: string;
     abstract options?: MongoClientOptions;
-    abstract logger: LoggerInterface;
+    protected abstract logger: LoggerInterface;
     constructor(...whatever: any[]) {
         super(...whatever);
         this.setMaxListeners(1000);

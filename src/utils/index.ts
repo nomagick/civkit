@@ -8,7 +8,7 @@ export * from './vectorize';
 export * from './watch-tailer';
 export * from './yaml';
 export * from './property-injector';
-export * from './filesystem';
+export * from './file-system';
 export * from './event-stream';
 export * from './typings';
 export * from './escape';

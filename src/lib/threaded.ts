@@ -28,9 +28,9 @@ export interface WorkerStatusReport {
 
 export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistry {
 
-    abstract pseudoTransfer: AbstractPseudoTransfer;
-    abstract asyncContext: AbstractAsyncContext;
-    abstract logger: LoggerInterface;
+    protected abstract pseudoTransfer: AbstractPseudoTransfer;
+    protected abstract asyncContext: AbstractAsyncContext;
+    protected abstract logger: LoggerInterface;
 
     filesToLoad: Set<string> = new Set();
     workers = new Map<Worker, {

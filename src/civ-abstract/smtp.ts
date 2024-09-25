@@ -33,7 +33,7 @@ const SMTP_PORT = 25;
 const ALTERNATIVE_SMTP_PORT = 2525;
 
 export abstract class AbstractSMTPSenderService extends AsyncService {
-    abstract logger: LoggerInterface;
+    protected abstract logger: LoggerInterface;
 
     TATransport?: nodemailer.Transporter;
 
@@ -330,7 +330,7 @@ export abstract class AbstractSMTPSenderService extends AsyncService {
 
 
 export abstract class AbstractSMTPServerService extends AsyncService {
-    abstract logger: LoggerInterface;
+    protected abstract logger: LoggerInterface;
 
     TATransport?: nodemailer.Transporter;
 

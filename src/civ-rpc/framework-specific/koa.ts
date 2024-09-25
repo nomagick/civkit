@@ -716,7 +716,7 @@ export interface KoaRPCRegistry {
 }
 
 export abstract class KoaServer extends AsyncService {
-    abstract logger: LoggerInterface;
+    protected abstract logger: LoggerInterface;
     healthCheckEndpoint = '/ping';
 
     koaApp: Koa = new Koa();

@@ -13,7 +13,7 @@ export abstract class AbstractScheduleService extends AsyncService {
     private __tick: number = 0;
 
     abstract container: typeof DIContainer;
-    abstract logger: LoggerInterface;
+    protected abstract logger: LoggerInterface;
 
     jobs: Map<string, nodeSchedule.Job> = new Map();
 

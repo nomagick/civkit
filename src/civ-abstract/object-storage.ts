@@ -9,7 +9,7 @@ export interface ObjectStorageOptions extends minio.ClientOptions {
 }
 
 export abstract class AbstractObjectStorageService extends AsyncService {
-    abstract logger: LoggerInterface;
+    protected abstract logger: LoggerInterface;
 
     minioClient!: minio.Client;
 

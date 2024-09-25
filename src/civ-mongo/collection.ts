@@ -19,7 +19,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
 
     abstract collectionName: string;
     abstract mongo: AbstractMongoDB;
-    abstract logger: LoggerInterface;
+    protected abstract logger: LoggerInterface;
 
     typeclass?: { new(): T; };
 

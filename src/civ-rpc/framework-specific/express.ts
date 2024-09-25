@@ -709,7 +709,7 @@ export interface ExpressRPCRegistry {
 }
 
 export abstract class ExpressServer extends AsyncService {
-    abstract logger: LoggerInterface;
+    protected abstract logger: LoggerInterface;
     healthCheckEndpoint = '/ping';
 
     expressApp: express.Express = express();

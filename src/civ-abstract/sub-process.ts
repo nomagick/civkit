@@ -17,7 +17,7 @@ export interface AppSpawnOptions extends CustomSpawnOptions {
 export abstract class AbstractSubProcess extends SubProcessRoutine {
     static override Error = ServerSubprocessError;
 
-    abstract logger: LoggerInterface;
+    protected abstract logger: LoggerInterface;
 
     encoding: BufferEncoding | null = null;
 
