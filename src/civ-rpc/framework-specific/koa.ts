@@ -425,18 +425,18 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
         return body;
     }
-    override async exec(name: string, input: object) {
+    override async exec(name: string, input: object, env?: object) {
         this.emit('run', name, input);
         const startTime = Date.now();
         try {
-            const result = await super.exec(name, input);
+            const result = await super.exec(name, input, env);
 
-            this.emit('ran', name, input, result, startTime);
+            this.emit('ran', name, input, result, startTime, env);
 
             return result;
         } catch (err) {
 
-            this.emit('fail', err, name, input, startTime);
+            this.emit('fail', err, name, input, startTime, env);
 
             throw err;
         }
