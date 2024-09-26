@@ -726,7 +726,7 @@ export abstract class KoaServer extends AsyncService {
 
     listening = false;
 
-    constructor() {
+    constructor(..._args: any[]) {
         super(...arguments);
         this.koaApp.proxy = true;
         this.init()

@@ -719,7 +719,7 @@ export abstract class ExpressServer extends AsyncService {
 
     listening = false;
 
-    constructor() {
+    constructor(..._args: any[]) {
         super(...arguments);
         this.expressApp.set('trust proxy', true);
         this.init()
