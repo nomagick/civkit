@@ -38,13 +38,35 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         openPorts: number;
     }>();
 
+    workerEntrypoint = __filename;
+
     maxWorkers = cpus().length;
 
     ongoingTasks = 0;
 
     runInThread = isMainThread ? RUN_IN_THREAD.CHILD_THREAD : RUN_IN_THREAD.THIS_THREAD;
 
+    constructor(..._args: any[]) {
+        super(...arguments);
+
+        if (!isMainThread) {
+            process.nextTick(() => {
+                if (this.__status === 'init') {
+                    this.serviceReady();
+                }
+            });
+        }
+    }
+
     override async init() {
+        const o = { stack: '' };
+        Error.captureStackTrace(o, AbstractThreadedServiceRegistry.prototype.init);
+        const l = o.stack.split('\n')[1];
+        const m = l.match(/at .+ \((.+)\:\d+\:\d+\)/);
+        const f = m?.[1]?.trim();
+
+        this.workerEntrypoint = f ?? this.workerEntrypoint;
+
         this.initWorker();
     }
 
@@ -54,7 +76,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
 
     createWorker() {
         this.logger.debug(`Starting new worker thread with ${this.filesToLoad.size} files to load ...`);
-        const worker = new Worker(__filename, {
+        const worker = new Worker(this.workerEntrypoint, {
             workerData: {
                 type: this.constructor.name,
                 filesToLoad: [...this.filesToLoad],
@@ -166,6 +188,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
     }
 
     override async exec(name: string, input: object, env?: any) {
+        await this.serviceReady();
         if (this.runInThread === RUN_IN_THREAD.CHILD_THREAD) {
             const worker = this.getWorker();
             const deferred = Defer<any>();
