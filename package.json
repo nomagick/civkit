@@ -1,6 +1,6 @@
 {
     "name": "civkit",
-    "version": "0.7.2",
+    "version": "0.8.0",
     "description": "Sets of tools, in typescript",
     "main": "index.js",
     "types": "index.d.ts",
@@ -113,6 +113,7 @@
         "./sub-process": "./lib/sub-process.js",
         "./temp": "./lib/temp.js",
         "./throttle": "./lib/throttle.js",
+        "./trie-router": "./lib/trie-router.js",
         "./x509": "./lib/x509.js",
         "./pseudo-transfer": "./lib/pseudo-transfer.js",
         "./threaded": "./lib/threaded.js",
@@ -131,6 +132,7 @@
         "./readability": "./utils/readability.js",
         "./sub-emitter": "./utils/sub-emitter.js",
         "./timeout": "./utils/timeout.js",
+        "./trie": "./utils/trie.js",
         "./typings": "./utils/typings.js",
         "./vectorize": "./utils/vectorize.js",
         "./watch-tailer": "./utils/watch-tailer.js",

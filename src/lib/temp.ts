@@ -1,5 +1,6 @@
 import fs, { promises as fsp } from 'fs';
 import path from 'path';
+import { tmpdir } from 'os';
 import { Readable } from 'stream';
 import { FancyFile } from './fancy-file';
 import { AsyncService } from './async-service';
@@ -71,7 +72,7 @@ export abstract class AbstractTempFileManger extends AsyncService {
             }
 
         } else {
-            this.rootDir = await fsp.mkdtemp('nodejs-application-');
+            this.rootDir = await fsp.mkdtemp(path.join(tmpdir(), 'nodejs-application-'));
         }
     }
 

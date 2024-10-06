@@ -8,7 +8,6 @@ import { Readable } from 'stream';
 import type { Context, Middleware } from 'koa';
 import Koa from 'koa';
 import compose from 'koa-compose';
-import KoaRouter from '@koa/router';
 
 import bodyParser from "koa-bodyparser";
 import {
@@ -27,12 +26,24 @@ import { humanReadableDataSize } from "../../utils/readability";
 import { marshalErrorLike } from "../../utils/lang";
 import { UploadedFile } from "./shared";
 import { AbstractAsyncContext, setupTraceId } from "../../lib/async-context";
+import { TrieRouter } from "../../lib/trie-router";
 
 
 export type ParsedContext = Context & {
     request: { body: { [key: string]: any; }; };
     files: UploadedFile[];
 };
+
+interface RPCRouteEntry {
+    httpMethods: string[];
+    rpcMethod: string;
+}
+interface NativeRouteEntry {
+    httpMethods: string[];
+    handler: Middleware<any, any, any>;
+}
+
+type RouteEntry = RPCRouteEntry | NativeRouteEntry;
 
 export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     protected abstract logger: LoggerInterface;
@@ -41,7 +52,14 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     abstract title: string;
     logoUrl?: string;
 
+    router = new TrieRouter<RouteEntry>();
+
     openAPIManager = new OpenAPIManager();
+
+    routerPrefix = '';
+    rpcPrefix = '/rpc';
+    openapiJsonPath = '/openapi.json';
+
 
     _RECEIVE_TIMEOUT = 60 * 60 * 1000;
     _MULTIPART_LIMITS: busboy.Limits = {
@@ -65,14 +83,17 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         this.__multiParse
     ];
 
-    registerMethodsToKoaRouter(koaRouter: KoaRouter, openapiJsonPath = '/openapi.json') {
+    resetRouter() {
+        this.router = new TrieRouter<RouteEntry>();
         for (const [methodName, , methodConfig] of this.dump()) {
             const httpConfig: {
                 action?: string | string[];
                 path?: string;
             } | undefined = methodConfig.ext?.http;
 
-            let methods = ['post'];
+            const tags = [...(methodConfig.tags || []), ...methodName.split('.').filter(Boolean)];
+
+            let methods = ['POST'];
             if (httpConfig?.action) {
                 if (typeof httpConfig.action === 'string') {
                     methods.push(httpConfig.action);
@@ -80,97 +101,69 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     methods.push(...httpConfig.action);
                 }
             }
-            methods = _(methods).uniq().compact().map((x) => x.toLowerCase()).value();
-
-            const theController = this.makeShimController(methodName);
+            methods = _(methods).uniq().compact().map((x) => x.toUpperCase()).value();
 
             const httpRegistered = new WeakSet();
             if (httpConfig?.path && !httpRegistered.has(methodConfig)) {
                 httpRegistered.add(methodConfig);
                 const regUrl = `/${httpConfig.path}`.replace(/^\/+/, '/');
-                koaRouter.register(
+                this.router.register(
                     regUrl,
-                    methods,
-                    this.wipeBehindKoaRouter(
-                        ...this.koaMiddlewares,
-                        theController
-                    )
+                    {
+                        rpcMethod: methodName,
+                        httpMethods: methods,
+                    },
+
                 );
                 this.openAPIManager.document(
-                    regUrl.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
+                    regUrl.split('/').map((x) => x.startsWith(':') ? `{${x.replace(/^:+/, '')}}` : x).join('/'),
                     methods,
                     methodConfig,
                     {
                         style: 'http',
-                        tags: methodName.split('.').filter(Boolean)
+                        tags
                     }
                 );
-
-                const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
-                if (methodsToFillNoop.length) {
-                    koaRouter.register(
-                        regUrl,
-                        methodsToFillNoop,
-                        this.wipeBehindKoaRouter(
-                            ...this.koaMiddlewares,
-                            this.__noop
-                        )
-                    );
-                }
 
                 this.logger.debug(
                     `HTTP Route: ${methods.map((x) => x.toUpperCase())} /${httpConfig.path} => rpc(${methodName})`,
                     { httpConfig }
                 );
-            }
-
-            const name = methodName;
-
-            const apiPath = `/${name.split('.').join('/')}`;
-            koaRouter.register(
-                apiPath,
-                methods,
-                this.wipeBehindKoaRouter(
-                    ...this.koaMiddlewares,
-                    theController
-                )
-            );
-
-            this.openAPIManager.document(
-                apiPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
-                methods,
-                methodConfig,
-                {
-                    style: 'http',
-                    tags: methodName.split('.').filter(Boolean)
-                }
-            );
-
-            const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
-            if (methodsToFillNoop.length) {
-                koaRouter.register(
+            } else {
+                const apiPath = `/${methodName.split('.').join('/')}`;
+                this.router.register(
                     apiPath,
-                    methodsToFillNoop,
-                    this.wipeBehindKoaRouter(
-                        ...this.koaMiddlewares,
-                        this.__noop
-                    )
+                    {
+                        rpcMethod: methodName,
+                        httpMethods: methods,
+                    }
+                );
+
+                this.openAPIManager.document(
+                    apiPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
+                    methods,
+                    methodConfig,
+                    {
+                        style: 'http',
+                        tags
+                    }
+                );
+
+                this.logger.debug(
+                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${apiPath} => rpc(${methodName})`,
+                    { httpConfig }
                 );
             }
 
-            this.logger.debug(
-                `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${apiPath} => rpc(${methodName})`,
-                { httpConfig }
-            );
 
-            const rpcPath = `/rpc/${name}`;
-            koaRouter.register(
+
+            const rpcPath = `${this.rpcPrefix}/${methodName}`;
+            this.router.register(
                 rpcPath,
-                methods,
-                this.wipeBehindKoaRouter(
-                    ...this.koaMiddlewares,
-                    theController
-                )
+                {
+                    rpcMethod: methodName,
+                    httpMethods: methods,
+                }
             );
             this.openAPIManager.document(
                 rpcPath.split('/').map((x) => x.startsWith(':') ? `{${x.substring(1)}}` : x).join('/'),
@@ -178,19 +171,10 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 methodConfig,
                 {
                     style: 'rpc',
-                    tags: methodName.split('.').filter(Boolean)
+                    tags
                 }
             );
-            if (methodsToFillNoop.length) {
-                koaRouter.register(
-                    rpcPath,
-                    methodsToFillNoop,
-                    this.wipeBehindKoaRouter(
-                        ...this.koaMiddlewares,
-                        this.__noop
-                    )
-                );
-            }
+
             this.logger.debug(
                 `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${rpcPath} => rpc(${methodName})`,
                 { httpConfig }
@@ -198,20 +182,28 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
         }
 
-        koaRouter.register(openapiJsonPath, ['get'], this.wipeBehindKoaRouter(this.__CORSAllowAllMiddleware, (ctx) => {
-            const baseURL = new URL(ctx.URL.toString());
-            baseURL.pathname = baseURL.pathname.replace(/openapi\.json$/i, '').replace(/\/+$/g, '');
-            baseURL.search = '';
-            ctx.body = this.openAPIManager.createOpenAPIObject(baseURL.toString(), {
-                info: {
-                    title: this.title,
-                    description: `${this.title} openapi document`,
-                    'x-logo': {
-                        url: this.logoUrl || `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
+        this.router.register(this.openapiJsonPath,
+            {
+                httpMethods: ['GET'],
+                handler: compose([
+                    this.__CORSAllowAllMiddleware,
+                    (ctx) => {
+                        const baseURL = new URL(ctx.URL.toString());
+                        baseURL.pathname = baseURL.pathname.replace(this.openapiJsonPath, '').replace(/\/+$/g, '');
+                        baseURL.search = '';
+                        ctx.body = this.openAPIManager.createOpenAPIObject(baseURL.toString(), {
+                            info: {
+                                title: this.title,
+                                description: `${this.title} openapi document`,
+                                'x-logo': {
+                                    url: this.logoUrl || `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
+                                }
+                            }
+                        }, (this.constructor as typeof AbstractRPCRegistry).envelope, { style: 'http', ...ctx.request.query });
                     }
-                }
-            }, (this.constructor as typeof AbstractRPCRegistry).envelope, ctx.request.query);
-        }));
+                ])
+            }
+        );
     }
 
     protected applyTransferProtocolMeta(ctx: Context, protocolMeta?: TransferProtocolMetadata) {
@@ -233,14 +225,36 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         }
     }
 
-    makeShimController(methodName: string) {
-        const conf = this.conf.get(methodName);
-        if (!conf) {
-            throw new Error(`Unknown rpc method: ${methodName}`);
-        }
+    makeShimController() {
+        this.resetRouter();
 
-        return async (ctx: Context, next: (err?: Error) => Promise<unknown>) => {
+        const shimController = async (ctx: Context, next: (err?: Error) => Promise<unknown>) => {
+            const path = ctx.path;
+            if (!path.startsWith(this.routerPrefix)) {
+                return next();
+            }
+            const matchPath = path.slice(this.routerPrefix.length);
+            const matched = this.router.match(matchPath)?.[0];
+            if (!matched) {
+                ctx.status = 404;
 
+                return next();
+            }
+            const [matchedEntry, params] = matched;
+            if (!matchedEntry.httpMethods.includes(ctx.method.toUpperCase())) {
+                ctx.status = 405;
+                ctx.set('Allow', matchedEntry.httpMethods.join(', '));
+
+                return next();
+            }
+
+            if ((matchedEntry as NativeRouteEntry).handler) {
+                return (matchedEntry as NativeRouteEntry).handler(ctx, next);
+            }
+
+            const methodName = (matchedEntry as RPCRouteEntry).rpcMethod;
+
+            ctx.params = params;
             const jointInput = {
                 ...ctx.params,
                 ...ctx.query,
@@ -252,7 +266,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             };
 
             const ctx2 = this.ctxMgr.setup(ctx);
-            
+
             ctx.status = 404;
             const keepAliveTimer = setTimeout(() => {
                 ctx.socket.setKeepAlive(true, 2 * 1000);
@@ -363,10 +377,8 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
             return next();
         };
-    }
 
-    wipeBehindKoaRouter(...middlewares: Middleware[]) {
-        return compose(middlewares);
+        return compose([...this.koaMiddlewares, shimController]);
     }
 
     briefHeaders(headers: IncomingHttpHeaders) {
@@ -415,6 +427,10 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             return `[Buffer(${body.byteLength})]`;
         }
 
+        if (body instanceof Blob) {
+            return `[Blob(${body.size})]`;
+        }
+
         if (typeof (body as Readable)?.pipe === 'function') {
             return `[Stream]`;
         }
@@ -425,6 +441,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
         return body;
     }
+
     override async exec(name: string, input: object, env?: object) {
         this.emit('run', name, input);
         const startTime = Date.now();
@@ -645,7 +662,6 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
     async registerParticularRoute(
         rpcMethod: string,
-        koaRouter: KoaRouter,
         qPath: string,
     ) {
         const methodConfig = this.conf.get(rpcMethod);
@@ -665,29 +681,16 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 methods.push(...httpConfig.action);
             }
         }
-        methods = _(methods).uniq().compact().map((x) => x.toLowerCase()).value();
+        methods = _(methods).uniq().compact().map((x) => x.toUpperCase()).value();
 
-        koaRouter.register(
+        this.router.register(
             qPath,
-            methods,
-            this.wipeBehindKoaRouter(
-                ...this.koaMiddlewares,
-                this.makeShimController(rpcMethod)
-            )
+            {
+                rpcMethod,
+                httpMethods: methods,
+            }
         );
 
-        const methodsToFillNoop = _.pullAll(['head', 'options'], methods);
-
-        if (methodsToFillNoop.length) {
-            koaRouter.register(
-                qPath,
-                methodsToFillNoop,
-                this.wipeBehindKoaRouter(
-                    ...this.koaMiddlewares,
-                    this.__noop
-                )
-            );
-        }
         this.logger.debug(
             `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${qPath} => rpc(${rpcMethod})`,
             { httpConfig }
@@ -717,10 +720,13 @@ export interface KoaRPCRegistry {
 
 export abstract class KoaServer extends AsyncService {
     protected abstract logger: LoggerInterface;
+
+    title = this.constructor.name;
+
     healthCheckEndpoint = '/ping';
+    docsEndpoint = '/docs';
 
     koaApp: Koa = new Koa();
-    koaRootRouter: KoaRouter = new KoaRouter();
 
     httpServer!: http.Server;
 
@@ -748,8 +754,6 @@ export abstract class KoaServer extends AsyncService {
         this.logger.info(`Server starting at ${os.hostname()}(${process.pid}) ${os.platform()}_${os.release()}_${os.arch()}`);
 
         this.featureSelect();
-
-        this.koaApp.use(this.koaRootRouter.routes());
 
         this.logger.info('Server dependency ready');
 
@@ -780,9 +784,9 @@ export abstract class KoaServer extends AsyncService {
         this.insertAsyncHookMiddleware();
         this.insertHealthCheckMiddleware(this.healthCheckEndpoint);
         this.insertLogRequestsMiddleware();
+        this.registerOpenAPIDocsRoutes();
 
         this.registerRoutes();
-        this.registerOpenAPIDocsRoutes();
     }
 
     @runOnce()
@@ -799,13 +803,19 @@ export abstract class KoaServer extends AsyncService {
     abstract registerRoutes(): void;
 
     @runOnce()
-    registerOpenAPIDocsRoutes(url: string = 'docs', openapiUrl: string = '/openapi.json') {
-        this.koaRootRouter.get(url, async (ctx: Context) => {
+    registerOpenAPIDocsRoutes(openapiUrl: string = '/openapi.json') {
+        if (!this.docsEndpoint) {
+            return;
+        }
+        this.koaApp.use(async (ctx: Context, next: CallableFunction) => {
+            if (ctx.path !== this.docsEndpoint) {
+                return next();
+            }
             ctx.body = `
             <!DOCTYPE html>
             <html>
               <head>
-                <title>Redoc</title>
+                <title>${this.title || 'ReDoc'}</title>
                 <!-- needed for adaptive design -->
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1">

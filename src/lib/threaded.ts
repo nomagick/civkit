@@ -210,6 +210,10 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                 dataProfiles: profiles,
                 port: port2,
             }, [port2, ...transferList]);
+            const p = this.workers.get(worker);
+            if (p?.ongoingTasks !== undefined) {
+                p.ongoingTasks += 1;
+            }
             const workerCrashHandler = (err: any) => {
                 deferred.reject(err);
             };
