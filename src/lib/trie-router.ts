@@ -57,10 +57,10 @@ export class TrieRouter<D = unknown> {
         const middle = orig.slice(1, orig.length - 1).filter(Boolean);
 
         if (head === '') {
-            return [...middle, last];
+            return [head, ...middle, last];
         }
 
-        return [head, ...middle, last];
+        return ['', head, ...middle, last];
     }
 
     match(
@@ -98,11 +98,6 @@ export class TrieRouter<D = unknown> {
             }
 
             nextSteps.push([v, { ...props, [v.payload.matchAnyAsProp]: stack[0] }]);
-        }
-
-
-        if (!nextSteps.length) {
-            return [];
         }
 
         return nextSteps.flatMap(([node, props]) => this.match(stack.slice(1), node, props)).concat(matchRests);
