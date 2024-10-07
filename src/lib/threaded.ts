@@ -306,6 +306,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
 
         parentPort!.on('message', async (msg) => {
             if (msg?.channel === this.constructor.name && msg.event === 'exec') {
+                await this.serviceReady();
                 const m = this.pseudoTransfer.mangleTransferred(msg.port, msg.data, msg.dataProfiles);
                 try {
                     const r = await this.exec(m.name, m.input, m.env);
