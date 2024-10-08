@@ -206,7 +206,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 res.statusCode = protocolMeta.code!;
             }
             if (protocolMeta.contentType) {
-                res.set('content-type', protocolMeta.contentType);
+                res.set('Content-Type', protocolMeta.contentType);
             }
             if (protocolMeta.headers) {
                 for (const [key, value] of Object.entries(protocolMeta.headers)) {
@@ -306,20 +306,20 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 } else if (Buffer.isBuffer(output)) {
                     if (!(result.tpm?.contentType)) {
                         const contentType = restoreContentType(await mimeOf(output));
-                        res.set('content-type', contentType);
+                        res.set('Content-Type', contentType);
                     }
                     this.applyTransferProtocolMeta(res, result.tpm);
                     res.end(output);
                 } else if (output instanceof Blob) {
                     if (output.type) {
-                        res.set('content-type', output.type);
+                        res.set('Content-Type', output.type);
                     }
                     if (output.size) {
-                        res.set('content-length', `${output.size}`);
+                        res.set('Content-Length', `${output.size}`);
                     }
                     const fname = (output as any).name;
                     if (fname) {
-                        res.set('content-disposition', `attachment; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(fname)}`);
+                        res.set('Content-Disposition', `attachment; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(fname)}`);
                     }
                     res.socket?.setKeepAlive(true, 1000);
                     this.applyTransferProtocolMeta(res, result.tpm);
@@ -337,11 +337,11 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                         }
                     });
                 } else if (typeof output === 'string') {
-                    res.set('content-type', 'text/plain');
+                    res.set('Content-Type', 'text/plain; charset=utf-8');
                     this.applyTransferProtocolMeta(res, result.tpm);
                     res.end(output);
                 } else {
-                    res.set('content-type', 'application/json');
+                    res.set('Content-Type', 'application/json; charset=utf-8');
                     this.applyTransferProtocolMeta(res, result.tpm);
                     res.end(JSON.stringify(output));
                 }

@@ -212,7 +212,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 ctx.status = protocolMeta.code!;
             }
             if (protocolMeta.contentType) {
-                ctx.set('content-type', protocolMeta.contentType);
+                ctx.set('Content-Type', protocolMeta.contentType);
             }
             if (protocolMeta.headers) {
                 for (const [key, value] of Object.entries(protocolMeta.headers)) {
@@ -319,20 +319,20 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 } else if (Buffer.isBuffer(output)) {
                     if (!(result.tpm?.contentType)) {
                         const contentType = restoreContentType(await mimeOf(output));
-                        ctx.set('content-type', contentType);
+                        ctx.set('Content-Type', contentType);
                     }
                     this.applyTransferProtocolMeta(ctx, result.tpm);
                     ctx.body = output;
                 } else if (output instanceof Blob) {
                     if (output.type) {
-                        ctx.set('content-type', output.type);
+                        ctx.set('Content-Type', output.type);
                     }
                     if (output.size) {
-                        ctx.set('content-length', `${output.size}`);
+                        ctx.set('Content-Length', `${output.size}`);
                     }
                     const fname = (output as any).name;
                     if (fname) {
-                        ctx.set('content-disposition', `attachment; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(fname)}`);
+                        ctx.set('Content-Disposition', `attachment; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(fname)}`);
                     }
                     ctx.socket?.setKeepAlive(true, 1000);
                     this.applyTransferProtocolMeta(ctx, result.tpm);
@@ -350,11 +350,11 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                         }
                     });
                 } else if (typeof output === 'string') {
-                    ctx.set('content-type', 'text/plain');
+                    ctx.set('Content-Type', 'text/plain; charset=utf-8');
                     this.applyTransferProtocolMeta(ctx, result.tpm);
                     ctx.body = output;
                 } else {
-                    ctx.set('content-type', 'application/json');
+                    ctx.set('Content-Type', 'application/json; charset=utf-8');
                     this.applyTransferProtocolMeta(ctx, result.tpm);
                     ctx.body = output;
                 }
