@@ -101,7 +101,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     methods.push(...httpConfig.action);
                 }
             }
-            methods = _(methods).uniq().compact().map((x) => x.toUpperCase()).value();
+            methods = _(methods).compact().map((x) => x.toUpperCase()).uniq().value();
 
             const httpRegistered = new WeakSet();
             if (httpConfig?.path && !httpRegistered.has(methodConfig)) {
@@ -126,7 +126,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 );
 
                 this.logger.debug(
-                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} /${httpConfig.path} => rpc(${methodName})`,
+                    `HTTP Route: ${methods} /${httpConfig.path.replace(/^\/+/, '')} => rpc(${methodName})`,
                     { httpConfig }
                 );
             } else {
@@ -150,7 +150,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 );
 
                 this.logger.debug(
-                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${apiPath} => rpc(${methodName})`,
+                    `HTTP Route: ${methods} ${apiPath} => rpc(${methodName})`,
                     { httpConfig }
                 );
             }
@@ -176,7 +176,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             );
 
             this.logger.debug(
-                `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${rpcPath} => rpc(${methodName})`,
+                `HTTP Route: ${methods} ${rpcPath} => rpc(${methodName})`,
                 { httpConfig }
             );
 
@@ -673,7 +673,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             path?: string;
         } | undefined = methodConfig.ext?.http;
 
-        let methods = ['post'];
+        let methods = ['POST'];
         if (httpConfig?.action) {
             if (typeof httpConfig.action === 'string') {
                 methods.push(httpConfig.action);
@@ -681,7 +681,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 methods.push(...httpConfig.action);
             }
         }
-        methods = _(methods).uniq().compact().map((x) => x.toUpperCase()).value();
+        methods = _(methods).compact().map((x) => x.toUpperCase()).uniq().value();
 
         this.router.register(
             qPath,
@@ -692,7 +692,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         );
 
         this.logger.debug(
-            `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${qPath} => rpc(${rpcMethod})`,
+            `HTTP Route: ${methods} ${qPath} => rpc(${rpcMethod})`,
             { httpConfig }
         );
     }

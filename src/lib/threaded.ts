@@ -105,9 +105,6 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
             this.workers.delete(worker);
         });
 
-
-        this.logger.debug(`Worker thread started: ${worker.threadId}`, { tid: worker.threadId });
-
         return worker;
     }
 
@@ -291,8 +288,6 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
             process.exit();
         });
 
-        this.logger.debug(`Remote informed ${workerData.filesToLoad?.length || 0} files to load in thread ...`, { tid: threadId });
-
         for (const x of workerData.filesToLoad) {
             this.filesToLoad.add(x);
         }
@@ -327,7 +322,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
             process.exit(1);
         });
 
-        this.logger.debug(`Thread fully set up.`, { tid: threadId, filesLoaded: this.filesToLoad.size });
+        this.logger.debug(`Worker thread(${threadId}) up with ${workerData.filesToLoad?.length || 0} files loaded`, { tid: threadId, filesLoaded: this.filesToLoad.size });
 
     }
 
