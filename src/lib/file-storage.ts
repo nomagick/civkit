@@ -14,8 +14,6 @@ import { ensureDir } from '../utils/file-system';
 const randomBytes = promisify(originalRandomBytes);
 
 
-
-
 export abstract class AbstractStorageManager extends AsyncService {
     abstract storageRoot: string;
 
@@ -45,7 +43,7 @@ export abstract class AbstractStorageManager extends AsyncService {
         });
     }
 
-    async securePathFor(pathName: string, fileName?: string) {
+    async securePathFor(pathName: string, fileName: string = this.defaultFileName) {
         await this._ensureDir(this.pathScatter(pathName));
 
         return this.fullPath(pathName, fileName);
@@ -88,25 +86,17 @@ export abstract class AbstractStorageManager extends AsyncService {
         return FancyFile.auto(this.fullPath(dirName, fileName), { fileName: overrideFileName });
     }
 
-    async storeFancyFile(file: FancyFile, dirName?: string, fileName?: string) {
+    async storeFancyFile(file: FancyFile, dirName?: string, fileName: string = this.defaultFileName) {
         if (!file) {
             throw new Error('No file to store.');
         }
         let targetDir = dirName;
-        let targetName = fileName;
         if (!targetDir) {
             targetDir = await this.randomName();
         }
-        if (!targetName) {
-            if (! await this.alreadyStored(targetDir, this.defaultFileName)) {
-                targetName = this.defaultFileName;
-            } else {
-                return null;
-            }
-        }
 
         const theStream: Readable = await file.createReadStream();
-        const targetPath = await this.securePathFor(targetDir, targetName);
+        const targetPath = await this.securePathFor(targetDir, fileName);
 
         const targetPromise = new Promise<[string, string]>((resolve, reject) => {
             const targetStream = fs.createWriteStream(targetPath);
@@ -117,7 +107,7 @@ export abstract class AbstractStorageManager extends AsyncService {
                 reject(err);
             });
             targetStream.once('finish', () => {
-                resolve([targetDir!, targetName!]);
+                resolve([targetDir!, fileName!]);
             });
             theStream.pipe(targetStream);
         });
@@ -126,24 +116,17 @@ export abstract class AbstractStorageManager extends AsyncService {
     }
 
 
-    async storeReadable(stream: Readable, dirName?: string, fileName?: string) {
+    async storeReadable(stream: Readable, dirName?: string, fileName: string = this.defaultFileName) {
         if (!stream) {
             throw new Error('No stream to store.');
         }
         stream.pause();
         let targetDir = dirName;
-        let targetName = fileName;
         if (!targetDir) {
             targetDir = await this.randomName();
         }
-        if (!targetName) {
-            if (!await this.alreadyStored(targetDir, this.defaultFileName)) {
-                targetName = this.defaultFileName;
-            } else {
-                return null;
-            }
-        }
-        const targetPath = await this.securePathFor(targetDir, targetName);
+        
+        const targetPath = await this.securePathFor(targetDir, fileName);
         const targetStream = fs.createWriteStream(targetPath);
 
         const targetPromise = new Promise<[string, string]>((resolve, reject) => {
@@ -151,7 +134,7 @@ export abstract class AbstractStorageManager extends AsyncService {
                 reject(err);
             });
             stream.once('end', () => {
-                resolve([targetDir!, targetName!]);
+                resolve([targetDir!, fileName!]);
             });
         });
         stream.pipe(targetStream);
@@ -160,13 +143,13 @@ export abstract class AbstractStorageManager extends AsyncService {
         return targetPromise;
     }
 
-    storeLocalFile(filePath: string, dirName?: string, fileName?: string) {
+    storeLocalFile(filePath: string, dirName?: string, fileName: string = this.defaultFileName) {
         const fFile = FancyFile.auto(filePath);
 
         return this.storeFancyFile(fFile, dirName, fileName);
     }
 
-    storeBuffer(buff: Buffer | ArrayBuffer, dirName?: string, fileName?: string) {
+    storeBuffer(buff: Buffer | ArrayBuffer, dirName?: string, fileName: string = this.defaultFileName) {
         const pStream = new PassThrough();
         const r = this.storeReadable(pStream, dirName, fileName);
         pStream.write(buff);
@@ -175,24 +158,20 @@ export abstract class AbstractStorageManager extends AsyncService {
         return r;
     }
 
-    erase(dirName: string, fileName: string) {
+    erase(dirName: string, fileName: string = this.defaultFileName) {
         const fpath = this.fullPath(dirName, fileName);
 
         return fsp.unlink(fpath);
     }
 
-    fullPath(dirName: string, fileName?: string) {
+    fullPath(dirName: string, fileName: string = this.defaultFileName) {
         if (dirName.indexOf('..') >= 0 || (fileName && fileName.indexOf('..') >= 0)) {
             throw new Error('Illegal path names.');
         }
 
         const scatteredPath = this.pathScatter(dirName);
 
-        if (fileName) {
-            return path.join(this.storageRoot, scatteredPath, fileName);
-        }
-
-        return path.join(this.storageRoot, scatteredPath);
+        return path.join(this.storageRoot, scatteredPath, this.defaultFileName);
     }
 
     async randomName() {
