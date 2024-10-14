@@ -15,7 +15,7 @@ import {
     chainEntriesSimple as chainEntries, htmlEscape, isConstructor, isPrimitiveType
 } from '../utils';
 import { PICK_RPC_PARAM_DECORATION_META_KEY, InternalRPCOptions } from './registry';
-import { extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
+import { extractTransferProtocolMeta, RawBuffer, RawString, TransferProtocolMetadata } from './meta';
 import { RPCEnvelope } from './base';
 
 type PropOptionsLike = Partial<PropOptions<any>> & Partial<InternalRPCOptions> & {
@@ -52,10 +52,12 @@ export class OpenAPIManager {
 
     primitiveSchemaMap = new Map<any, any>([
         [String, { type: 'string' }],
+        [RawString, { type: 'string' }],
         [Number, { type: 'number' }],
         [Symbol, { type: 'string', format: 'symbol' }],
         [Boolean, { type: 'boolean' }],
         [Buffer, { type: 'string', format: 'binary' }],
+        [RawBuffer, { type: 'string', format: 'binary' }],
         [Date, { type: 'string', format: 'date-time' }],
         [null, { type: 'string', format: 'null', nullable: true }],
         [undefined, { type: 'string', format: 'undefined', nullable: true }],
@@ -1129,6 +1131,8 @@ export class OpenAPIManager {
             const returnTypes = Array.isArray(rpcOptions.returnType) ? rpcOptions.returnType : [rpcOptions.returnType];
 
             const wrappedOptions = [];
+            const individuallyWrappedOptions = [];
+
             let allUsingDefaultEnvelope = true;
             for (const x of returnTypes) {
                 const tpm = extractTransferProtocolMeta(x?.prototype);
@@ -1138,20 +1142,21 @@ export class OpenAPIManager {
                     tpm?.envelope === null ?
                         new RPCEnvelope() :
                         defaultEnvelope;
+                individuallyWrappedOptions.push(envelope.describeWrap({
+                    ...rpcOptions,
+                    returnType: x,
+                    throws: undefined,
+                    returnArrayOf: undefined,
+                    returnDictOf: undefined
+                }));
                 if (envelope !== defaultEnvelope) {
                     allUsingDefaultEnvelope = false;
-                    const partialWrappedRpcOptions = envelope.describeWrap({
-                        ...rpcOptions,
-                        returnType: x,
-                        throws: undefined,
-                        returnArrayOf: undefined,
-                        returnDictOf: undefined
-                    }) as InternalRPCOptions;
-                    wrappedOptions.push(partialWrappedRpcOptions);
                 }
             }
             if (allUsingDefaultEnvelope) {
                 wrappedOptions.push(defaultWrappedOptions);
+            } else {
+                wrappedOptions.push(...individuallyWrappedOptions);
             }
 
             for (const wrappedRpcOptions of wrappedOptions) {
@@ -1162,7 +1167,7 @@ export class OpenAPIManager {
                 for (const wrappedType of wrappedTypes) {
                     const wrappedTpm = extractTransferProtocolMeta(wrappedType?.prototype);
                     const codeKey = `${wrappedTpm?.code || 200}`;
-                    const codeTypeKey = `${codeKey}::${wrappedTpm?.contentType || 'application/json'}`;
+                    const codeTypeKey = `${codeKey}::${wrappedTpm?.contentType || getApparentContentType(wrappedType)}`;
                     const codeTypeValue = codeTypeMap.get(codeTypeKey);
                     const partialSchema = this.autoTypesToOpenAPISchema(wrappedType, 'output');
                     this.applySceneMeta(partialSchema, rpcOptions, 'response');
@@ -1238,11 +1243,11 @@ export class OpenAPIManager {
             } else {
                 propMap[contentType] = {
                     schema: {
-                        oneOf: v.map((x) => {
+                        oneOf: _.uniqBy(v.map((x) => {
                             this.mergeHeadersObject(headers, x[1]);
 
                             return x[0];
-                        })
+                        }), JSON.stringify)
                     }
                 };
             }
@@ -1503,4 +1508,30 @@ export class OpenAPIManager {
 
         return final;
     }
+}
+
+
+function getApparentContentType(cls: any) {
+    if (cls === String || cls?.prototype instanceof String) {
+        return 'text/plain; charset=utf-8';
+    }
+
+    if (
+        cls === Readable ||
+        (cls?.prototype instanceof Readable) ||
+        (typeof cls?.prototype?.pipe) === 'function'
+    ) {
+        return 'application/octet-stream';
+    }
+
+    if (
+        cls === Buffer ||
+        cls?.prototype instanceof Buffer ||
+        cls === Blob ||
+        cls?.prototype instanceof Blob
+    ) {
+        return 'application/octet-stream';
+    }
+
+    return 'application/json';
 }

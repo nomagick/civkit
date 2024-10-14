@@ -143,7 +143,8 @@ export function TPM(meta: TransferProtocolMetadata) {
 export const withTransferProtocolMeta = assignTransferProtocolMeta;
 
 @TPM({
-    envelope: null
+    envelope: null,
+    contentType: 'text/plain; charset=utf-8'
 })
 export class RawString extends String { }
 Object.defineProperty(RawString, 'name', {
@@ -151,7 +152,8 @@ Object.defineProperty(RawString, 'name', {
 });
 
 @TPM({
-    envelope: null
+    envelope: null,
+    contentType: 'application/octet-stream'
 })
 export class RawBuffer extends Buffer { }
 Object.defineProperty(RawBuffer, 'name', {
