@@ -11,7 +11,7 @@ import {
 } from './meta';
 import {
     Also, AutoCastable,
-    AutoCastingError, Prop, 
+    AutoCastingError, Prop,
     PropOptions, Combine,
 } from '../lib/auto-castable';
 import { isPrimitiveLike, marshalErrorLike } from '../utils';
@@ -271,7 +271,9 @@ export class IntegrityEnvelope extends RPCEnvelope {
                 return x;
             } else if (
                 x === Buffer ||
-                x?.prototype instanceof Buffer
+                x?.prototype instanceof Buffer ||
+                x === Blob ||
+                x?.prototype instanceof Blob
             ) {
                 return x;
             }

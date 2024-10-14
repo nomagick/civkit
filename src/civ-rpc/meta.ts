@@ -141,3 +141,19 @@ export function TPM(meta: TransferProtocolMetadata) {
 }
 
 export const withTransferProtocolMeta = assignTransferProtocolMeta;
+
+@TPM({
+    envelope: null
+})
+export class RawString extends String { }
+Object.defineProperty(RawString, 'name', {
+    value: 'String',
+});
+
+@TPM({
+    envelope: null
+})
+export class RawBuffer extends Buffer { }
+Object.defineProperty(RawBuffer, 'name', {
+    value: 'Buffer',
+});
