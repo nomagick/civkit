@@ -37,10 +37,10 @@ export class TrieRouter<D = unknown> {
             node.payload ??= {};
             const data = node.payload as RouteVec<D>;
             if (key.startsWith('::')) {
-                data.matchAnyAsProp = key.slice(2);
+                data.matchAnyAsProp = decodeURIComponent(key.slice(2));
                 data.matchRest = true;
             } else if (key.startsWith(':')) {
-                data.matchAnyAsProp = key.slice(1);
+                data.matchAnyAsProp = decodeURIComponent(key.slice(1));
             }
         }
     }
