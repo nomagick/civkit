@@ -44,12 +44,13 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
 
     ongoingTasks = 0;
 
-    runInThread = isMainThread ? RUN_IN_THREAD.CHILD_THREAD : RUN_IN_THREAD.THIS_THREAD;
+    runInThread = (isMainThread || !(typeof workerData === 'object' && workerData?.type === this.constructor.name)) ?
+        RUN_IN_THREAD.CHILD_THREAD : RUN_IN_THREAD.THIS_THREAD;
 
     constructor(..._args: any[]) {
         super(...arguments);
 
-        if (!isMainThread) {
+        if (this.runInThread === RUN_IN_THREAD.THIS_THREAD) {
             process.nextTick(() => {
                 if (this.__status === 'init') {
                     this.serviceReady();
@@ -133,7 +134,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
 
     @perNextTick()
     notifyOngoingTasks() {
-        if (isMainThread) {
+        if (this.runInThread !== RUN_IN_THREAD.THIS_THREAD) {
             return;
         }
         parentPort?.postMessage({
@@ -276,7 +277,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
     }
 
     initWorker() {
-        if (isMainThread) {
+        if (this.runInThread !== RUN_IN_THREAD.THIS_THREAD) {
             return;
         }
         if (workerData.type !== this.constructor.name) {
