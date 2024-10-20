@@ -1,47 +1,91 @@
-import { createHook, executionAsyncResource } from 'async_hooks';
+import { createHook, executionAsyncId } from 'async_hooks';
 import { randomUUID } from 'crypto';
 import { AsyncService } from './async-service';
 
-export const TRACE_CTX = Symbol('TraceCtx');
 export interface TraceCtx {
     traceId?: string;
     traceT0?: Date;
     [k: string | symbol]: any;
 }
-export interface TraceableInterface {
-    [TRACE_CTX]?: TraceCtx;
-}
+
+const trackings: Array<Map<number, number | object>> = [];
 
 export const tracerHook = createHook({
-    init(_asyncId, _type, _triggerAsyncId, resource: TraceableInterface) {
-        const currentResource: TraceableInterface = executionAsyncResource();
-        if (currentResource?.[TRACE_CTX]) {
-            resource[TRACE_CTX] = currentResource[TRACE_CTX];
+    // triggerAsyncId is the asyncId of the resource that caused (or "triggered") the new resource to initialize 
+    // and that caused init to call. This is different from async_hooks.executionAsyncId() that only shows when a resource was created, 
+    // while triggerAsyncId shows why a resource was created.
+    init(asyncId, _type, _triggerAsyncId, _resource) {
+        const whenParent = executionAsyncId();
+        for (const idBasedTracking of trackings) {
+            const upstreamTracked = idBasedTracking.get(whenParent);
+            if (typeof upstreamTracked === 'number') {
+                idBasedTracking.set(asyncId, upstreamTracked);
+            } else if (typeof upstreamTracked === 'object') {
+                idBasedTracking.set(asyncId, whenParent);
+            }
+        }
+    },
+    destroy(asyncId) {
+        for (const idBasedTracking of trackings) {
+            idBasedTracking.delete(asyncId);
         }
     }
-});
+}).enable();
+
+export function setupTracker() {
+    const idBasedTracking = new Map<number, number | object>();
+    trackings.push(idBasedTracking);
+
+    return {
+        getStore(asyncId: number) {
+            const l1 = idBasedTracking.get(asyncId);
+            if (typeof l1 === 'number') {
+                const l2 = idBasedTracking.get(l1);
+                if (typeof l2 !== 'object') {
+                    throw new Error('Corrupted async context');
+                }
+
+                return l2;
+            }
+
+            return l1;
+        },
+        getCurrentStore() {
+            return this.getStore(executionAsyncId());
+        },
+        track(asyncId: number) {
+            if (idBasedTracking.has(asyncId)) {
+                return this.getStore(asyncId)!;
+            }
+            idBasedTracking.set(asyncId, {});
+
+            return this.getStore(asyncId)!;
+        },
+        trackCurrent() {
+            return this.track(executionAsyncId());
+        },
+        dismiss() {
+            const idx = trackings.indexOf(idBasedTracking);
+            if (idx >= 0) {
+                trackings.splice(idx, 1);
+            }
+        }
+    };
+}
+
+export const defaultTracker = setupTracker();
 
 export function setupTraceCtx(input: Partial<TraceCtx> = {}) {
-    tracerHook.enable();
-    const currentResource: TraceableInterface = executionAsyncResource();
-    if (currentResource) {
-        if (!currentResource[TRACE_CTX]) {
-            currentResource[TRACE_CTX] = {
-                ...input,
-            };
-        }
+    const currentResource = defaultTracker.trackCurrent();
 
-        const ctx = currentResource[TRACE_CTX]!;
-        Object.assign(ctx, {
-            ...input
-        });
-        ctx.traceId ??= randomUUID();
-        ctx.traceT0 ??= new Date();
+    const ctx: TraceCtx = currentResource!;
+    Object.assign(ctx, {
+        ...input
+    });
+    ctx.traceId ??= randomUUID();
+    ctx.traceT0 ??= new Date();
 
-        return ctx;
-    }
-
-    return undefined;
+    return ctx;
 }
 
 export function setupTraceId(traceId?: string, traceT0?: Date) {
@@ -49,9 +93,7 @@ export function setupTraceId(traceId?: string, traceT0?: Date) {
 }
 
 export function getTraceCtx() {
-    const currentResource: TraceableInterface = executionAsyncResource();
-
-    return currentResource?.[TRACE_CTX];
+    return defaultTracker.getCurrentStore() as TraceCtx | undefined;
 }
 
 export function getTraceId() {
