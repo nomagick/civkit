@@ -57,9 +57,11 @@ export function setupTracker() {
             if (idBasedTracking.has(asyncId)) {
                 return this.getStore(asyncId)!;
             }
-            idBasedTracking.set(asyncId, {});
 
-            return this.getStore(asyncId)!;
+            const obj = {};
+            idBasedTracking.set(asyncId, obj);
+
+            return obj as object;
         },
         trackCurrent() {
             return this.track(executionAsyncId());
@@ -93,7 +95,11 @@ export function setupTraceId(traceId?: string, traceT0?: Date) {
 }
 
 export function getTraceCtx() {
-    return defaultTracker.getCurrentStore() as TraceCtx | undefined;
+    try {
+        return defaultTracker.getCurrentStore() as TraceCtx | undefined;
+    } catch (err) {
+        return undefined;
+    }
 }
 
 export function getTraceId() {
