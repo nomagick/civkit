@@ -37,10 +37,10 @@ export class TrieRouter<D = unknown> {
             node.payload ??= {};
             const data = node.payload as RouteVec<D>;
             if (key.startsWith('::')) {
-                data.matchAnyAsProp = decodeURIComponent(key.slice(2));
+                data.matchAnyAsProp = key.slice(2);
                 data.matchRest = true;
             } else if (key.startsWith(':')) {
-                data.matchAnyAsProp = decodeURIComponent(key.slice(1));
+                data.matchAnyAsProp = key.slice(1);
             }
         }
     }
@@ -54,7 +54,7 @@ export class TrieRouter<D = unknown> {
 
         const head = orig[0];
         const last = orig[orig.length - 1];
-        const middle = orig.slice(1, orig.length - 1).filter(Boolean);
+        const middle = orig.slice(1, orig.length - 1);
 
         if (head === '') {
             return [head, ...middle, last];
@@ -88,7 +88,7 @@ export class TrieRouter<D = unknown> {
             }
             if (v.payload?.matchRest) {
                 if (v.payload?.data) {
-                    const nextProps = { ...props, [v.payload.matchAnyAsProp]: stack.join(this.delimiter) };
+                    const nextProps = { ...props, [v.payload.matchAnyAsProp]: decodeURIComponent(stack.join(this.delimiter)) };
                     for (const x of v.payload.data) {
                         matchRests.push([x, nextProps]);
                     }
@@ -97,7 +97,7 @@ export class TrieRouter<D = unknown> {
                 continue;
             }
 
-            nextSteps.push([v, { ...props, [v.payload.matchAnyAsProp]: stack[0] }]);
+            nextSteps.push([v, { ...props, [v.payload.matchAnyAsProp]: decodeURIComponent(stack[0]) }]);
         }
 
         return nextSteps.flatMap(([node, props]) => this.match(stack.slice(1), node, props)).concat(matchRests);
