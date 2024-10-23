@@ -130,20 +130,21 @@ export function useResourceBasedDefaultTracker() {
     defaultTracker = setupResourceBasedTracker();
 }
 
-export function setupTraceCtx(input: Partial<TraceCtx> = {}) {
+export function setupTraceCtx(input?: Partial<TraceCtx>) {
     const currentResource = defaultTracker.trackCurrent();
 
     const ctx: TraceCtx = currentResource!;
-    Object.assign(ctx, {
-        ...input
-    });
-    ctx.traceId ??= randomUUID();
-    ctx.traceT0 ??= new Date();
+
+    if (input && typeof input === 'object') {
+        Object.assign(ctx, {
+            ...input
+        });
+    }
 
     return ctx;
 }
 
-export function setupTraceId(traceId?: string, traceT0?: Date) {
+export function setupTraceId(traceId: string = randomUUID(), traceT0: Date = new Date()) {
     return setupTraceCtx({ traceId, traceT0 });
 }
 
