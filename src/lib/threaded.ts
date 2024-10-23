@@ -191,12 +191,18 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
             const worker = this.getWorker();
             const deferred = Defer<any>();
             const { port1, port2 } = new MessageChannel();
+            let asyncContext: any;
+            try {
+                asyncContext = this.asyncContext.ctx;
+            } catch (err) {
+                // context not available
+            }
             const m = {
                 name,
                 input,
                 env: {
                     ...env,
-                    asyncContext: this.asyncContext.ctx,
+                    asyncContext,
                 },
             };
             const { data, profiles, transferList } = this.pseudoTransfer.composeTransferable(m);
