@@ -5,7 +5,7 @@ import { cpus } from 'node:os';
 import { isMainThread, Worker, parentPort, workerData, MessageChannel, threadId } from 'node:worker_threads';
 
 import { AbstractPseudoTransfer } from './pseudo-transfer';
-import { AbstractAsyncContext } from './async-context';
+import type { AbstractAsyncContext } from './async-context';
 import { RPC_REFLECT } from '../civ-rpc/base';
 import { AbstractRPCRegistry, RPCOptions } from '../civ-rpc/registry';
 import { LoggerInterface } from './logger';

@@ -1,4 +1,4 @@
-import { createHook, executionAsyncId } from 'async_hooks';
+import { createHook, executionAsyncId, executionAsyncResource } from 'async_hooks';
 import { randomUUID } from 'crypto';
 import { AsyncService } from './async-service';
 
@@ -8,15 +8,18 @@ export interface TraceCtx {
     [k: string | symbol]: any;
 }
 
-const trackings: Array<Map<number, number | object>> = [];
+const idBasedTrackings: Array<Map<number, number | object>> = [];
+const resourceBasedTrackings: Array<WeakMap<object, object>> = [];
 
 export const tracerHook = createHook({
     // triggerAsyncId is the asyncId of the resource that caused (or "triggered") the new resource to initialize 
     // and that caused init to call. This is different from async_hooks.executionAsyncId() that only shows when a resource was created, 
     // while triggerAsyncId shows why a resource was created.
-    init(asyncId, _type, _triggerAsyncId, _resource) {
+    init(asyncId, _type, _triggerAsyncId, resource) {
         const whenParent = executionAsyncId();
-        for (const idBasedTracking of trackings) {
+        const parentResource = executionAsyncResource();
+
+        for (const idBasedTracking of idBasedTrackings) {
             const upstreamTracked = idBasedTracking.get(whenParent);
             if (typeof upstreamTracked === 'number') {
                 idBasedTracking.set(asyncId, upstreamTracked);
@@ -24,17 +27,24 @@ export const tracerHook = createHook({
                 idBasedTracking.set(asyncId, whenParent);
             }
         }
+
+        for (const resourceBasedTracking of resourceBasedTrackings) {
+            const upstreamTracked = resourceBasedTracking.get(parentResource);
+            if (upstreamTracked) {
+                resourceBasedTracking.set(resource, upstreamTracked);
+            }
+        }
     },
     destroy(asyncId) {
-        for (const idBasedTracking of trackings) {
+        for (const idBasedTracking of idBasedTrackings) {
             idBasedTracking.delete(asyncId);
         }
     }
 }).enable();
 
-export function setupTracker() {
+export function setupIdBasedTracker() {
     const idBasedTracking = new Map<number, number | object>();
-    trackings.push(idBasedTracking);
+    idBasedTrackings.push(idBasedTracking);
 
     return {
         getStore(asyncId: number) {
@@ -67,15 +77,58 @@ export function setupTracker() {
             return this.track(executionAsyncId());
         },
         dismiss() {
-            const idx = trackings.indexOf(idBasedTracking);
+            const idx = idBasedTrackings.indexOf(idBasedTracking);
             if (idx >= 0) {
-                trackings.splice(idx, 1);
+                idBasedTrackings.splice(idx, 1);
             }
         }
     };
 }
 
-export const defaultTracker = setupTracker();
+export function setupResourceBasedTracker() {
+    const resourceBasedTracking = new WeakMap<object, object>();
+    resourceBasedTrackings.push(resourceBasedTracking);
+
+    return {
+        getStore(asyncResource: object) {
+            return resourceBasedTracking.get(asyncResource);
+        },
+        getCurrentStore() {
+            return this.getStore(executionAsyncResource());
+        },
+        track(asyncResource: object) {
+            if (resourceBasedTracking.has(asyncResource)) {
+                return this.getStore(asyncResource)!;
+            }
+
+            const obj = {};
+            resourceBasedTracking.set(asyncResource, obj);
+
+            return obj as object;
+        },
+        trackCurrent() {
+            return this.track(executionAsyncResource());
+        },
+        dismiss() {
+            const idx = resourceBasedTrackings.indexOf(resourceBasedTracking);
+            if (idx >= 0) {
+                idBasedTrackings.splice(idx, 1);
+            }
+        }
+    };
+}
+
+export let defaultTracker: ReturnType<typeof setupResourceBasedTracker> | ReturnType<typeof setupIdBasedTracker> = setupIdBasedTracker();
+
+export function useIdBasedDefaultTracker() {
+    defaultTracker.dismiss();
+    defaultTracker = setupIdBasedTracker();
+}
+
+export function useResourceBasedDefaultTracker() {
+    defaultTracker.dismiss();
+    defaultTracker = setupResourceBasedTracker();
+}
 
 export function setupTraceCtx(input: Partial<TraceCtx> = {}) {
     const currentResource = defaultTracker.trackCurrent();
