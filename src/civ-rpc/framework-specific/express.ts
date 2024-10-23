@@ -841,7 +841,8 @@ export abstract class ExpressServer extends AsyncService {
     @runOnce()
     insertAsyncHookMiddleware() {
         const asyncHookMiddleware = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
-            setupTraceId(req.get('x-request-id') || req.get('request-id') || undefined);
+            const googleTraceId = req.get('x-cloud-trace-context')?.split('/')?.[0];
+            setupTraceId(req.get('x-request-id') || req.get('request-id') || googleTraceId || undefined);
 
             return next();
         };

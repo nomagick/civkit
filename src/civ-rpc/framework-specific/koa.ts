@@ -857,7 +857,8 @@ export abstract class KoaServer extends AsyncService {
     @runOnce()
     insertAsyncHookMiddleware() {
         const asyncHookMiddleware = async (ctx: Context, next: () => Promise<void>) => {
-            setupTraceId(ctx.get('x-request-id') || ctx.get('request-id') || undefined);
+            const googleTraceId = ctx.get('x-cloud-trace-context').split('/')?.[0];
+            setupTraceId(ctx.get('x-request-id') || ctx.get('request-id') || googleTraceId || undefined);
 
             return next();
         };
