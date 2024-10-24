@@ -98,6 +98,7 @@
         "./file-storage": "./lib/file-storage.js",
         "./finalizer": "./lib/finalizer-service.js",
         "./fswalk": "./lib/fswalk.js",
+        "./bfswalk": "./lib/bfswalk.js",
         "./hash": "./lib/hash.js",
         "./http": "./lib/httpService.js",
         "./logger": "./lib/logger.js",

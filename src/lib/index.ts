@@ -3,6 +3,7 @@ export * from './defer';
 export * from './encoding';
 export * from './fancy-file';
 export * from './fswalk';
+export * from './bfswalk';
 export * from './hash';
 
 export * from './httpService';
