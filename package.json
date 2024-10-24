@@ -90,6 +90,8 @@
         "./auto-castable": "./lib/auto-castable.js",
         "./async-context": "./lib/async-context.js",
         "./async-service": "./lib/async-service.js",
+        "./asar/archive": "./lib/asar/archive.js",
+        "./asar/writer": "./lib/asar/writer.js",
         "./constants": "./lib/constants.js",
         "./cryptology": "./lib/cryptology.js",
         "./dns": "./lib/custom-lookup.js",

@@ -71,3 +71,19 @@ export async function walkDirForSummary(dirPath: string) {
         walkStream.on('error', (err) => reject(err));
     });
 }
+
+
+export async function* iterFileContents(fpath: string, bs: number = 4 * 1024 * 1024) {
+    const fd = await fsp.open(fpath, 'r');
+
+    const buff = Buffer.allocUnsafe(bs);
+    let bytesRead = 0;
+
+    try {
+        while ((bytesRead = (await fd.read(buff, 0, buff.byteLength, null)).bytesRead) > 0) {
+            yield buff.subarray(0, bytesRead);
+        }
+    } finally {
+        fd.close().catch(() => null);
+    }
+}
