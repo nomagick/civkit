@@ -1,6 +1,6 @@
 {
     "name": "civkit",
-    "version": "0.8.1",
+    "version": "0.8.2",
     "description": "Sets of tools, in typescript",
     "main": "index.js",
     "types": "index.d.ts",
@@ -38,6 +38,7 @@
         "libmagic-ffi": "^0.1.4",
         "mime": "^3.0.0",
         "minio": "^7.0.33",
+        "minimatch": "^10.0.1",
         "node-object-hash": "^3.0.0",
         "node-schedule": "^2.1.1",
         "nodemailer": "^6.9.1",

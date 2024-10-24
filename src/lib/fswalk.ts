@@ -149,6 +149,67 @@ export class FsWalk extends EventEmitter {
 
         return;
     }
+
+    async *iterWalk(thePath: string = this.origPath, relativePathStack: string[] = [this.rootPrefix], symlinkDepth = this.symlinkDepth): AsyncGenerator<{
+        type: 'dir' | 'file' | 'symlink' | 'other',
+        result: WalkEntity
+    }> {
+        const absPath = thePath === this.origPath ? await fsp.realpath(thePath) : thePath;
+        const curStat: Stats = await fsp.lstat(absPath);
+
+        const result: any = {
+            stats: curStat
+        };
+
+        result.path = absPath;
+        const rPathVecs = _.compact(relativePathStack);
+        result.relativePath = rPathVecs.length ? pathModule.join(...rPathVecs) : '';
+
+        const downStreams = [];
+
+        if (curStat.isFile()) {
+            yield { type: 'file', result };
+        } else if (curStat.isDirectory()) {
+            yield { type: 'dir', result };
+            const fList = await fsp.readdir(absPath);
+            for (const fName of fList) {
+                const downStream = this.iterWalk(pathModule.join(absPath, fName), [...relativePathStack, fName], symlinkDepth);
+                if (this.depthFirst) {
+                    yield* downStream;
+                } else {
+                    downStreams.push(downStream);
+                }
+            }
+        } else if (curStat.isSymbolicLink()) {
+            yield { type: 'symlink', result };
+            if (this.followSymink && symlinkDepth > 0) {
+                const linkContent = await fsp.readlink(absPath);
+                let theOtherEnd;
+                const linkContentString = linkContent;
+                if (pathModule.isAbsolute(linkContentString)) {
+                    theOtherEnd = linkContent;
+                } else {
+                    theOtherEnd = await fsp.realpath(pathModule.join(absPath, linkContent));
+                }
+                const downStream = this.iterWalk(theOtherEnd, relativePathStack, symlinkDepth - 1);
+                if (this.depthFirst) {
+                    yield* downStream;
+                } else {
+                    downStreams.push(downStream);
+                }
+            }
+        } else {
+            yield { type: 'other', result };
+        }
+
+        if (downStreams.length) {
+            for (const downStream of downStreams) {
+                yield* downStream;
+            }
+        }
+
+        return;
+    }
 }
 
 export interface FsWalk extends EventEmitter {
