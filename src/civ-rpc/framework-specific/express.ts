@@ -237,13 +237,9 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             }
 
             const jointInput = {
-                ...req.params,
                 ...req.query,
                 ...(_.isPlainObject(req.body) ? req.body : {}),
-                __body__: req.body,
-                __rawBody__: (req as any).rawBody,
-                __params__: req.params,
-                __query__: req.query,
+                ...req.params,
             };
 
             const env = this.ctxMgr.setup({ req, res });
