@@ -75,9 +75,14 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         this.filesToLoad.add(file);
     }
 
+    overrideEnv(): Record<string, string> | undefined {
+        return undefined;
+    }
+
     createWorker() {
         this.logger.debug(`Starting new worker thread with ${this.filesToLoad.size} files to load ...`);
         const worker = new Worker(this.workerEntrypoint, {
+            env: this.overrideEnv(),
             workerData: {
                 type: this.constructor.name,
                 filesToLoad: [...this.filesToLoad],
