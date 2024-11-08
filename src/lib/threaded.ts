@@ -75,7 +75,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         this.filesToLoad.add(file);
     }
 
-    overrideEnv(): Record<string, string> | undefined {
+    overrideEnv(): Record<string, string | undefined> | undefined {
         return undefined;
     }
 
