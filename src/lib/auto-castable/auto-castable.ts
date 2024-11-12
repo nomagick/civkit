@@ -528,6 +528,30 @@ export function inputSingle<T>(
             return null;
         }
 
+        if (config.default !== undefined) {
+            if (Array.isArray(config.default)) {
+                return [...config.default];
+            }
+            if (_.isPlainObject(config.default)) {
+                return { ...config.default };
+            }
+
+            return config.default;
+        }
+        if ((typeof config.defaultFactory) === 'function') {
+            return config.defaultFactory!.call(undefined, input, access);
+        }
+        if (config.required) {
+            throw new AutoCastingError({
+                reason: `Required, non-nullable, but received null.`,
+                path: accessText,
+                hostName,
+                propName,
+                value: inputProp,
+                desc: config.desc,
+            });
+        }
+
         return undefined;
     }
 
