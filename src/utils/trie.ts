@@ -82,9 +82,18 @@ export class TrieNode<T = unknown, D = unknown> {
         return node.seek(...tail) as any;
     }
 
+    *ancestors() {
+        let node: TrieNode<T> | null = this.parent;
+
+        while (node !== null) {
+            yield node;
+            node = node.parent;
+        }
+    }
+
     *traverse(mode: 'dfs' | 'bfs' = 'dfs') {
         const stack: TrieNode<T>[] = [this];
-        
+
         if (mode === 'bfs') {
             while (stack.length > 0) {
                 const node = stack.shift()!;
