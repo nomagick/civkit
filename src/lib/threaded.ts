@@ -190,7 +190,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
 
     }
 
-    override async exec(name: string, input: object, env?: any) {
+    override async exec(name: string, input: object, env?: any, lateMangleMsg?: any) {
         await this.serviceReady();
         if (this.runInThread === RUN_IN_THREAD.CHILD_THREAD) {
             const worker = this.getWorker();
@@ -270,6 +270,12 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                 await codeHostClass.serviceReady();
             }
 
+            if (lateMangleMsg) {
+                const m = this.pseudoTransfer.mangleTransferred(lateMangleMsg.port, lateMangleMsg.data, lateMangleMsg.dataProfiles);
+
+                return super.exec(name, m.data, m.env);
+            }
+
             return super.exec(name, input, env);
         } finally {
             this.ongoingTasks -= 1;
@@ -314,9 +320,11 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         parentPort!.on('message', async (msg) => {
             if (msg?.channel === this.constructor.name && msg.event === 'exec') {
                 await this.serviceReady();
-                const m = this.pseudoTransfer.mangleTransferred(msg.port, msg.data, msg.dataProfiles);
+                // const m = this.pseudoTransfer.mangleTransferred(msg.port, msg.data, msg.dataProfiles);
+                // Delay parameter mangling due to potential change of pseudoTransfer, in the init phase of method dependencies
                 try {
-                    const r = await this.exec(m.name, m.input, m.env);
+                    const m = msg.data;
+                    const r = await this.exec(m.name, m.input, m.env, msg);
                     this.pseudoTransfer.transferOverTheWire(msg.port, {
                         kind: 'return',
                         data: r,
