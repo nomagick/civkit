@@ -257,23 +257,25 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         this.ongoingTasks += 1;
         this.notifyOngoingTasks();
 
-        if (env?.asyncContext) {
-            this.asyncContext.setup();
-            Object.assign(this.asyncContext.ctx, env.asyncContext);
-        }
-
-
         try {
             const codeHostClass = this.host(name);
             const hostIsAsyncService = codeHostClass instanceof AsyncService;
             if (hostIsAsyncService && codeHostClass.serviceStatus !== 'ready') {
                 await codeHostClass.serviceReady();
             }
-
             if (lateMangleMsg) {
                 const m = this.pseudoTransfer.mangleTransferred(lateMangleMsg.port, lateMangleMsg.data, lateMangleMsg.dataProfiles);
 
-                return super.exec(name, m.data, m.env);
+                if (m.env?.asyncContext) {
+                    this.asyncContext.setup();
+                    Object.assign(this.asyncContext.ctx, m.env.asyncContext);
+                }
+                return super.exec(name, m.input, m.env);
+            }
+
+            if (env?.asyncContext) {
+                this.asyncContext.setup();
+                Object.assign(this.asyncContext.ctx, env.asyncContext);
             }
 
             return super.exec(name, input, env);
