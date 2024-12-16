@@ -75,19 +75,18 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         this.filesToLoad.add(file);
     }
 
-    overrideEnv(): Record<string, string | undefined> | undefined {
-        return undefined;
-    }
-
-    createWorker() {
-        this.logger.debug(`Starting new worker thread with ${this.filesToLoad.size} files to load ...`);
-        const worker = new Worker(this.workerEntrypoint, {
-            env: this.overrideEnv(),
+    get workerOptions(): ConstructorParameters<typeof Worker>[1] {
+        return {
             workerData: {
                 type: this.constructor.name,
                 filesToLoad: [...this.filesToLoad],
             }
-        });
+        };
+    }
+
+    createWorker() {
+        this.logger.debug(`Starting new worker thread with ${this.filesToLoad.size} files to load ...`);
+        const worker = new Worker(this.workerEntrypoint, this.workerOptions);
 
         this.workers.set(worker, {
             ongoingTasks: 0,

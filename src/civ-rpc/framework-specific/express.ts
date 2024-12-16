@@ -22,6 +22,7 @@ import { marshalErrorLike } from '../../utils/lang';
 
 import { UploadedFile } from "./shared";
 import { AbstractAsyncContext, setupTraceId } from '../../lib/async-context';
+export { UploadedFile } from './shared';
 
 
 export abstract class ExpressRegistry extends AbstractRPCRegistry {
