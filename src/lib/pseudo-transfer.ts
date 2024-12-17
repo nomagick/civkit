@@ -698,6 +698,14 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
             return true;
         }
 
+        if (thing?.buffer instanceof SharedArrayBuffer) {
+            return true;
+        }
+        
+        if (thing?.buffer instanceof ArrayBuffer) {
+            return true;
+        }
+
         if (typeof thing === 'object' && thing !== null && thing[SYM_PSEUDO_TRANSFERABLE]) {
             return false;
         }
@@ -706,9 +714,8 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
     }
 
     composeTransferable(obj: any) {
-        const r = this.prepareForTransfer(obj);
         const o = { data: ['object', 'function'].includes(typeof obj) ? _.cloneDeepWith(obj, (v)=> {
-            if (this.isNativelyTransferable(v)) {
+            if (this.isNativelyTransferable(v) !== undefined) {
                 return v;
             }
             const pseudoTransferableOptions = v?.[SYM_PSEUDO_TRANSFERABLE]?.();
@@ -720,6 +727,8 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
             }
             
         }) : obj };
+
+        const r = this.prepareForTransfer(o.data);
         const oidObjMap = new Map();
         const transferList = [];
         const profiles = [];
