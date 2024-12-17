@@ -707,7 +707,19 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
 
     composeTransferable(obj: any) {
         const r = this.prepareForTransfer(obj);
-        const o = { data: ['object', 'function'].includes(typeof obj) ? { ...obj } : obj };
+        const o = { data: ['object', 'function'].includes(typeof obj) ? _.cloneDeepWith(obj, (v)=> {
+            if (this.isNativelyTransferable(v)) {
+                return v;
+            }
+            const pseudoTransferableOptions = v[SYM_PSEUDO_TRANSFERABLE]?.();
+            if (pseudoTransferableOptions?.marshall) {
+                return v;
+            }
+            if (isPrimitiveLike(v)) {
+                return v;
+            }
+            
+        }) : obj };
         const oidObjMap = new Map();
         const transferList = [];
         const profiles = [];
