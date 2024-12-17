@@ -711,7 +711,7 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
             if (this.isNativelyTransferable(v)) {
                 return v;
             }
-            const pseudoTransferableOptions = v[SYM_PSEUDO_TRANSFERABLE]?.();
+            const pseudoTransferableOptions = v?.[SYM_PSEUDO_TRANSFERABLE]?.();
             if (pseudoTransferableOptions?.marshall) {
                 return v;
             }
