@@ -572,6 +572,8 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
         Reflect.set(req, 'files', reqBody.__files);
 
         try {
+            await cachedFile.ready;
+            
             return next();
         } finally {
             res.once('close', () => {

@@ -593,6 +593,8 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         ctx.files = reqBody.__files;
 
         try {
+            await cachedFile.ready;
+
             return await next();
         } finally {
             cachedFile.unlink().catch(this.logger.warn);
