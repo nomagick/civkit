@@ -597,7 +597,14 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
             return await next();
         } finally {
-            cachedFile.unlink().catch(this.logger.warn);
+            if (ctx.res.writable) {
+                ctx.res.once('close', () => {
+                    cachedFile.unlink().catch(this.logger.warn);
+                });
+            }
+            else {
+                cachedFile.unlink().catch(this.logger.warn);
+            }
         }
     }
 
