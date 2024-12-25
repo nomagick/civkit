@@ -314,6 +314,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                         }
                     });
                     if (this._RESPONSE_STREAM_MODE === 'direct') {
+                        ctx.respond = false;
                         resStream.pipe(ctx.res, { end: true });
                     } else {
                         ctx.body = resStream;
