@@ -69,6 +69,8 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     };
     _BODY_PARSER_LIMIT = '50mb';
 
+    _RESPONSE_STREAM_MODE: 'direct' | 'koa' = 'direct';
+
     koaMiddlewares = [
         this.__CORSAllowAllMiddleware,
         bodyParser({
@@ -291,16 +293,14 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
                 if (output instanceof Readable || (typeof output?.pipe) === 'function') {
                     ctx.socket.setKeepAlive(true, 1000);
-                    ctx.respond = false;
+                    let resStream = output;
 
                     this.applyTransferProtocolMeta(ctx, result.tpm);
                     if (output.readableObjectMode) {
                         const transformStream = new NDJsonStream();
                         this.applyTransferProtocolMeta(ctx, extractTransferProtocolMeta(transformStream));
                         output.pipe(transformStream, { end: true });
-                        transformStream.pipe(ctx.res, { end: true });
-                    } else {
-                        output.pipe(ctx.res);
+                        resStream = transformStream;
                     }
                     ctx.res.once('close', () => {
                         if (!output.readableEnded) {
@@ -313,6 +313,11 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                             output.destroy(new Error('Downstream socket closed'));
                         }
                     });
+                    if (this._RESPONSE_STREAM_MODE === 'direct') {
+                        resStream.pipe(ctx.res, { end: true });
+                    } else {
+                        ctx.body = resStream;
+                    }
                 } else if (Buffer.isBuffer(output)) {
                     if (!(result.tpm?.contentType)) {
                         const contentType = restoreContentType(await mimeOf(output));
