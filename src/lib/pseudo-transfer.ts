@@ -733,7 +733,7 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
         const transferList = [];
         const profiles = [];
         for (const [v, p] of r) {
-            _.set(o, ['data', ...(p.path || [])], (v && !isPrimitiveLike(v)) ? { ...v } : v);
+            _.set(o, ['data', ...(p.path || [])], v);
 
             if (p.oid) {
                 oidObjMap.set(p.oid, v);
