@@ -828,45 +828,39 @@ export abstract class KoaServer extends AsyncService {
             if (ctx.path !== this.docsEndpoint) {
                 return next();
             }
-            ctx.body = `
-            <!DOCTYPE html>
-            <html>
-              <head>
-                <title>${this.title || 'ReDoc'}</title>
-                <!-- needed for adaptive design -->
-                <meta charset="utf-8"/>
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
-
-                <!--
-                Redoc doesn't change outer page styles
-                -->
-                <style>
-                  body {
-                    margin: 0;
-                    padding: 0;
-                  }
-                </style>
-              </head>
-              <body>
-                <div id="redoc-container"></div>
-                <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"> </script>
-                <script>
-                  document.addEventListener('DOMContentLoaded', function() {
-                        Redoc.init('${openapiUrl}?${ctx.querystring}',
-                        {},
-                        document.getElementById('redoc-container'),
-                        ()=> {
-                            const apiTitle = document.querySelector('.api-info>h1').innerText;
-                            if (apiTitle) {
-                                document.title = apiTitle;
-                            }
-                        });
-                  });
-                </script>
-              </body>
-            </html>
-            `;
+            ctx.body = `<!DOCTYPE html>
+<html>
+  <head>
+    <title>${this.title || 'ReDoc'}</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="redoc-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"> </script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+            Redoc.init('${openapiUrl}?${ctx.querystring}',
+            {},
+            document.getElementById('redoc-container'),
+            ()=> {
+                const apiTitle = document.querySelector('.api-info>h1').innerText;
+                if (apiTitle) {
+                    document.title = apiTitle;
+                }
+            });
+      });
+    </script>
+  </body>
+</html>
+`;
 
         });
     }
