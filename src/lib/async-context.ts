@@ -21,9 +21,7 @@ export const tracerHook = createHook({
 
         for (const idBasedTracking of idBasedTrackings) {
             const upstreamTracked = idBasedTracking.get(whenParent);
-            if (typeof upstreamTracked === 'number') {
-                idBasedTracking.set(asyncId, upstreamTracked);
-            } else if (typeof upstreamTracked === 'object') {
+            if (typeof upstreamTracked === 'object') {
                 idBasedTracking.set(asyncId, whenParent);
             }
         }
@@ -43,22 +41,12 @@ export const tracerHook = createHook({
 }).enable();
 
 export function setupIdBasedTracker() {
-    const idBasedTracking = new Map<number, number | object>();
+    const idBasedTracking = new Map<number, object>();
     idBasedTrackings.push(idBasedTracking);
 
     return {
         getStore(asyncId: number) {
-            const l1 = idBasedTracking.get(asyncId);
-            if (typeof l1 === 'number') {
-                const l2 = idBasedTracking.get(l1);
-                if (typeof l2 !== 'object') {
-                    throw new Error('Corrupted async context');
-                }
-
-                return l2;
-            }
-
-            return l1;
+            return idBasedTracking.get(asyncId);
         },
         getCurrentStore() {
             return this.getStore(executionAsyncId());
