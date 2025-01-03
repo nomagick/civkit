@@ -21,6 +21,7 @@ import { extractTransferProtocolMeta, TransferProtocolMetadata } from '../meta';
 import { AbstractRPCRegistry } from '../registry';
 import { OpenAPIManager } from '../openapi';
 import http, { IncomingHttpHeaders } from 'http';
+import type http2 from 'http2';
 import { runOnce } from '../../decorators';
 import { humanReadableDataSize } from '../../utils/readability';
 import { marshalErrorLike } from '../../utils/lang';
@@ -740,7 +741,7 @@ export abstract class KoaServer extends AsyncService {
 
     koaApp: Koa = new Koa();
 
-    httpServer!: http.Server;
+    httpServer!: http.Server | http2.Http2Server;
 
     listening = false;
 
@@ -787,9 +788,13 @@ export abstract class KoaServer extends AsyncService {
             this.logger.warn(`Stacktrace: \n${err?.stack}`);
         });
 
-        this.httpServer = http.createServer(this.koaApp.callback());
+        this.httpServer = this.getServer(this.koaApp.callback());
 
         this.emit('ready');
+    }
+
+    getServer(koaRequestHandler: ReturnType<Koa['callback']>): typeof this['httpServer'] {
+        return http.createServer(koaRequestHandler);
     }
 
     protected featureSelect() {
@@ -936,10 +941,14 @@ export abstract class KoaServer extends AsyncService {
     override async standDown() {
         if (this.listening) {
             this.logger.info('Server closing...');
-            this.httpServer.closeIdleConnections();
+            if (this.httpServer instanceof http.Server) {
+                this.httpServer.closeIdleConnections();
+            }
             await new Promise<void>((resolve, reject) => {
                 const timer = setInterval(async () => {
-                    this.httpServer.closeIdleConnections();
+                    if (this.httpServer instanceof http.Server) {
+                        this.httpServer.closeIdleConnections();
+                    }
                     const connsLeft = await new Promise((resolve) => this.httpServer.getConnections((err, c) => {
                         if (err) { return resolve(undefined); }
                         return resolve(c);
