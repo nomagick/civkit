@@ -813,7 +813,7 @@ export abstract class KoaServer extends AsyncService {
         this.httpServer.listen(port, () => {
 
             this.listening = true;
-            this.logger.info(`Server listening on port ${port}`);
+            this.logger.info(`${this.httpServer.constructor.name} listening on port ${port}`);
         });
     }
 
@@ -938,6 +938,7 @@ export abstract class KoaServer extends AsyncService {
             if (this.httpServer instanceof http.Server) {
                 this.httpServer.closeIdleConnections();
             }
+            this.logger.info(`${this.httpServer.constructor.name} closing...`);
             await new Promise<void>((resolve, reject) => {
                 const timer = setInterval(async () => {
                     if (this.httpServer instanceof http.Server) {
