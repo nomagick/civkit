@@ -1,6 +1,7 @@
 import { Readable } from 'stream';
 import os from 'os';
 import http, { IncomingHttpHeaders } from 'http';
+import { randomUUID } from 'crypto';
 
 import _ from 'lodash';
 import busboy from 'busboy';
@@ -839,7 +840,7 @@ export abstract class ExpressServer extends AsyncService {
     insertAsyncHookMiddleware() {
         const asyncHookMiddleware = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
             const googleTraceId = req.get('x-cloud-trace-context')?.split('/')?.[0];
-            setupTraceId(req.get('x-request-id') || req.get('request-id') || googleTraceId || undefined);
+            setupTraceId(req.get('x-request-id') || req.get('request-id') || googleTraceId || randomUUID());
 
             return next();
         };

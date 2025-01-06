@@ -3,6 +3,7 @@ import _ from 'lodash';
 import busboy from 'busboy';
 
 import os from 'os';
+import { randomUUID } from 'crypto';
 
 import { Readable } from 'stream';
 import type { Context, Middleware } from 'koa';
@@ -869,7 +870,7 @@ export abstract class KoaServer extends AsyncService {
     insertAsyncHookMiddleware() {
         const asyncHookMiddleware = async (ctx: Context, next: () => Promise<void>) => {
             const googleTraceId = ctx.get('x-cloud-trace-context').split('/')?.[0];
-            setupTraceId(ctx.get('x-request-id') || ctx.get('request-id') || googleTraceId || undefined);
+            setupTraceId(ctx.get('x-request-id') || ctx.get('request-id') || googleTraceId || randomUUID());
 
             return next();
         };
