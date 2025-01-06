@@ -53,7 +53,7 @@ export abstract class AbstractLogger extends AsyncService {
         if (traceCtx) {
             objects.push({
                 traceId: traceCtx.traceId,
-                traceDt: Date.now() - traceCtx.traceT0!.getTime()
+                traceDt: traceCtx.traceT0 ? Date.now() - traceCtx.traceT0?.getTime() : undefined
             });
         }
 
