@@ -104,6 +104,9 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         worker.on('message', handler);
         worker.on('error', (err) => {
             this.logger.error(`Worker thread ${worker.threadId} error: \n${err.stack}`, { err: marshalErrorLike(err) });
+            worker.terminate().catch(() => undefined);
+            worker.off('message', handler);
+            this.workers.delete(worker);
         });
         worker.once('exit', () => {
             worker.off('message', handler);

@@ -1,6 +1,7 @@
 import { Readable } from 'stream';
 import os from 'os';
 import http, { IncomingHttpHeaders } from 'http';
+import type http2 from 'http2';
 import { randomUUID } from 'crypto';
 
 import _ from 'lodash';
@@ -715,7 +716,7 @@ export abstract class ExpressServer extends AsyncService {
     expressApp: express.Express = express();
     expressRootRouter: express.Router = express.Router();
 
-    httpServer!: http.Server;
+    httpServer!: http.Server | http2.Http2Server;
 
     listening = false;
 
@@ -785,7 +786,7 @@ export abstract class ExpressServer extends AsyncService {
         this.httpServer.listen(port, () => {
 
             this.listening = true;
-            this.logger.info(`Server listening on port ${port}`);
+            this.logger.info(`${this.httpServer.constructor.name} listening on port ${port}`);
         });
     }
 
@@ -897,10 +898,14 @@ export abstract class ExpressServer extends AsyncService {
     override async standDown() {
         if (this.listening) {
             this.logger.info('Server closing...');
-            this.httpServer.closeIdleConnections();
+            if (this.httpServer instanceof http.Server) {
+                this.httpServer.closeIdleConnections();
+            }
             await new Promise<void>((resolve, reject) => {
                 const timer = setInterval(async () => {
-                    this.httpServer.closeIdleConnections();
+                    if (this.httpServer instanceof http.Server) {
+                        this.httpServer.closeIdleConnections();
+                    }
                     const connsLeft = await new Promise((resolve) => this.httpServer.getConnections((err, c) => {
                         if (err) { return resolve(undefined); }
                         return resolve(c);
