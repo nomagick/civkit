@@ -818,7 +818,7 @@ export abstract class ExpressServer extends AsyncService {
     <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"> </script>
     <script>
       document.addEventListener('DOMContentLoaded', function() {
-            Redoc.init('${openapiUrl}${new URL(req.originalUrl).search}',
+            Redoc.init('${openapiUrl}${new URL(req.originalUrl, `${req.protocol}://${req.headers.host}`).search}',
             {},
             document.getElementById('redoc-container'),
             ()=> {
