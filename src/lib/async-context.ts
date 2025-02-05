@@ -8,6 +8,8 @@ export interface TraceCtx {
     [k: string | symbol]: any;
 }
 
+export const defaultAsyncLocalStorage = new AsyncLocalStorage<Record<string | number | symbol, any>>();
+
 export abstract class AbstractAsyncContext extends AsyncService {
     asyncLocalStorage = new AsyncLocalStorage<Record<string | number | symbol, any>>();
 
@@ -70,15 +72,16 @@ export abstract class AbstractAsyncContext extends AsyncService {
 }
 
 class GlobalAsyncContext extends AbstractAsyncContext {
+    override asyncLocalStorage = defaultAsyncLocalStorage;
     constructor(...args: any[]) {
         super(...args);
         this.init();
     }
 }
-const defaultTracker = new GlobalAsyncContext();
+export const defaultAsyncContext = new GlobalAsyncContext();
 
 export function setupTraceCtx(input?: Partial<TraceCtx>) {
-    return defaultTracker.setup(input);
+    return defaultAsyncContext.setup(input);
 }
 
 export function setupTraceId(traceId: string = randomUUID(), traceT0: Date = new Date()) {
@@ -87,7 +90,7 @@ export function setupTraceId(traceId: string = randomUUID(), traceT0: Date = new
 
 export function getTraceCtx() {
     try {
-        return defaultTracker.ctx as TraceCtx | undefined;
+        return defaultAsyncContext.ctx as TraceCtx | undefined;
     } catch (err) {
         return undefined;
     }
