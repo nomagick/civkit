@@ -264,10 +264,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
 
                 const result = await this.ctxMgr.run(() => {
                     const ctx = this.ctxMgr.ctx;
-                    Object.defineProperties(ctx, {
-                        req: { value: req, enumerable: false },
-                        res: { value: res, enumerable: false },
-                    });
+                    Object.setPrototypeOf(ctx, { req, res });
                     return this.call(methodName, jointInput, { env: ctx });
                 });
                 const output = result.output;
