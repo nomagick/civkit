@@ -714,8 +714,8 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
     }
 
     composeTransferable(obj: any) {
-        const thisType = typeof obj;
-        const o = { data: ['object', 'function'].includes(thisType) ? _.cloneDeepWith(obj, (v)=> {
+        const o = { data: ['object', 'function'].includes(typeof obj) ? _.cloneDeepWith(obj, (v)=> {
+            const thisType = typeof v;
             if (this.isNativelyTransferable(v) !== undefined && thisType !== 'function') {
                 return v;
             }
