@@ -71,11 +71,11 @@ export abstract class AbstractAsyncContext extends AsyncService {
 
 }
 
-class GlobalAsyncContext extends AbstractAsyncContext {
-    override asyncLocalStorage = defaultAsyncLocalStorage;
+export class GlobalAsyncContext extends AbstractAsyncContext {
     constructor(...args: any[]) {
         super(...args);
         this.init();
+        this.asyncLocalStorage = defaultAsyncLocalStorage;
     }
 }
 export const defaultAsyncContext = new GlobalAsyncContext();
