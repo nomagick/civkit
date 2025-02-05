@@ -245,8 +245,6 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 ...req.params,
             };
 
-            const env = this.ctxMgr.setup({ req, res });
-
             res.statusCode = 404;
             const keepAliveTimer = setTimeout(() => {
                 if (res.socket) {
@@ -264,7 +262,14 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     this.logger.info(`${rpcHost.constructor.name} recovered successfully`);
                 }
 
-                const result = await this.call(methodName, jointInput, { env });
+                const result = await this.ctxMgr.run(() => {
+                    const ctx = this.ctxMgr.ctx;
+                    Object.defineProperties(ctx, {
+                        req: { value: req, enumerable: false },
+                        res: { value: res, enumerable: false },
+                    });
+                    return this.call(methodName, jointInput, { env: ctx });
+                });
                 const output = result.output;
                 clearTimeout(keepAliveTimer);
                 if (this._hack_block_unauthorized_send) {
@@ -575,7 +580,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
 
         try {
             await cachedFile.ready;
-            
+
             return next();
         } finally {
             res.once('close', () => {

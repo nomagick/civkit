@@ -18,23 +18,22 @@ export abstract class AbstractAsyncContext extends AsyncService {
     }
 
     setup<T extends object>(base: T = {} as any) {
-        const alreadyCtx = this.asyncLocalStorage.getStore();
-        if (typeof alreadyCtx === 'object') {
-            Object.setPrototypeOf(base, alreadyCtx);
+        let ctx = this.asyncLocalStorage.getStore();
+        ctx ??= base;
+        if (ctx !== base) {
+            Object.assign(ctx, base);
         }
 
-        this.asyncLocalStorage.enterWith(base);
+        this.asyncLocalStorage.enterWith(ctx);
 
-        return base;
+        return ctx;
     }
 
-    run<T extends object, R>(base: T = {} as any, func: () => R) {
-        const alreadyCtx = this.asyncLocalStorage.getStore();
-        if (typeof alreadyCtx === 'object') {
-            Object.setPrototypeOf(base, alreadyCtx);
-        }
+    run<T extends object, R>(func: () => R, base?: T) {
+        let ctx = this.asyncLocalStorage.getStore();
+        ctx ??= base;
 
-        return this.asyncLocalStorage.run(base, func);
+        return this.asyncLocalStorage.run({ ...ctx, ...base }, func);
     }
 
     merge<T extends object>(input: T) {

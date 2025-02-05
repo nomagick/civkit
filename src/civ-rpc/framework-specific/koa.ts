@@ -266,7 +266,6 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 ...ctx.params,
             };
 
-            const ctx2 = this.ctxMgr.setup(ctx);
 
             ctx.status = 404;
             const keepAliveTimer = setTimeout(() => {
@@ -284,7 +283,11 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     this.logger.info(`${rpcHost.constructor.name} recovered successfully`);
                 }
 
-                const result = await this.call(methodName, jointInput, { env: ctx2 });
+                const result = await this.ctxMgr.run(() => {
+                    const ctx = this.ctxMgr.ctx;
+                    Object.setPrototypeOf(ctx, this.ctxMgr);
+                    return this.call(methodName, jointInput, { env: ctx });
+                });
                 const output = result.output;
                 clearTimeout(keepAliveTimer);
 

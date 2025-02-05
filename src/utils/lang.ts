@@ -184,6 +184,9 @@ export function digConstructablePrototype(o: object) {
 
     while (ptr) {
         ptr = Object.getPrototypeOf(ptr);
+        if (ptr === null) {
+            return undefined;
+        }
         if (typeof ptr.constructor === 'function') {
             break;
         }
