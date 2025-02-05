@@ -714,13 +714,17 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
     }
 
     composeTransferable(obj: any) {
-        const o = { data: ['object', 'function'].includes(typeof obj) ? _.cloneDeepWith(obj, (v)=> {
-            if (this.isNativelyTransferable(v) !== undefined) {
+        const thisType = typeof obj;
+        const o = { data: ['object', 'function'].includes(thisType) ? _.cloneDeepWith(obj, (v)=> {
+            if (this.isNativelyTransferable(v) !== undefined && thisType !== 'function') {
                 return v;
             }
             const pseudoTransferableOptions = v?.[SYM_PSEUDO_TRANSFERABLE]?.();
             if (pseudoTransferableOptions?.marshall) {
                 return v;
+            }
+            if (thisType === 'function') {
+                return undefined;
             }
             if (isPrimitiveLike(v)) {
                 return v;
