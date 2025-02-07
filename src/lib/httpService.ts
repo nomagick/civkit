@@ -193,9 +193,11 @@ export abstract class HTTPService<
         const config = { ...options, url };
         this.emit('request', config, serial);
         let timeoutTimer: ReturnType<typeof setTimeout>;
+        const timeoutDeferred = Defer();
         if (options.timeout) {
             timeoutTimer = setTimeout(() => {
                 (abortCtrl as any).abort(`Timeout of ${options.timeout}ms exceeded`);
+                timeoutDeferred.reject(new Error(`Timeout of ${options.timeout}ms exceeded`));
             }, options.timeout);
         }
         fetch(url, options).then(
@@ -206,7 +208,7 @@ export abstract class HTTPService<
                 });
                 this.emit('response', r, serial);
                 try {
-                    const parsed = await this.__processResponse(options, r);
+                    const parsed = await Promise.race([this.__processResponse(options, r), timeoutDeferred.promise]);
                     Object.defineProperties(r, {
                         data: { value: parsed, writable: true },
                         parsed: { value: parsed, writable: true },
@@ -245,11 +247,6 @@ export abstract class HTTPService<
                 clearTimeout(timeoutTimer);
             }
         });
-        if (options.timeout) {
-            setTimeout(() => {
-                (abortCtrl as any).abort(`Timeout of ${options.timeout}ms exceeded`);
-            }, options.timeout);
-        }
 
         return deferred.promise as any;
     }
