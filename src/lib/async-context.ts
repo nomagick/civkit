@@ -50,7 +50,7 @@ export abstract class AbstractAsyncContext extends AsyncService {
         return ctx;
     }
 
-    hasContext() {
+    available() {
         return !!this.asyncLocalStorage.getStore();
     }
 
