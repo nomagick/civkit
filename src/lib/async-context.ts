@@ -50,6 +50,10 @@ export abstract class AbstractAsyncContext extends AsyncService {
         return ctx;
     }
 
+    hasContext() {
+        return !!this.asyncLocalStorage.getStore();
+    }
+
     get<T = any>(k: string | number | symbol): T | undefined {
         try {
             return this.ctx?.[k];
