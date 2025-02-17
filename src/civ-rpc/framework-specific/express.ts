@@ -46,10 +46,10 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
     _hack_block_unauthorized_send = false;
 
     expressMiddlewares = [
-        express.json(),
-        express.urlencoded({ extended: true }),
-        this.__CORSAllowAllMiddleware,
-        this.__multiParse
+        express.json({ limit: this._BODY_PARSER_LIMIT }),
+        express.urlencoded({ extended: true, limit: this._BODY_PARSER_LIMIT }),
+        this.__CORSAllowAllMiddleware.bind(this),
+        this.__multiParse.bind(this)
     ];
 
     protected __routerRegister(router: express.Router, url: string, methods: string[], controller: express.RequestHandler) {
