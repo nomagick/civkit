@@ -284,8 +284,8 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 }
 
                 const result = await this.ctxMgr.run(() => {
-                    const ctx = this.ctxMgr.ctx;
-                    Object.setPrototypeOf(ctx, this.ctxMgr);
+                    const asyncCtx = this.ctxMgr.ctx;
+                    Object.setPrototypeOf(asyncCtx, ctx);
                     return this.call(methodName, jointInput, { env: ctx });
                 });
                 const output = result.output;
