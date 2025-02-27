@@ -246,7 +246,13 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 return next();
             }
             const [matchedEntry, params] = matched;
-            if (!matchedEntry.httpMethods.includes(ctx.method.toUpperCase())) {
+            const uMethod = ctx.method.toUpperCase();
+            if (uMethod === 'OPTIONS') {
+                ctx.status = 200;
+
+                return next();
+            }
+            if (!matchedEntry.httpMethods.includes(uMethod)) {
                 ctx.status = 405;
                 ctx.set('Allow', matchedEntry.httpMethods.join(', '));
 
