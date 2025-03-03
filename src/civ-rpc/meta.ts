@@ -7,7 +7,7 @@ export const RPC_RESULT_META_SYMBOL = Symbol('RPC result metas');
 export const RPC_MARSHAL = Symbol('RPCMarshal');
 
 export function assignMeta<T, P extends object>(inputTarget: T, meta: P):
-    T extends object ? T : T extends { (): any } ? T : { toJSON(key?: string): T; } {
+    T extends object ? T : T extends { (): any } ? T : { [k: string | symbol]: any; toJSON(key?: string): T; } {
 
     const target: any = (typeof inputTarget === 'object' || typeof inputTarget === 'function') ? inputTarget : {
         [RPC_MARSHAL]() {
@@ -69,7 +69,7 @@ function patchTransferProtocolMeta(meta: TransferProtocolMetadata) {
 
 export function assignTransferProtocolMeta<T extends any, P extends TransferProtocolMetadata>(
     inputTarget: T, meta?: P
-): T extends object ? T : T extends { (): any } ? T : { toJSON(key?: string): T; } {
+): T extends object ? T : T extends { (): any } ? T : { [k: string | symbol]: any; toJSON(key?: string): T; } {
     if (!meta) {
         return inputTarget as any;
     }
