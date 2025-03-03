@@ -94,7 +94,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             const httpConfig: {
                 action?: string | string[];
                 path?: string;
-            } | undefined = methodConfig.ext?.http;
+            } | undefined = methodConfig.proto?.http || methodConfig.ext?.http;
 
             const tags = [...(methodConfig.tags || []), ...methodName.split('.').filter(Boolean)];
 
@@ -694,7 +694,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         const httpConfig: {
             action?: string | string[];
             path?: string;
-        } | undefined = methodConfig.ext?.http;
+        } | undefined = methodConfig.proto?.http || methodConfig.ext?.http;
 
         let methods = ['POST'];
         if (httpConfig?.action) {

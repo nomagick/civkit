@@ -40,10 +40,18 @@ export interface RPCOptions {
     returnMetaType?: Function | Function[];
     desc?: string;
     markdown?: string;
-    ext?: { [k: string]: any; };
     deprecated?: boolean;
     tags?: string[];
     throws?: Function | Function[];
+    ext?: { [k: string]: any; };
+    openapi?: { [k: string]: any; };
+    proto?: {
+        http?: {
+            action?: string | string[];
+            path?: string;
+        };
+        [k: string]: any;
+    };
 
     envelope?: typeof RPCEnvelope | null;
 
