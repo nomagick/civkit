@@ -351,6 +351,13 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         try {
 
             params = conf!.paramOptions.map((paramOption) => {
+                if (paramOption?.required === false) {
+                    try {
+                        return inputSingle('Input', patchedInput, paramOption.path, paramOption);
+                    } catch (_err) {
+                        return undefined;
+                    }
+                }
                 return inputSingle('Input', patchedInput, paramOption.path, paramOption);
             });
 
