@@ -6,7 +6,7 @@ export { runOnce } from './once';
 
 export { perNextTick, perTick } from './per-tick';
 
-export { retry, patchRetry, TRIES_SYMBOL } from './retry';
+export { retry, retryWith, TRIES_SYMBOL } from './retry';
 
 export { serialOperation } from './serial-op';
 
