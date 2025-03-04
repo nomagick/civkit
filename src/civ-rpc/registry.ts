@@ -82,6 +82,8 @@ export interface RPCReflection<I = Record<string, any>, O = any, ENV = Record<st
     env: ENV;
     input: I;
 
+    signal: AbortSignal;
+
     // Note that hook functions here are intentionally designed to return void instead of Promise of future events.
     // This is to avoid creating a dead lock of promises.
     return: (anything: any) => void;
@@ -214,7 +216,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         }) as [string, Function, InternalRPCOptions][];
     }
 
-    async exec(name: string, input: object, env?: object) {
+    async exec(name: string, input: object, env?: object, signal?: AbortSignal) {
         const conf = this.conf.get(name);
         const func = conf?._func;
 
@@ -252,6 +254,12 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             returnDeferred.resolve(thingToReturn);
         };
         const pr = returnDeferred.promise;
+        let abortSignal = signal;
+        if (!abortSignal) {
+            const abortController = new AbortController();
+            abortSignal = abortController.signal;
+        }
+        abortSignal.throwIfAborted();
 
         const params = this.fitInputToArgs(name, {
             [RPC_CALL_ENVIRONMENT]: env,
@@ -262,6 +270,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 conf,
                 input,
                 env,
+                signal: abortSignal,
                 return: reflectReturnHook,
                 then: addToThenHooks,
                 catch: addToCatchHook,
@@ -404,6 +413,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
     async call(name: string, input: object, options?: {
         overrideEnvelopeClass?: typeof RPCEnvelope;
         env?: object;
+        signal?: AbortSignal;
     }): Promise<{
         tpm?: TransferProtocolMetadata;
         output: any,
@@ -419,7 +429,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         let envelopeInstance: RPCEnvelope = this.resolveEnvelopeClass(envelopeClass);
         let result: any;
         try {
-            result = await this.exec(name, input, options?.env);
+            result = await this.exec(name, input, options?.env, options?.signal);
 
             const tpm = extractTransferProtocolMeta(result);
             if (!options?.overrideEnvelopeClass && (tpm?.envelope || tpm?.envelope === null)) {

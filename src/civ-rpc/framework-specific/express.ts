@@ -251,6 +251,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     res.socket.setKeepAlive(true, 2 * 1000);
                 }
             }, 2 * 1000);
+            let done = false;
             try {
                 await this.serviceReady();
                 const rpcHost = this.host(methodName) as RPCHost;
@@ -262,10 +263,17 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     this.logger.info(`${rpcHost.constructor.name} recovered successfully`);
                 }
 
+                const abortController = new AbortController();
+                res.once('close', () => {
+                    if (!done) {
+                        abortController.abort('Connection closed by the other end.');
+                    }
+                });
+
                 const result = await this.ctxMgr.run(() => {
                     const ctx = this.ctxMgr.ctx;
                     Object.setPrototypeOf(ctx, { req, res });
-                    return this.call(methodName, jointInput, { env: ctx });
+                    return this.call(methodName, jointInput, { env: ctx, signal: abortController.signal });
                 });
                 const output = result.output;
                 clearTimeout(keepAliveTimer);
@@ -304,12 +312,14 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                             output.destroy(new Error('Downstream socket closed'));
                         }
                     });
+                    output.once('end', () => { done = true; });
                 } else if (Buffer.isBuffer(output)) {
                     if (!(result.tpm?.contentType)) {
                         const contentType = restoreContentType(await mimeOf(output));
                         res.set('Content-Type', contentType);
                     }
                     this.applyTransferProtocolMeta(res, result.tpm);
+                    done = true;
                     res.end(output);
                 } else if (output instanceof Blob) {
                     if (output.type) {
@@ -325,6 +335,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     res.socket?.setKeepAlive(true, 1000);
                     this.applyTransferProtocolMeta(res, result.tpm);
                     const nodeStream = Readable.fromWeb(output.stream());
+                    nodeStream.once('end', () => { done = true; });
                     nodeStream.pipe(res, { end: true });
                     res.once('close', () => {
                         if (!nodeStream.readableEnded) {
@@ -340,10 +351,12 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 } else if (typeof output === 'string') {
                     res.set('Content-Type', 'text/plain; charset=utf-8');
                     this.applyTransferProtocolMeta(res, result.tpm);
+                    done = true;
                     res.end(output);
                 } else {
                     res.set('Content-Type', 'application/json; charset=utf-8');
                     this.applyTransferProtocolMeta(res, result.tpm);
+                    done = true;
                     res.end(JSON.stringify(output));
                 }
 
@@ -365,6 +378,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 if (err?.stack) {
                     this.logger.warn(`Stacktrace: \n`, err?.stack);
                 }
+                done = true;
                 res.end(`${JSON.stringify(marshalErrorLike(err))}`);
             }
         };
@@ -426,11 +440,11 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
 
         return body;
     }
-    override async exec(name: string, input: object, env?: object) {
+    override async exec(name: string, input: object, env?: object, signal?: AbortSignal) {
         this.emit('run', name, input, env);
         const startTime = Date.now();
         try {
-            const result = await super.exec(name, input, env);
+            const result = await super.exec(name, input, env, signal);
 
             this.emit('ran', name, input, result, startTime, env);
 

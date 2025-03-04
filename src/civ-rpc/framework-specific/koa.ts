@@ -71,7 +71,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     };
     _BODY_PARSER_LIMIT = '50mb';
 
-    _RESPONSE_STREAM_MODE: 'direct' | 'koa' = 'direct';
+    _RESPONSE_STREAM_MODE: 'direct' | 'koa' = 'koa';
 
     koaMiddlewares = [
         this.__CORSAllowAllMiddleware,
@@ -277,6 +277,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             const keepAliveTimer = setTimeout(() => {
                 ctx.socket.setKeepAlive(true, 2 * 1000);
             }, 2 * 1000);
+            let done = false;
             try {
                 await this.serviceReady();
                 const rpcHost = this.host(methodName) as RPCHost;
@@ -289,10 +290,17 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     this.logger.info(`${rpcHost.constructor.name} recovered successfully`);
                 }
 
+                const abortController = new AbortController();
+                ctx.res.once('closed', () => {
+                    if (!done) {
+                        abortController.abort('Connection closed by the other end.');
+                    }
+                });
+
                 const result = await this.ctxMgr.run(() => {
                     const asyncCtx = this.ctxMgr.ctx;
                     Object.setPrototypeOf(asyncCtx, ctx);
-                    return this.call(methodName, jointInput, { env: ctx });
+                    return this.call(methodName, jointInput, { env: ctx, signal: abortController.signal });
                 });
                 const output = result.output;
                 clearTimeout(keepAliveTimer);
@@ -313,6 +321,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                         output.pipe(transformStream, { end: true });
                         resStream = transformStream;
                     }
+                    output.once('end', () => done = true);
                     ctx.res.once('close', () => {
                         if (!output.readableEnded) {
                             this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`);
@@ -337,6 +346,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     }
                     this.applyTransferProtocolMeta(ctx, result.tpm);
                     ctx.body = output;
+                    done = true;
                 } else if (output instanceof Blob) {
                     if (output.type) {
                         ctx.set('Content-Type', output.type);
@@ -352,6 +362,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     this.applyTransferProtocolMeta(ctx, result.tpm);
                     const nodeStream = Readable.fromWeb(output.stream());
                     nodeStream.pipe(ctx.res, { end: true });
+                    nodeStream.once('end', () => done = true);
                     ctx.res.once('close', () => {
                         if (!nodeStream.readableEnded) {
                             this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`);
@@ -367,10 +378,12 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     ctx.set('Content-Type', 'text/plain; charset=utf-8');
                     this.applyTransferProtocolMeta(ctx, result.tpm);
                     ctx.body = output;
+                    done = true;
                 } else {
                     ctx.set('Content-Type', 'application/json; charset=utf-8');
                     this.applyTransferProtocolMeta(ctx, result.tpm);
                     ctx.body = output;
+                    done = true;
                 }
 
                 if (!result.succ) {
@@ -386,6 +399,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 if (err?.stack) {
                     this.logger.warn(`Stacktrace: \n`, err?.stack);
                 }
+                done = true;
                 return next(err);
             }
 
@@ -456,11 +470,11 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         return body;
     }
 
-    override async exec(name: string, input: object, env?: object) {
+    override async exec(name: string, input: object, env?: object, signal?: AbortSignal) {
         this.emit('run', name, input);
         const startTime = Date.now();
         try {
-            const result = await super.exec(name, input, env);
+            const result = await super.exec(name, input, env, signal);
 
             this.emit('ran', name, input, result, startTime, env);
 
@@ -894,17 +908,26 @@ export abstract class KoaServer extends AsyncService {
             const startedAt = Date.now();
             const url = ctx.request.originalUrl.replace(/secret=\w+/, 'secret=***');
             if (['GET', 'DELETE', 'HEAD', 'OPTIONS'].includes(ctx.method.toUpperCase())) {
-                this.logger.info(`Incoming request: ${ctx.request.method.toUpperCase()} ${url} ${ctx.ip}`, { service: 'HTTP Server' });
+                this.logger.info(`Incoming request: ${ctx.request.method.toUpperCase()} ${url} ${ctx.ip}`);
             } else {
-                this.logger.info(`Incoming request: ${ctx.request.method.toUpperCase()} ${url} ${ctx.request.type || 'unspecified-type'} ${humanReadableDataSize(ctx.request.get('content-length') || ctx.request.socket.bytesRead) || 'N/A'} ${ctx.ip}`, { service: 'HTTP Server' });
+                this.logger.info(`Incoming request: ${ctx.request.method.toUpperCase()} ${url} ${ctx.request.type || 'unspecified-type'} ${humanReadableDataSize(ctx.request.get('content-length') || ctx.request.socket.bytesRead) || 'N/A'} ${ctx.ip}`);
             }
-
+            let downstreamReturned = false;
             ctx.res.once('close', () => {
                 const duration = Date.now() - startedAt;
-                this.logger.info(`Request completed: ${ctx.status} ${ctx.request.method.toUpperCase()} ${url} ${ctx.response.type || 'unspecified-type'} ${humanReadableDataSize(ctx.response.get('content-length') || ctx.res.socket?.bytesWritten) || 'cancelled'} ${duration}ms`, { service: 'HTTP Server' });
+                if (downstreamReturned) {
+                    this.logger.info(`Request completed: ${ctx.status} ${ctx.request.method.toUpperCase()} ${url} ${ctx.response.type || 'unspecified-type'} ${humanReadableDataSize(ctx.response.get('content-length') || ctx.res.socket?.bytesWritten) || 'cancelled'} ${duration}ms`);
+                    return;
+                }
+
+
+                this.logger.info(`Request cancelled: ??? ${ctx.request.method.toUpperCase()} ${url} ${ctx.response.type || 'unspecified-type'} ${humanReadableDataSize(ctx.response.get('content-length') || ctx.res.socket?.bytesWritten) || 'cancelled'} ${duration}ms`);
             });
 
-            return next();
+            const pn = next();
+            pn.finally(() => { downstreamReturned = true; });
+
+            return pn;
         };
 
         this.koaApp.use(loggingMiddleware);

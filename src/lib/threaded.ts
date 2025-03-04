@@ -192,7 +192,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
 
     }
 
-    override async exec(name: string, input: object, env?: any, lateMangleMsg?: any) {
+    override async exec(name: string, input: object, env?: any, signal?: AbortSignal, lateMangleMsg?: any) {
         await this.serviceReady();
         if (this.runInThread === RUN_IN_THREAD.CHILD_THREAD) {
             const worker = this.getWorker();
@@ -213,6 +213,15 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                 },
             };
             const { data, profiles, transferList } = this.pseudoTransfer.composeTransferable(m);
+            if (signal) {
+                signal.throwIfAborted();
+                signal.addEventListener('abort', (_evt) => {
+                    port1.postMessage({
+                        event: 'abort',
+                        reason: signal.reason,
+                    });
+                });
+            }
 
             worker.postMessage({
                 channel: this.constructor.name,
@@ -272,7 +281,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                     this.asyncContext.setup();
                     Object.assign(this.asyncContext.ctx, m.env.asyncContext);
                 }
-                return super.exec(name, m.input, m.env);
+                return super.exec(name, m.input, m.env, signal);
             }
 
             if (env?.asyncContext) {
@@ -280,7 +289,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                 Object.assign(this.asyncContext.ctx, env.asyncContext);
             }
 
-            return super.exec(name, input, env);
+            return super.exec(name, input, env, signal);
         } finally {
             this.ongoingTasks -= 1;
             this.notifyOngoingTasks();
@@ -328,7 +337,13 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                 // Delay parameter mangling due to potential change of pseudoTransfer, in the init phase of method dependencies
                 try {
                     const m = msg.data;
-                    const r = await this.exec(m.name, m.input, m.env, msg);
+                    const abortController = new AbortController();
+                    msg.port.on('message', (msg: any) => {
+                        if (typeof msg === 'object' && msg.event === 'abort') {
+                            abortController.abort(msg.reason);
+                        }
+                    });
+                    const r = await this.exec(m.name, m.input, m.env, abortController.signal, msg);
                     this.pseudoTransfer.transferOverTheWire(msg.port, {
                         kind: 'return',
                         data: r,
