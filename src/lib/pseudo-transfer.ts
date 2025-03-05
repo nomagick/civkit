@@ -5,7 +5,7 @@ import { MessageChannel, MessagePort, parentPort, threadId } from 'node:worker_t
 import { AsyncService } from './async-service';
 import { Defer, Deferred } from './defer';
 import { isPrimitiveLike, marshalErrorLike } from '../utils/lang';
-import { deepClone } from '../utils/vectorize';
+import { deepCloneAndExpose } from '../utils/vectorize';
 type Constructor<T = any> = abstract new (...args: any) => T;
 
 export const SYM_PSEUDO_TRANSFERABLE = Symbol('PseudoTransferable');
@@ -714,41 +714,46 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
         return undefined;
     }
 
+    protected customDeepClone(obj: any) {
+        return ['object', 'function'].includes(typeof obj) ? deepCloneAndExpose(obj, (v) => {
+            const thisType = typeof v;
+            if (this.isNativelyTransferable(v) !== undefined && thisType !== 'function') {
+                return v;
+            }
+            const pseudoTransferableOptions = v?.[SYM_PSEUDO_TRANSFERABLE]?.();
+            if (pseudoTransferableOptions?.marshall) {
+                return v;
+            }
+            if (thisType === 'function') {
+                return undefined;
+            }
+            if (isPrimitiveLike(v)) {
+                return v;
+            }
+
+        }) : obj;
+    }
+
     composeTransferable(obj: any) {
         const o = {
-            data: ['object', 'function'].includes(typeof obj) ? deepClone(obj, (v) => {
-                const thisType = typeof v;
-                if (this.isNativelyTransferable(v) !== undefined && thisType !== 'function') {
-                    return v;
-                }
-                const pseudoTransferableOptions = v?.[SYM_PSEUDO_TRANSFERABLE]?.();
-                if (pseudoTransferableOptions?.marshall) {
-                    return v;
-                }
-                if (thisType === 'function') {
-                    return undefined;
-                }
-                if (isPrimitiveLike(v)) {
-                    return v;
-                }
-
-            }) : obj
+            data: this.customDeepClone(obj),
         };
 
-        const r = this.prepareForTransfer(o.data);
+        const r = this.prepareForTransfer(obj);
         const oidObjMap = new Map();
         const transferList = [];
         const profiles = [];
         for (const [v, p] of r) {
-            _.set(o, ['data', ...(p.path || [])], v);
+            const equv = this.customDeepClone(v);
+            _.set(o, ['data', ...(p.path || [])], equv);
 
             if (p.oid) {
                 oidObjMap.set(p.oid, v);
             }
 
-            const nativelyTransferable = this.isNativelyTransferable(v);
+            const nativelyTransferable = this.isNativelyTransferable(equv);
             if (nativelyTransferable) {
-                transferList.push(v);
+                transferList.push(equv);
                 continue;
             }
 
@@ -756,9 +761,9 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
             if (nativelyTransferable === false) {
                 const pseudoTransferableOptions = v[SYM_PSEUDO_TRANSFERABLE]?.();
                 if (typeof pseudoTransferableOptions?.marshall === 'function') {
-                    _.set(o, ['data', ...(p.path || [])], pseudoTransferableOptions.marshall(v));
-                } else if (v && isPrimitiveLike(v)) {
-                    _.set(o, ['data', ...(p.path || [])], { ...v });
+                    _.set(o, ['data', ...(p.path || [])], pseudoTransferableOptions.marshall(equv));
+                } else if (equv && isPrimitiveLike(equv)) {
+                    _.set(o, ['data', ...(p.path || [])], { ...equv });
                 }
             }
         }
