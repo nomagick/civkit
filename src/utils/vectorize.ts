@@ -236,3 +236,56 @@ export function deepClean<T extends object>(object: T): Partial<T> {
 
     return object as any;
 }
+
+export function deepClone(input: any, customizer?: (v: any) => any, db: WeakMap<any, any> = new WeakMap()) {
+    if ((typeof input !== 'object' && typeof input !== 'function') || input === null) {
+        return input;
+    }
+
+    if (db.has(input)) {
+        return db.get(input);
+    }
+
+    if (customizer) {
+        const result = customizer(input);
+        if (result !== undefined) {
+            db.set(input, result);
+
+            return result;
+        }
+    }
+
+    let clone: any;
+    if (Array.isArray(input)) {
+        clone = [...input];
+    } else if (Buffer.isBuffer(input)) {
+        clone = Buffer.from(input);
+        db.set(input, clone);
+
+        return clone;
+    } else if (input instanceof Set) {
+        clone = new Set();
+        db.set(input, clone);
+        for (const x of input) {
+            clone.add(deepClone(x, customizer, db));
+        }
+    } else if (input instanceof Map) {
+        clone = new Map();
+        db.set(input, clone);
+        for (const [k, v] of input.entries()) {
+            clone.set(deepClone(k, customizer, db), deepClone(v, customizer, db));
+        }
+    } else {
+        clone = Object.create(Object.getPrototypeOf(input) || null);
+        db.set(input, clone);
+    }
+
+    for (const [k, desc] of Object.entries(Object.getOwnPropertyDescriptors(input))) {
+        if (desc.hasOwnProperty('value')) {
+            desc.value = deepClone(desc.value, customizer, db);
+        }
+        Object.defineProperty(clone, k, desc);
+    }
+
+    return clone;
+}

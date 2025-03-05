@@ -5,6 +5,7 @@ import { MessageChannel, MessagePort, parentPort, threadId } from 'node:worker_t
 import { AsyncService } from './async-service';
 import { Defer, Deferred } from './defer';
 import { isPrimitiveLike, marshalErrorLike } from '../utils/lang';
+import { deepClone } from '../utils/vectorize';
 type Constructor<T = any> = abstract new (...args: any) => T;
 
 export const SYM_PSEUDO_TRANSFERABLE = Symbol('PseudoTransferable');
@@ -701,7 +702,7 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
         if (thing?.buffer instanceof SharedArrayBuffer) {
             return true;
         }
-        
+
         if (thing?.buffer instanceof ArrayBuffer) {
             return true;
         }
@@ -714,23 +715,25 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
     }
 
     composeTransferable(obj: any) {
-        const o = { data: ['object', 'function'].includes(typeof obj) ? _.cloneDeepWith(obj, (v)=> {
-            const thisType = typeof v;
-            if (this.isNativelyTransferable(v) !== undefined && thisType !== 'function') {
-                return v;
-            }
-            const pseudoTransferableOptions = v?.[SYM_PSEUDO_TRANSFERABLE]?.();
-            if (pseudoTransferableOptions?.marshall) {
-                return v;
-            }
-            if (thisType === 'function') {
-                return undefined;
-            }
-            if (isPrimitiveLike(v)) {
-                return v;
-            }
-            
-        }) : obj };
+        const o = {
+            data: ['object', 'function'].includes(typeof obj) ? deepClone(obj, (v) => {
+                const thisType = typeof v;
+                if (this.isNativelyTransferable(v) !== undefined && thisType !== 'function') {
+                    return v;
+                }
+                const pseudoTransferableOptions = v?.[SYM_PSEUDO_TRANSFERABLE]?.();
+                if (pseudoTransferableOptions?.marshall) {
+                    return v;
+                }
+                if (thisType === 'function') {
+                    return undefined;
+                }
+                if (isPrimitiveLike(v)) {
+                    return v;
+                }
+
+            }) : obj
+        };
 
         const r = this.prepareForTransfer(o.data);
         const oidObjMap = new Map();
