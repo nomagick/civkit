@@ -1,6 +1,7 @@
 import _ from 'lodash';
 import { EventEmitter } from 'node:stream';
 import { ReadableStream } from 'node:stream/web';
+import { isTypedArray } from 'node:util/types';
 import { MessageChannel, MessagePort, parentPort, threadId } from 'node:worker_threads';
 import { AsyncService } from './async-service';
 import { Defer, Deferred } from './defer';
@@ -699,11 +700,7 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
             return true;
         }
 
-        if (thing?.buffer instanceof SharedArrayBuffer) {
-            return true;
-        }
-
-        if (thing?.buffer instanceof ArrayBuffer) {
+        if (isTypedArray(thing) && !Buffer.isBuffer(thing)) {
             return true;
         }
 
