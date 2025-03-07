@@ -101,8 +101,10 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             let methods = ['POST'];
             if (httpConfig?.action) {
                 if (typeof httpConfig.action === 'string') {
+                    methods.length = 0;
                     methods.push(httpConfig.action);
                 } else if (Array.isArray(httpConfig.action)) {
+                    methods.length = 0;
                     methods.push(...httpConfig.action);
                 }
             }
@@ -713,8 +715,10 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         let methods = ['POST'];
         if (httpConfig?.action) {
             if (typeof httpConfig.action === 'string') {
+                methods.length = 0;
                 methods.push(httpConfig.action);
             } else if (Array.isArray(httpConfig.action)) {
+                methods.length = 0;
                 methods.push(...httpConfig.action);
             }
         }
