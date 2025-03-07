@@ -241,25 +241,35 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 return next();
             }
             const matchPath = path.slice(this.routerPrefix.length);
-            const matched = this.router.match(matchPath)?.[0];
-            if (!matched) {
+            const allMatched = this.router.match(matchPath);
+            if (!allMatched.length) {
                 ctx.status = 404;
 
                 return next();
             }
-            const [matchedEntry, params] = matched;
             const uMethod = ctx.method.toUpperCase();
             if (uMethod === 'OPTIONS') {
                 ctx.status = 200;
 
                 return next();
             }
-            if (!matchedEntry.httpMethods.includes(uMethod)) {
+            let finalMatch;
+            const allowedMethods = new Set<string>();
+            for (const matched of allMatched) {
+                const [matchedEntry] = matched;
+                if (!matchedEntry.httpMethods.includes(uMethod)) {
+                    continue;
+                }
+                finalMatch = matched;
+                break;
+            }
+            if (!finalMatch) {
                 ctx.status = 405;
-                ctx.set('Allow', matchedEntry.httpMethods.join(', '));
+                ctx.set('Allow', Array.from(allowedMethods).join(', '));
 
                 return next();
             }
+            const [matchedEntry, params] = finalMatch;
 
             if ((matchedEntry as NativeRouteEntry).handler) {
                 return (matchedEntry as NativeRouteEntry).handler(ctx, next);
