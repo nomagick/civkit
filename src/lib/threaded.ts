@@ -37,6 +37,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         ongoingTasks: number;
         openPorts: number;
     }>();
+    protected lifeCycleTrack = new WeakMap(); 
 
     workerEntrypoint = __filename;
 
@@ -203,6 +204,10 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                 asyncContext = this.asyncContext.ctx;
             } catch (err) {
                 // context not available
+            }
+            if (asyncContext && typeof asyncContext === 'object') {
+                // Make sure the async context does not go out of scope too early
+                this.lifeCycleTrack.set(port1, asyncContext);
             }
             const m = {
                 name,
