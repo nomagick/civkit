@@ -26,7 +26,7 @@ import type http2 from 'http2';
 import { runOnce } from '../../decorators';
 import { humanReadableDataSize } from '../../utils/readability';
 import { marshalErrorLike } from '../../utils/lang';
-import { UploadedFile } from './shared';
+import { cleanParams, UploadedFile } from './shared';
 import { AbstractAsyncContext, setupTraceId } from '../../lib/async-context';
 import { TrieRouter } from '../../lib/trie-router';
 export { UploadedFile } from './shared';
@@ -281,7 +281,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             const jointInput = {
                 ...ctx.query,
                 ...(_.isPlainObject(ctx.request.body) ? ctx.request.body : {} as any),
-                ...ctx.params,
+                ...cleanParams(ctx.params),
             };
 
 

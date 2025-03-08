@@ -22,7 +22,7 @@ import { runOnce } from "../../decorators";
 import { humanReadableDataSize } from "../../utils/readability";
 import { marshalErrorLike } from '../../utils/lang';
 
-import { UploadedFile } from "./shared";
+import { cleanParams, UploadedFile } from "./shared";
 import { AbstractAsyncContext, setupTraceId } from '../../lib/async-context';
 export { UploadedFile } from './shared';
 
@@ -242,7 +242,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             const jointInput = {
                 ...req.query,
                 ...(_.isPlainObject(req.body) ? req.body : {}),
-                ...req.params,
+                ...cleanParams(req.params),
             };
 
             res.statusCode = 404;
