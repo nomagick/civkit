@@ -32,6 +32,7 @@ export class TrieRouter<D = unknown> {
 
     @perNextTick()
     fillRouteVecRoutine() {
+        const matchAnyNodes = [];
         for (const node of this.root.traverse()) {
             const key = node.key;
             node.payload ??= {};
@@ -39,8 +40,17 @@ export class TrieRouter<D = unknown> {
             if (key.startsWith('::')) {
                 data.matchAnyAsProp = key.slice(2);
                 data.matchRest = true;
+                matchAnyNodes.push(node);
             } else if (key.startsWith(':')) {
                 data.matchAnyAsProp = key.slice(1);
+                matchAnyNodes.push(node);
+            }
+        }
+        for (const node of matchAnyNodes) {
+            const altNode = node.parent?.seek('')?.[0];
+            const tgt = altNode?.insert(node.key);
+            if (tgt) {
+                tgt.payload = node.payload;
             }
         }
     }
