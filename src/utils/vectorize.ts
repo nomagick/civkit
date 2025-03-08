@@ -358,7 +358,7 @@ export function deepCloneAndExpose(input: any, customizer?: (v: any) => any, db:
         } catch (err) {
             if (desc.hasOwnProperty('value')) {
                 try {
-                    Reflect.set(clone, k, desc.value);
+                    Reflect.set(clone, k, copyDesc.value);
                 } catch {
                     void 0;
                 }
