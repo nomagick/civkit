@@ -287,7 +287,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
             ctx.status = 404;
             const keepAliveTimer = setTimeout(() => {
-                ctx.socket.setKeepAlive(true, 2 * 1000);
+                ctx.socket.setKeepAlive?.(true, 2 * 1000);
             }, 2 * 1000);
             let done = false;
             try {
@@ -323,7 +323,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 }
 
                 if (output instanceof Readable || (typeof output?.pipe) === 'function') {
-                    ctx.socket.setKeepAlive(true, 1000);
+                    ctx.socket.setKeepAlive?.(true, 1000);
                     let resStream = output;
 
                     this.applyTransferProtocolMeta(ctx, result.tpm);
