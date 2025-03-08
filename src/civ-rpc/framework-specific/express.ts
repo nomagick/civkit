@@ -755,7 +755,7 @@ export abstract class ExpressServer extends AsyncService {
 
     async _init() {
         await this.dependencyReady();
-        this.logger.info(`Server starting at ${os.hostname()}(${process.pid}) ${os.platform()}_${os.release()}_${os.arch()}`);
+        this.logger.info(`Server starting at ${os.hostname()}(${process.pid}) ${os.platform()}_${os.release()}_${os.arch()} ${process.title}_${process.version}`);
 
         this.featureSelect();
 
