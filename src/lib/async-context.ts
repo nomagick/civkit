@@ -36,6 +36,14 @@ export abstract class AbstractAsyncContext extends AsyncService {
         return this.asyncLocalStorage.run({ ...ctx, ...base }, func);
     }
 
+    bridge<T extends object, R>(ctx: T, func: () => R) {
+        return this.asyncLocalStorage.run(ctx, func);
+    }
+
+    implicitBridge<T extends object>(ctx: T) {
+        return this.asyncLocalStorage.enterWith(ctx);
+    }
+
     merge<T extends object>(input: T) {
         const r = Object.assign(this.ctx, input);
 
