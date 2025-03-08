@@ -331,13 +331,13 @@ export function deepCloneAndExpose(input: any, customizer?: (v: any) => any, db:
         clone = new Set();
         db.set(input, clone);
         for (const x of input) {
-            clone.add(deepClone(x, customizer, db));
+            clone.add(deepCloneAndExpose(x, customizer, db));
         }
     } else if (input instanceof Map) {
         clone = new Map();
         db.set(input, clone);
         for (const [k, v] of input.entries()) {
-            clone.set(deepClone(k, customizer, db), deepClone(v, customizer, db));
+            clone.set(deepCloneAndExpose(k, customizer, db), deepCloneAndExpose(v, customizer, db));
         }
     } else {
         clone = Object.create(Object.getPrototypeOf(input) || null);
@@ -347,7 +347,7 @@ export function deepCloneAndExpose(input: any, customizer?: (v: any) => any, db:
     for (const [k, desc] of Object.entries(Object.getOwnPropertyDescriptors(input))) {
         const copyDesc = { ...desc };
         if (desc.hasOwnProperty('value')) {
-            copyDesc.value = deepClone(desc.value, customizer, db);
+            copyDesc.value = deepCloneAndExpose(desc.value, customizer, db);
         }
         copyDesc.enumerable = true;
         copyDesc.writable = true;
