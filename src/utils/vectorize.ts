@@ -284,7 +284,18 @@ export function deepClone(input: any, customizer?: (v: any) => any, db: WeakMap<
         if (desc.hasOwnProperty('value')) {
             desc.value = deepClone(desc.value, customizer, db);
         }
-        Object.defineProperty(clone, k, desc);
+
+        try {
+            Object.defineProperty(clone, k, desc);
+        } catch (err) {
+            if (desc.hasOwnProperty('value')) {
+                try {
+                    Reflect.set(clone, k, desc.value);
+                } catch {
+                    void 0;
+                }
+            }
+        }
     }
 
     return clone;
@@ -334,14 +345,25 @@ export function deepCloneAndExpose(input: any, customizer?: (v: any) => any, db:
     }
 
     for (const [k, desc] of Object.entries(Object.getOwnPropertyDescriptors(input))) {
+        const copyDesc = { ...desc };
         if (desc.hasOwnProperty('value')) {
-            desc.value = deepClone(desc.value, customizer, db);
+            copyDesc.value = deepClone(desc.value, customizer, db);
         }
-        desc.enumerable = true;
-        desc.writable = true;
-        desc.configurable = true;
-        
-        Object.defineProperty(clone, k, desc);
+        copyDesc.enumerable = true;
+        copyDesc.writable = true;
+        copyDesc.configurable = true;
+
+        try {
+            Object.defineProperty(clone, k, copyDesc);
+        } catch (err) {
+            if (desc.hasOwnProperty('value')) {
+                try {
+                    Reflect.set(clone, k, desc.value);
+                } catch {
+                    void 0;
+                }
+            }
+        }
     }
 
     return clone;
