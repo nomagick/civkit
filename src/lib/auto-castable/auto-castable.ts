@@ -237,7 +237,8 @@ function makeAutoCastingErrorMessage(err: AutoCastingError) {
             `(${err.path})` :
             `(${err.path} => ${err.propName})`) :
         '';
-    return `At #${err.hostName || 'input'}${compPath}: ${err.reason[0]?.toUpperCase()}${err.reason.substring(1)}`;
+    const compReason = (typeof err.reason === 'string') ? `${err.reason[0]?.toUpperCase()}${err.reason.substring(1)}` : `${err.message}`;
+    return `At #${err.hostName || 'input'}${compPath}: ${compReason}`;
 }
 
 const TRUE_VALUES = new Set([true, 'TRUE', 'true', 'True', 1, '1']);
