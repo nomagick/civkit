@@ -763,24 +763,6 @@ export abstract class ExpressServer extends AsyncService {
 
         this.logger.info('Server dependency ready');
 
-        process.on('uncaughtException', (err: any) => {
-            this.logger.error(`Uncaught exception in pid ${process.pid}, quitting`, {
-                pid: process.pid,
-                err
-            });
-            this.logger.error(`Stacktrace: \n${err?.stack}`);
-
-            setImmediate(() => process.exit(1));
-        });
-
-        process.on('unhandledRejection', (err: any) => {
-            this.logger.warn(`Unhandled promise rejection in pid ${process.pid}`, {
-                pid: process.pid,
-                err
-            });
-            this.logger.warn(`Stacktrace: \n${err?.stack}`);
-        });
-
         this.httpServer = http.createServer(this.expressApp);
 
         this.emit('ready');
