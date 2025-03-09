@@ -64,6 +64,10 @@ export abstract class AbstractFinalizerService extends AsyncService {
         };
     }
 
+    quitProcess(...args: Parameters<typeof process.exit>) {
+        return process.exit(...args);
+    }
+
     @runOnce()
     async terminate(err?: Error) {
         if (err) {
@@ -75,7 +79,7 @@ export abstract class AbstractFinalizerService extends AsyncService {
         await this.teardown();
 
         this.logger.info(`All done. Process exit.`);
-        process.exit(err ? 1 : 0);
+        this.quitProcess(err ? 1 : 0);
     }
 
     @runOnce()
