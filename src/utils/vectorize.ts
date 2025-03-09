@@ -288,13 +288,7 @@ export function deepClone(input: any, customizer?: (v: any) => any, db: WeakMap<
         try {
             Object.defineProperty(clone, k, desc);
         } catch (err) {
-            if (desc.hasOwnProperty('value')) {
-                try {
-                    Reflect.set(clone, k, desc.value);
-                } catch {
-                    void 0;
-                }
-            }
+            void 0;
         }
     }
 
@@ -356,13 +350,7 @@ export function deepCloneAndExpose(input: any, customizer?: (v: any) => any, db:
         try {
             Object.defineProperty(clone, k, copyDesc);
         } catch (err) {
-            if (desc.hasOwnProperty('value')) {
-                try {
-                    Reflect.set(clone, k, copyDesc.value);
-                } catch {
-                    void 0;
-                }
-            }
+            void 0;
         }
     }
 
