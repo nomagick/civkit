@@ -85,7 +85,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             xmlLimit: this._BODY_PARSER_LIMIT,
 
         }),
-        this.__multiParse
+        this.__multiParse.bind(this)
     ];
 
     resetRouter() {

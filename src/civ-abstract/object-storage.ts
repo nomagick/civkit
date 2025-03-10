@@ -1,6 +1,7 @@
 import * as minio from 'minio';
 import _ from 'lodash';
 import { AbstractTempFileManger, AsyncService, FancyFile, LoggerInterface } from '../lib';
+import { pathToFileURL } from 'url';
 
 
 export interface ObjectStorageOptions extends minio.ClientOptions {
@@ -59,7 +60,7 @@ export abstract class AbstractObjectStorageService extends AsyncService {
 
     async putSingleFile(inputFileHandle: string | FancyFile, objectName: string, meta: minio.ItemBucketMetadata = {}) {
 
-        const file = typeof inputFileHandle === 'string' ? FancyFile.auto(inputFileHandle) : inputFileHandle;
+        const file = typeof inputFileHandle === 'string' ? FancyFile.auto(pathToFileURL(inputFileHandle)) : inputFileHandle;
 
         const r = await this.minioClient.putObject(this.bucket, objectName, await file.createReadStream(), meta);
 
@@ -222,7 +223,7 @@ export class ObjectStorageCompanion {
         const localPath = this.tempService.alloc();
         await this.storageService.getSingleFile(`${this.dirPrefix}/${pathName}`.replaceAll(/\/+/g, '/'), localPath);
 
-        const r = FancyFile.auto(localPath);
+        const r = FancyFile.auto(pathToFileURL(localPath));
 
         return this.tempService.bindPathTo(r, localPath);
     }

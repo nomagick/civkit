@@ -6,6 +6,7 @@ import { FancyFile } from './fancy-file';
 import { AsyncService } from './async-service';
 import { PromiseThrottle } from './throttle';
 import { randomUUID } from 'crypto';
+import { pathToFileURL } from 'url';
 
 export abstract class AbstractTempFileManger extends AsyncService {
     abstract rootDir: string;
@@ -175,7 +176,7 @@ export abstract class AbstractTempFileManger extends AsyncService {
     }
 
     access(fileName: string) {
-        return FancyFile.auto(this.fullPath(fileName));
+        return FancyFile.auto(pathToFileURL(this.fullPath(fileName)));
     }
 
     mkdir(dirName: string) {

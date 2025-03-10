@@ -10,6 +10,7 @@ import fs from 'fs';
 import { randomBytes as originalRandomBytes } from 'crypto';
 import { AsyncService } from './async-service';
 import { ensureDir } from '../utils/file-system';
+import { pathToFileURL } from 'url';
 
 const randomBytes = promisify(originalRandomBytes);
 
@@ -83,7 +84,7 @@ export abstract class AbstractStorageManager extends AsyncService {
     }
 
     accessLocalFile(dirName: string, fileName: string = this.defaultFileName, overrideFileName?: string) {
-        return FancyFile.auto(this.fullPath(dirName, fileName), { fileName: overrideFileName });
+        return FancyFile.auto(pathToFileURL(this.fullPath(dirName, fileName)), { fileName: overrideFileName });
     }
 
     async storeFancyFile(file: FancyFile, dirName?: string, fileName: string = this.defaultFileName) {
@@ -144,7 +145,7 @@ export abstract class AbstractStorageManager extends AsyncService {
     }
 
     storeLocalFile(filePath: string, dirName?: string, fileName: string = this.defaultFileName) {
-        const fFile = FancyFile.auto(filePath);
+        const fFile = FancyFile.auto(pathToFileURL(filePath));
 
         return this.storeFancyFile(fFile, dirName, fileName);
     }
@@ -203,7 +204,7 @@ export abstract class AbstractStorageManager extends AsyncService {
     getFancyFile(dirName: string, fileName: string = this.defaultFileName) {
         const fPath = this.fullPath(dirName, fileName);
 
-        return FancyFile.auto(fPath);
+        return FancyFile.auto(pathToFileURL(fPath));
     }
 
 }

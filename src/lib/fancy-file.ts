@@ -12,6 +12,9 @@ import {
     TPM
 } from '../civ-rpc/meta';
 import { RPC_MARSHAL } from '../civ-rpc/meta';
+import { URL, fileURLToPath } from 'url';
+import { ReadableStream } from 'stream/web';
+import { isTypedArray } from 'lodash';
 
 const PEEK_BUFFER_SIZE = 32 * 1024;
 
@@ -222,26 +225,48 @@ export class FancyFile {
         return fileInstance;
     }
 
-    static auto(filePath: string, partialFile?: PartialFile): FancyFile;
-    static auto(readable: Readable | Buffer | string, tmpFilePath: string, partialFile?: PartialFile): FancyFile;
+    static auto(fileURL: URL, partialFile?: PartialFile): FancyFile;
     static auto(partialFile: PartialFile, tmpFilePath?: string): FancyFile;
+    static auto(readable: object, tmpFilePath: string, partialFile?: PartialFile): FancyFile;
     @AutoConstructor
     static auto(a: any, b?: any, c?: any) {
         if (!a) {
             throw new Error('Unrecognized Input. No Idea What To Do.');
         }
-        if (typeof a === 'string') {
-            return this._fromLocalFile(a, b);
-        } else if (a.filePath) {
-            return this._fromLocalFile(a.filePath, a);
+        if (typeof a !== 'object') {
+            throw new Error('Auto fancy file excepts an object, use URL/TypedArray/Buffer/Stream, etc.');
+        }
+
+        if (a instanceof URL && a.protocol === 'file:') {
+            return this._fromLocalFile(fileURLToPath(a.pathname), b);
+        } else if (a instanceof URL && a.protocol === 'data:') {
+            const data = a.toString().slice(a.protocol.length);
+            const [mediaType, rest] = data.split(';');
+            const [base64, dataStr] = rest.split(',');
+            if (base64 !== 'base64') {
+                throw new Error('Data URL must be base64 encoded.');
+            }
+            const buff = Buffer.from(dataStr, 'base64');
+
+            return this._fromBuffer(buff, b, { size: buff.byteLength, mimeType: mediaType });
         } else if (a instanceof Buffer) {
             return this._fromBuffer(a, b, c);
-        } else if (a.fileBuffer) {
-            return this._fromBuffer(a.fileBuffer, b, a);
+        } else if (a instanceof ReadableStream) {
+            return this._fromStream(Readable.fromWeb(a), b, c);
+        } else if (a instanceof Blob) {
+            return this._fromStream(Readable.fromWeb(a.stream()), b, { mimeType: a.type, size: a.size, ...c });
+        } else if (isTypedArray(a)) {
+            return this._fromBuffer(Buffer.from(a.buffer), b);
+        } else if (a instanceof ArrayBuffer || a instanceof SharedArrayBuffer) {
+            return this._fromBuffer(Buffer.from(a), b);
         } else if (typeof a.pipe === 'function') {
             return this._fromStream(a, b, c);
         } else if (a.fileStream) {
             return this._fromStream(a.fileStream, b, a);
+        } else if (a.filePath) {
+            return this._fromLocalFile(a.filePath, a);
+        } else if (a.fileBuffer) {
+            return this._fromBuffer(a.fileBuffer, b, a);
         }
 
         throw new Error('Unrecognized Input. No Idea What To Do.');
