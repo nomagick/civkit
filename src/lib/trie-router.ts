@@ -12,6 +12,14 @@ interface RouteVec<D = unknown> {
 
 }
 
+function safeDecodeURIComponent(input: string) {
+    try {
+        return decodeURIComponent(input);
+    } catch (err) {
+        return input;
+    }
+}
+
 export class TrieRouter<D = unknown> {
 
     delimiter = '/';
@@ -98,7 +106,7 @@ export class TrieRouter<D = unknown> {
             }
             if (v.payload?.matchRest) {
                 if (v.payload?.data) {
-                    const nextProps = { ...props, [v.payload.matchAnyAsProp]: decodeURIComponent(stack.join(this.delimiter)) };
+                    const nextProps = { ...props, [v.payload.matchAnyAsProp]: safeDecodeURIComponent(stack.join(this.delimiter)) };
                     for (const x of v.payload.data) {
                         matchRests.push([x, nextProps]);
                     }
@@ -107,7 +115,7 @@ export class TrieRouter<D = unknown> {
                 continue;
             }
 
-            nextSteps.push([v, { ...props, [v.payload.matchAnyAsProp]: decodeURIComponent(stack[0]) }]);
+            nextSteps.push([v, { ...props, [v.payload.matchAnyAsProp]: safeDecodeURIComponent(stack[0]) }]);
         }
 
         return nextSteps.flatMap(([node, props]) => this.match(stack.slice(1), node, props)).concat(matchRests);
