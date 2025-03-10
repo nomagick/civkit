@@ -10,23 +10,9 @@ export abstract class AbstractFinalizerService extends AsyncService {
     processFinalizers: Array<[Function, object | undefined, ...any[]]> = [];
 
     override init() {
-        process.on('uncaughtException', (err: any) => {
-            this.logger.error(`Uncaught exception in pid ${process.pid}, quitting`, {
-                pid: process.pid,
-                err
-            });
-            this.logger.error(`Stacktrace: \n${err?.stack}`);
+        process.on('uncaughtException', this.onUncaughtException.bind(this));
 
-            this.terminate(err);
-        });
-
-        process.on('unhandledRejection', (err: any) => {
-            this.logger.warn(`Unhandled promise rejection in pid ${process.pid}`, {
-                pid: process.pid,
-                err
-            });
-            this.logger.warn(`Stacktrace: \n${err?.stack}`);
-        });
+        process.on('unhandledRejection', this.onUnhandledRejection.bind(this));
 
         process.on('SIGTERM', () => {
             this.logger.warn('Received SIGTERM');
@@ -38,6 +24,28 @@ export abstract class AbstractFinalizerService extends AsyncService {
         });
 
         this.emit('ready');
+    }
+
+    onUncaughtException(err: Error, _origin: NodeJS.UncaughtExceptionOrigin) {
+        this.logger.error(`Uncaught exception in pid ${process.pid}, quitting`, {
+            pid: process.pid,
+            err
+        });
+        this.logger.error(`Stacktrace: \n${err?.stack}`);
+
+        this.terminate(err);
+    }
+
+    onUnhandledRejection(err: unknown, _triggeringPromise: Promise<unknown>) {
+        this.logger.error(`Uncaught exception in pid ${process.pid}, quitting`, {
+            pid: process.pid,
+            err: err as any,
+        });
+        if ((err as Error)?.stack) {
+            this.logger.error(`Stacktrace: \n${(err as Error).stack}`);
+        }
+
+        this.terminate(err);
     }
 
     registerProcessFinalizer(func: Function, thisArg?: object | undefined, ...args: any[]) {
@@ -69,7 +77,7 @@ export abstract class AbstractFinalizerService extends AsyncService {
     }
 
     @runOnce()
-    async terminate(err?: Error) {
+    async terminate(err?: unknown) {
         if (err) {
             this.logger.error('Process terminating because of error', { err });
         } else {
