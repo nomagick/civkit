@@ -736,6 +736,8 @@ export abstract class ExpressServer extends AsyncService {
 
     listening = false;
 
+    shutdownGraceTimeout = 33_000;
+
     constructor(..._args: any[]) {
         super(...arguments);
         this.expressApp.set('trust proxy', true);
@@ -910,12 +912,18 @@ export abstract class ExpressServer extends AsyncService {
                     }));
                     this.logger.warn(`Waiting for ${connsLeft} remaining connections`);
                 }, 1000).unref();
+                const timer2 = setTimeout(async () => {
+                    this.logger.warn(`Timed out waiting for connections to gracefully close. Skipping...`);
+                    reject(new TimeoutError('Timed out waiting for connections to gracefully close.'));
+                }, this.shutdownGraceTimeout).unref();
+
 
                 this.httpServer.close((err) => {
                     if (err) {
                         return reject(err);
                     }
                     clearInterval(timer);
+                    clearTimeout(timer2);
                     resolve();
                 });
 
