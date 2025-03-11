@@ -747,7 +747,7 @@ export abstract class ExpressServer extends AsyncService {
                 if (err.stack) {
                     this.logger.error(`Stacktrace: \n${err?.stack}`);
                 }
-                this.emit('error', err);
+                process.nextTick(()=> this.emit('error', err));
             });
     }
 
