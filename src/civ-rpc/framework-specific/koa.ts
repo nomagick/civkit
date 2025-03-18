@@ -53,7 +53,6 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     protected abstract tempFileManager: AbstractTempFileManger;
     protected abstract ctxMgr: AbstractAsyncContext;
     abstract title: string;
-    logoUrl?: string;
 
     router = new TrieRouter<RouteEntry>();
 
@@ -199,18 +198,22 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                         baseURL.pathname = baseURL.pathname.replace(this.openapiJsonPath, '').replace(/\/+$/g, '');
                         baseURL.search = '';
                         ctx.body = this.openAPIManager.createOpenAPIObject(baseURL.toString(), {
-                            info: {
-                                title: this.title,
-                                description: `${this.title} openapi document`,
-                                'x-logo': {
-                                    url: this.logoUrl || `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
-                                }
-                            }
+                            info: this.getOpenAPIInfo()
                         }, (this.constructor as typeof AbstractRPCRegistry).envelope, { style: 'http', ...ctx.request.query });
                     }
                 ])
             }
         );
+    }
+
+    protected getOpenAPIInfo(): { [k: string]: any } {
+        return {
+            title: this.title,
+            description: `${this.title} openapi document`,
+            'x-logo': {
+                url: `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
+            }
+        };
     }
 
     protected applyTransferProtocolMeta(ctx: Context, protocolMeta?: TransferProtocolMetadata) {
