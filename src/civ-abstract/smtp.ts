@@ -8,7 +8,6 @@ import { AsyncService, Defer, FancyFile, LoggerInterface, SYSTEM_CPU_COUNT } fro
 
 import { AbstractX509Manager } from '../lib/x509';
 import { AbstractTempFileManger } from '../lib/temp';
-import { AbstractSignalBus } from '../lib/signal-bus';
 import { which } from '../utils/which';
 
 export interface SMTPConfig {
@@ -337,18 +336,10 @@ export abstract class AbstractSMTPServerService extends AsyncService {
     transportCache: Map<string, Promise<nodemailer.Transporter>> = new Map();
 
     abstract config: SMTPConfig;
+    abstract x509: AbstractX509Manager;
+    abstract tmpFileManager: AbstractTempFileManger;
 
     servers: Map<number, SMTPServer> = new Map();
-
-    constructor(
-        protected x509: AbstractX509Manager,
-        protected tmpFileManager: AbstractTempFileManger,
-        protected eventDispatch: AbstractSignalBus
-    ) {
-        super(...arguments);
-
-        this.eventDispatch.handle('teardown', () => this.closeAll());
-    }
 
     override async init() {
         await this.dependencyReady();
