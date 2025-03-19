@@ -128,7 +128,12 @@ export class OpenAPIManager {
         const incompatibleMeta: any = {};
 
         if (meta.name) {
-            schema.summary = `${meta.name || meta.desc}`;
+            schema.summary = `${meta.name}`;
+            if (Array.isArray(meta.name) && meta.name.length) {
+                schema.summary = meta.name.join(' | ');
+            }
+        } else if (meta.desc) {
+            schema.summary = meta.desc;
         }
 
         if (meta.desc) {
