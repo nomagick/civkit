@@ -335,9 +335,9 @@ export abstract class AbstractSMTPServerService extends AsyncService {
 
     transportCache: Map<string, Promise<nodemailer.Transporter>> = new Map();
 
-    abstract config: SMTPConfig;
-    abstract x509: AbstractX509Manager;
-    abstract tmpFileManager: AbstractTempFileManger;
+    protected abstract config: SMTPConfig;
+    protected abstract x509: AbstractX509Manager;
+    protected abstract tmpFileManager: AbstractTempFileManger;
 
     servers: Map<number, SMTPServer> = new Map();
 
