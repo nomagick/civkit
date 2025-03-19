@@ -8,7 +8,7 @@ export { perNextTick, perTick } from './per-tick';
 
 export { retry, retryWith, TRIES_SYMBOL } from './retry';
 
-export { serialOperation } from './serial-op';
+export { serialOperation, globalSerialOperation } from './serial-op';
 
 export { throttle } from './throttle';
 export { maxConcurrency } from './max-concurrency';
