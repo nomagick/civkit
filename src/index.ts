@@ -18,18 +18,7 @@ export * from './utils';
 export * from './civ-rpc';
 export * from './civ-rpc/framework-specific';
 
-export * from './civ-mongo';
-
-export * from './civ-abstract';
-
 export default {
-    ...decorators,
-    ...lib,
-    ...utils,
-    ...civRPC,
-    ...civMongo,
-    ...civAbstract,
-
     decorators,
     lib,
     utils,

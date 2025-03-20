@@ -1,5 +1,5 @@
 import {
-    BSON, ObjectId, AggregateOptions, BulkWriteOptions,
+    ObjectId, AggregateOptions, BulkWriteOptions,
     ChangeStream, ChangeStreamDocument, ChangeStreamOptions,
     ClientSession, ClientSessionOptions, Collection,
     CountDocumentsOptions, DeleteOptions, Document, Filter,
@@ -12,17 +12,10 @@ import {
 import { AsyncService } from '../lib/async-service';
 import { AbstractMongoDB } from './client';
 import _ from 'lodash';
-import { deepCreate, vectorize2, delay } from '../utils';
 import { LoggerInterface } from '../lib';
 import { PassThrough, Readable } from 'stream';
-
-export const BSON_PROTOTYPES = new Set<object>();
-
-for (const v of Object.values(BSON)) {
-    if (typeof v === 'function' && v.prototype instanceof BSON.BSONValue) {
-        BSON_PROTOTYPES.add(v.prototype);
-    }
-}
+import { deepCreate, vectorize2 } from './misc';
+import { delay } from '../utils/timeout';
 
 export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> extends AsyncService {
 
@@ -105,7 +98,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
             return r;
         }
 
-        return deepCreate(r, BSON_PROTOTYPES);
+        return deepCreate(r);
     }
 
     async get(_id: P) {
@@ -250,7 +243,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
         const now = new Date();
         const r = await this.collection.findOneAndUpdate(
             { _id } as Filter<T>,
-            { $set: vectorize2({ ...data, updatedAt: now }, BSON_PROTOTYPES), $setOnInsert: { createdAt: now } } as any,
+            { $set: vectorize2({ ...data, updatedAt: now }), $setOnInsert: { createdAt: now } } as any,
             { upsert: true, returnDocument: 'after', ...options, includeResultMetadata: true }
         );
         if (!r.ok) {
