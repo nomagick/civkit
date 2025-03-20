@@ -1,18 +1,8 @@
 import _ from 'lodash';
-import {
-    ObjectId, Timestamp, UUID, Binary, BSONRegExp, BSONSymbol,
-    Code, DBRef, Decimal128, Double, Int32, Long, MaxKey, MinKey
-} from 'bson';
 
 import {
     chainEntriesSimple as chainEntries, isPrimitiveLike,
 } from './lang';
-
-const BSON_TYPES = [
-    ObjectId, Timestamp, UUID, Binary, BSONRegExp, BSONSymbol,
-    Code, DBRef, Decimal128, Double, Int32, Long, MaxKey, MinKey
-];
-const BSON_PROTOTYPES = new Set(BSON_TYPES.map((x) => x.prototype));
 
 function _vectorize(obj: object, stack: string[] = []) {
     const vectors: Array<[string, any]> = [];
@@ -39,7 +29,8 @@ export function vectorize(obj: object) {
 }
 
 export function _vectorize2(
-    obj: object, stack: string[] = [], mode: 'array' | 'inherited' = 'inherited'
+    obj: object, stack: string[] = [], mode: 'array' | 'inherited' = 'inherited',
+    ...additionalPrimitivePrototypeSets: Set<object>[]
 ): [string, any][] {
     const vectors: Array<[string, any]> = [];
     for (const [k, v] of chainEntries(obj)) {
@@ -70,8 +61,8 @@ export function _vectorize2(
                 v !== null
             ) {
                 if (v instanceof Array) {
-                    vectors.push(..._vectorize2(v, stack.concat(k), 'array'));
-                } else if (isPrimitiveLike(v, BSON_PROTOTYPES)) {
+                    vectors.push(..._vectorize2(v, stack.concat(k), 'array', ...additionalPrimitivePrototypeSets));
+                } else if (isPrimitiveLike(v, ...additionalPrimitivePrototypeSets)) {
                     vectors.push([stack.concat(k).join('.'), v]);
                 } else {
                     vectors.push(..._vectorize2(v, stack.concat(k)));
@@ -88,11 +79,11 @@ export function _vectorize2(
             typeof v === 'object' && v !== null
         ) {
             if (v instanceof Array) {
-                vectors.push(..._vectorize2(v, stack.concat(k), 'array'));
-            } else if (isPrimitiveLike(v, BSON_PROTOTYPES)) {
+                vectors.push(..._vectorize2(v, stack.concat(k), 'array', ...additionalPrimitivePrototypeSets));
+            } else if (isPrimitiveLike(v, ...additionalPrimitivePrototypeSets)) {
                 vectors.push([stack.concat(k).join('.'), v]);
             } else {
-                vectors.push(..._vectorize2(v, stack.concat(k)));
+                vectors.push(..._vectorize2(v, stack.concat(k), 'inherited', ...additionalPrimitivePrototypeSets));
             }
 
             continue;
@@ -179,17 +170,17 @@ export function parseJSONText(text?: string) {
 }
 
 
-export function deepCreate(source: object): any {
+export function deepCreate(source: object, ...additionalPrimitivePrototypeSets: Set<object>[]): any {
     const isArray = Array.isArray(source);
     const clone: any = isArray ? [...source] : { ...source };
 
     for (const [k, v] of Object.entries(source)) {
-        if (isPrimitiveLike(v, BSON_PROTOTYPES)) {
+        if (isPrimitiveLike(v, ...additionalPrimitivePrototypeSets)) {
             clone[k] = v;
             continue;
         }
 
-        clone[k] = deepCreate(v);
+        clone[k] = deepCreate(v, ...additionalPrimitivePrototypeSets);
     }
 
     const result = Object.create(clone);
@@ -197,7 +188,7 @@ export function deepCreate(source: object): any {
     return result;
 }
 
-export function deepSurface(source: any): any {
+export function deepSurface(source: any, ...additionalPrimitivePrototypeSets: Set<object>[]): any {
     if (typeof source !== 'object' || source === null) {
         return source;
     }
@@ -206,14 +197,14 @@ export function deepSurface(source: any): any {
         return (source as Array<any>).map((x) => (_.isPlainObject(x) ? x : deepSurface(x)));
     }
 
-    if (isPrimitiveLike(source, BSON_PROTOTYPES)) {
+    if (isPrimitiveLike(source, ...additionalPrimitivePrototypeSets)) {
         return source;
     }
 
     const clone: any = {};
 
     for (const [k, v] of chainEntries(source)) {
-        clone[k] = deepSurface(v);
+        clone[k] = deepSurface(v, ...additionalPrimitivePrototypeSets);
     }
 
     return clone;
