@@ -1,11 +1,12 @@
 import {
-    ObjectId, AggregateOptions, BulkWriteOptions,
+    BSON, ObjectId, AggregateOptions, BulkWriteOptions,
     ChangeStream, ChangeStreamDocument, ChangeStreamOptions,
     ClientSession, ClientSessionOptions, Collection,
     CountDocumentsOptions, DeleteOptions, Document, Filter,
     FindOneAndDeleteOptions, FindOneAndReplaceOptions, FindOneAndUpdateOptions,
     FindOptions, InsertOneOptions, MatchKeysAndValues,
-    OptionalId, UpdateFilter, UpdateOptions, WithTransactionCallback, WithoutId, CollectionInfo, CreateIndexesOptions, IndexSpecification, CreateCollectionOptions
+    OptionalId, UpdateFilter, UpdateOptions, WithTransactionCallback, WithoutId, 
+    CollectionInfo, CreateIndexesOptions, IndexSpecification, CreateCollectionOptions
 } from 'mongodb';
 
 import { AsyncService } from '../lib/async-service';
@@ -14,6 +15,14 @@ import _ from 'lodash';
 import { deepCreate, vectorize2, delay } from '../utils';
 import { LoggerInterface } from '../lib';
 import { PassThrough, Readable } from 'stream';
+
+export const BSON_PROTOTYPES = new Set<object>();
+
+for (const v of Object.values(BSON)) {
+    if (typeof v === 'function' && v.prototype instanceof BSON.BSONValue) {
+        BSON_PROTOTYPES.add(v.prototype);
+    }
+}
 
 export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> extends AsyncService {
 
@@ -96,7 +105,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
             return r;
         }
 
-        return deepCreate(r);
+        return deepCreate(r, BSON_PROTOTYPES);
     }
 
     async get(_id: P) {
@@ -241,7 +250,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
         const now = new Date();
         const r = await this.collection.findOneAndUpdate(
             { _id } as Filter<T>,
-            { $set: vectorize2({ ...data, updatedAt: now }), $setOnInsert: { createdAt: now } } as any,
+            { $set: vectorize2({ ...data, updatedAt: now }, BSON_PROTOTYPES), $setOnInsert: { createdAt: now } } as any,
             { upsert: true, returnDocument: 'after', ...options, includeResultMetadata: true }
         );
         if (!r.ok) {

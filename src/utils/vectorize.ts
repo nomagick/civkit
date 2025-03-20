@@ -93,8 +93,8 @@ export function _vectorize2(
     return vectors;
 }
 
-export function vectorize2(obj: object) {
-    const vecs = _vectorize2(obj);
+export function vectorize2(obj: object, ...additionalPrimitivePrototypeSets: Set<object>[]) {
+    const vecs = _vectorize2(obj, undefined, undefined, ...additionalPrimitivePrototypeSets);
 
     if (vecs.length > 1) {
         return _.fromPairs(vecs);
