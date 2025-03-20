@@ -131,10 +131,12 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     }
                 );
 
-                this.logger.debug(
-                    `HTTP Route: ${methods} /${httpConfig.path.replace(/^\/+/, '')} => rpc(${methodName})`,
-                    { httpConfig }
-                );
+                if (process.env.DEBUG) {
+                    this.logger.debug(
+                        `HTTP Route: ${methods} /${httpConfig.path.replace(/^\/+/, '')} => rpc(${methodName})`,
+                        { httpConfig }
+                    );
+                }
             } else {
                 const apiPath = `/${methodName.split('.').join('/')}`;
                 this.router.register(
@@ -155,10 +157,12 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     }
                 );
 
-                this.logger.debug(
-                    `HTTP Route: ${methods} ${apiPath} => rpc(${methodName})`,
-                    { httpConfig }
-                );
+                if (process.env.DEBUG) {
+                    this.logger.debug(
+                        `HTTP Route: ${methods} ${apiPath} => rpc(${methodName})`,
+                        { httpConfig }
+                    );
+                }
             }
 
 
@@ -181,11 +185,12 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 }
             );
 
-            this.logger.debug(
-                `HTTP Route: ${methods} ${rpcPath} => rpc(${methodName})`,
-                { httpConfig }
-            );
-
+            if (process.env.DEBUG) {
+                this.logger.debug(
+                    `HTTP Route: ${methods} ${rpcPath} => rpc(${methodName})`,
+                    { httpConfig }
+                );
+            }
         }
 
         this.router.register(this.openapiJsonPath,
@@ -745,10 +750,12 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             }
         );
 
-        this.logger.debug(
-            `HTTP Route: ${methods} ${qPath} => rpc(${rpcMethod})`,
-            { httpConfig }
-        );
+        if (process.env.DEBUG) {
+            this.logger.debug(
+                `HTTP Route: ${methods} ${qPath} => rpc(${rpcMethod})`,
+                { httpConfig }
+            );
+        }
     }
 }
 

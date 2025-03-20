@@ -111,10 +111,12 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     );
                 }
 
-                this.logger.debug(
-                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} /${httpConfig.path} => rpc(${methodName})`,
-                    { httpConfig }
-                );
+                if (process.env.DEBUG) {
+                    this.logger.debug(
+                        `HTTP Route: ${methods.map((x) => x.toUpperCase())} /${httpConfig.path} => rpc(${methodName})`,
+                        { httpConfig }
+                    );
+                }
             }
 
             const name = methodName;
@@ -146,10 +148,12 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 );
             }
 
-            this.logger.debug(
-                `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${apiPath} => rpc(${methodName})`,
-                { httpConfig }
-            );
+            if (process.env.DEBUG) {
+                this.logger.debug(
+                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${apiPath} => rpc(${methodName})`,
+                    { httpConfig }
+                );
+            }
 
             const rpcPath = `/rpc/${name}`;
             this.__routerRegister(
@@ -175,10 +179,12 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     this.__noop
                 );
             }
-            this.logger.debug(
-                `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${rpcPath} => rpc(${methodName})`,
-                { httpConfig }
-            );
+            if (process.env.DEBUG) {
+                this.logger.debug(
+                    `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${rpcPath} => rpc(${methodName})`,
+                    { httpConfig }
+                );
+            }
 
         }
 
@@ -698,10 +704,12 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                 this.__noop
             );
         }
-        this.logger.debug(
-            `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${qPath} => rpc(${rpcMethod})`,
-            { httpConfig }
-        );
+        if (process.env.DEBUG) {
+            this.logger.debug(
+                `HTTP Route: ${methods.map((x) => x.toUpperCase())} ${qPath} => rpc(${rpcMethod})`,
+                { httpConfig }
+            );
+        }
     }
 }
 
@@ -747,7 +755,7 @@ export abstract class ExpressServer extends AsyncService {
                 if (err.stack) {
                     this.logger.error(`Stacktrace: \n${err?.stack}`);
                 }
-                process.nextTick(()=> this.emit('error', err));
+                process.nextTick(() => this.emit('error', err));
             });
     }
 
