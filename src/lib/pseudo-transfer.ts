@@ -5,7 +5,7 @@ import { isTypedArray } from 'node:util/types';
 import { MessageChannel, MessagePort, parentPort, threadId } from 'node:worker_threads';
 import { AsyncService } from './async-service';
 import { Defer, Deferred } from './defer';
-import { isPrimitiveLike, marshalErrorLike } from '../utils/lang';
+import { carefulAssign, isPrimitiveLike, marshalErrorLike, strongerAssign } from '../utils/lang';
 import { deepCloneAndExpose } from '../utils/vectorize';
 type Constructor<T = any> = abstract new (...args: any) => T;
 
@@ -283,7 +283,7 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
 
                     return deferred.promise;
                 };
-                Object.assign(instance, transferred);
+                strongerAssign(instance, transferred);
             } else if (profile.traits.includes('Promise')) {
                 if (!msgChannel) {
                     msgChannel = new MessageChannel();
@@ -328,7 +328,7 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
                     oid,
                     port: callPort2,
                 }, [callPort2]);
-                Object.assign(instance, transferred);
+                carefulAssign(instance, transferred);
             } else if (profile.traits.includes('EventEmitter')) {
                 if (!msgChannel) {
                     msgChannel = new MessageChannel();
@@ -359,7 +359,7 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
                     oid: profile.oid,
                     port: callPort2,
                 }, [callPort2]);
-                Object.assign(instance, transferred);
+                carefulAssign(instance, transferred);
             }
 
             if (profile.traits.includes('AsyncIterator')) {
@@ -470,7 +470,7 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
                 };
             }
 
-            Object.assign(instance, mixin);
+            carefulAssign(instance, mixin);
 
             if (msgChannel) {
                 if (instance[Symbol.dispose]) {

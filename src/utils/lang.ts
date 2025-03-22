@@ -284,3 +284,46 @@ export function patchErrorCaptureStackTraceIfNeeded() {
         return origCaptureStackTrace.call(this, typeof err === 'object' ? err : new Error(`${err}`), ...args);
     };
 }
+
+export function carefulAssign(target: object, source: object) {
+    for (const [k, desc] of Object.entries(Object.getOwnPropertyDescriptors(source))) {
+        const currentDesc = Object.getOwnPropertyDescriptor(target, k);
+
+        if (!currentDesc) {
+            Object.defineProperty(target, k, desc);
+            continue;
+        }
+
+        if (currentDesc.configurable === false) {
+            continue;
+        }
+
+        if (currentDesc.get || currentDesc.set) {
+            continue;
+        }
+
+        Reflect.set(target, k, Reflect.get(source, k));
+    }
+}
+
+export function strongerAssign(target: object, source: object) {
+    for (const [k, desc] of Object.entries(Object.getOwnPropertyDescriptors(source))) {
+        const currentDesc = Object.getOwnPropertyDescriptor(target, k);
+
+        if (!currentDesc) {
+            Object.defineProperty(target, k, desc);
+            continue;
+        }
+
+        if (currentDesc.configurable === false) {
+            continue;
+        }
+
+        if (currentDesc.get || currentDesc.set) {
+            continue;
+        }
+
+        Object.defineProperty(target, k, desc);
+    }
+}
+
