@@ -5,7 +5,7 @@ import { EventEmitter } from 'events';
 import { stringify as formDataStringify } from 'querystring';
 
 import { Defer } from './defer';
-import { patchErrorCaptureStackTraceIfNeeded, stringifyErrorLike } from '../utils/lang';
+import { stringifyErrorLike } from '../utils/lang';
 
 import { Readable, isReadable } from 'stream';
 import { ReadableStream } from 'stream/web';
@@ -97,7 +97,6 @@ export abstract class HTTPService<
 
     constructor(baseUrl: string, config: Tc = {} as any) {
         super();
-        patchErrorCaptureStackTraceIfNeeded();
         this.config = _.defaults(config, {
             requestOptions: {},
             baseParams: {},

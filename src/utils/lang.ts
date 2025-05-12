@@ -275,16 +275,6 @@ export function parseUrl(input: string) {
     }
 }
 
-export function patchErrorCaptureStackTraceIfNeeded() {
-    if (!Error.captureStackTrace.toString().includes('[native code]')) {
-        return;
-    }
-    const origCaptureStackTrace = Error.captureStackTrace;
-    Error.captureStackTrace = function captureStackTrace(err: any, ...args: any[]) {
-        return origCaptureStackTrace.call(this, typeof err === 'object' ? err : new Error(`${err}`), ...args);
-    };
-}
-
 export function carefulAssign(target: object, source: object) {
     for (const [k, desc] of Object.entries(Object.getOwnPropertyDescriptors(source))) {
         const currentDesc = Object.getOwnPropertyDescriptor(target, k);

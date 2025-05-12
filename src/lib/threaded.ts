@@ -37,7 +37,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         ongoingTasks: number;
         openPorts: number;
     }>();
-    protected lifeCycleTrack = new WeakMap(); 
+    protected lifeCycleTrack = new WeakMap();
 
     workerEntrypoint = __filename;
 
@@ -94,12 +94,40 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
             openPorts: 0,
         });
 
-        const handler = (msg: WorkerStatusReport) => {
-            if (msg?.channel === this.constructor.name && msg?.event === 'reportOngoingTasks') {
+        const handler = async (msg: WorkerStatusReport | any) => {
+            if (msg?.channel !== this.constructor.name) {
+                return;
+            }
+            if (msg?.event === 'reportOngoingTasks') {
                 this.workers.set(worker, {
                     ongoingTasks: msg.ongoingTasks,
                     openPorts: msg.openPorts,
                 });
+                return;
+            }
+            if (msg?.event === 'exec') {
+                await this.serviceReady();
+                // const m = this.pseudoTransfer.mangleTransferred(msg.port, msg.data, msg.dataProfiles);
+                // Delay parameter mangling due to potential change of pseudoTransfer, in the init phase of method dependencies
+                try {
+                    const m = msg.data;
+                    const abortController = new AbortController();
+                    msg.port.on('message', (msg: any) => {
+                        if (typeof msg === 'object' && msg.event === 'abort') {
+                            abortController.abort(msg.reason);
+                        }
+                    });
+                    const r = await this.exec(m.name, m.input, m.env, abortController.signal, msg);
+                    this.pseudoTransfer.transferOverTheWire(msg.port, {
+                        kind: 'return',
+                        data: r,
+                    });
+                } catch (err: any) {
+                    this.pseudoTransfer.transferOverTheWire(msg.port, {
+                        kind: 'throw',
+                        data: err,
+                    });
+                }
             }
         };
         worker.on('message', handler);
@@ -190,7 +218,148 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
 
             return afterDesc;
         };
+    }
 
+    MainThread(opts?: Partial<RPCOptions>) {
+        const o = { stack: '' };
+        Error.captureStackTrace(o, this.MainThread);
+        const l = o.stack.split('\n')[1];
+        const m = l.match(/at .+ \((.+)\:\d+\:\d+\)/);
+        const f = m?.[1]?.trim();
+        if (f) {
+            this.loadInWorker(f);
+        }
+
+        const upstreamDecorator = this.Method(opts) as (tgt: typeof AsyncService.prototype, methodName: string, desc: PropertyDescriptor) => unknown;
+
+        return (tgt: typeof AsyncService.prototype, methodName: string, desc: PropertyDescriptor) => {
+            const afterDesc: PropertyDescriptor = upstreamDecorator(tgt, methodName, desc) ?? desc;
+
+            if (typeof afterDesc.value !== 'function') {
+                throw new Error('MainThread decorator can only be applied to methods');
+            }
+
+            const originalMethod = afterDesc.value;
+            const funcName = Array.isArray(opts?.name) ? opts!.name[0] : (opts?.name || methodName);
+            // eslint-disable-next-line @typescript-eslint/no-this-alias
+            const self = this;
+            function wrappedMethod(this: AsyncService, ...args: any[]) {
+                if (isMainThread || self.runInThread === RUN_IN_THREAD.CHILD_THREAD) {
+                    return originalMethod.apply(this, args);
+                }
+
+                return self.parentExec(funcName, args);
+            }
+
+            Object.defineProperty(wrappedMethod, 'name', { value: `mainThreadWrapped${funcName[0].toUpperCase()}${funcName.slice(1)}` });
+
+            afterDesc.value = wrappedMethod;
+
+            return afterDesc;
+        };
+    }
+
+    async parentExec(name: string, input: object, env?: any, signal?: AbortSignal, lateMangleMsg?: any) {
+        await this.serviceReady();
+        if (parentPort) {
+            const deferred = Defer<any>();
+            const { port1, port2 } = new MessageChannel();
+            let asyncContext: any;
+            try {
+                asyncContext = this.asyncContext.ctx;
+            } catch (err) {
+                // context not available
+            }
+            if (asyncContext && typeof asyncContext === 'object') {
+                // Make sure the async context does not go out of scope too early
+                this.lifeCycleTrack.set(port1, asyncContext);
+            }
+            const m = {
+                name,
+                input,
+                env: {
+                    ...env,
+                    asyncContext,
+                },
+            };
+            const { data, profiles, transferList } = this.pseudoTransfer.composeTransferable(m);
+            if (signal) {
+                signal.throwIfAborted();
+                signal.addEventListener('abort', (_evt) => {
+                    port1.postMessage({
+                        event: 'abort',
+                        reason: signal.reason,
+                    });
+                });
+            }
+
+            parentPort.postMessage({
+                channel: this.constructor.name,
+                event: 'exec',
+                data: data,
+                dataProfiles: profiles,
+                port: port2,
+            }, [port2, ...transferList]);
+            const workerCrashHandler = (err: any) => {
+                deferred.reject(err);
+            };
+            parentPort.once('error', workerCrashHandler);
+            port1.on('message', (msg) => {
+                parentPort!.off('error', workerCrashHandler);
+                switch (msg?.kind) {
+                    case 'return': {
+                        deferred.resolve(this.pseudoTransfer.mangleTransferred(port1, msg.data, msg.dataProfiles));
+                        port1.close();
+                        break;
+                    }
+                    case 'throw': {
+                        deferred.reject(this.pseudoTransfer.mangleTransferred(port1, msg.data, msg.dataProfiles));
+                        port1.close();
+                        break;
+                    }
+                    case 'remoteObjectReference': {
+                        this.pseudoTransfer.handleRemoteAction(msg.port, data);
+                        break;
+                    }
+                    default: {
+                        deferred.reject(new Error('Protocol error: unknown message kind'));
+                        break;
+                    }
+                }
+            });
+
+            return deferred.promise;
+        }
+
+        this.ongoingTasks += 1;
+        this.notifyOngoingTasks();
+
+        try {
+            const codeHostClass = this.host(name);
+            const hostIsAsyncService = codeHostClass instanceof AsyncService;
+            if (hostIsAsyncService && codeHostClass.serviceStatus !== 'ready') {
+                await codeHostClass.serviceReady();
+            }
+            if (lateMangleMsg) {
+                const m = this.pseudoTransfer.mangleTransferred(lateMangleMsg.port, lateMangleMsg.data, lateMangleMsg.dataProfiles);
+
+                if (m.env?.asyncContext) {
+                    this.asyncContext.setup();
+                    Object.assign(this.asyncContext.ctx, m.env.asyncContext);
+                }
+                return super.exec(name, m.input, m.env, signal);
+            }
+
+            if (env?.asyncContext) {
+                this.asyncContext.setup();
+                Object.assign(this.asyncContext.ctx, env.asyncContext);
+            }
+
+            return super.exec(name, input, env, signal);
+        } finally {
+            this.ongoingTasks -= 1;
+            this.notifyOngoingTasks();
+        }
     }
 
     override async exec(name: string, input: object, env?: any, signal?: AbortSignal, lateMangleMsg?: any) {

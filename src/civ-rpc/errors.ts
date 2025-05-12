@@ -115,7 +115,10 @@ export class ApplicationError extends Error implements AutoCastable {
         if (typeof input === 'string') {
             _input = { message: input };
         }
-        const instance = autoConstructor.call(this, _input) as ApplicationError;
+        let instance = autoConstructor.call(this, _input) as ApplicationError;
+        if (typeof instance !== 'object' || instance === null) {
+            instance = new this(`${input}`);
+        }
 
         Error.captureStackTrace(instance, this.from);
         instance._fixStack();
