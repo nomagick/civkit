@@ -36,12 +36,20 @@ export abstract class AbstractAsyncContext extends AsyncService {
         return this.asyncLocalStorage.run({ ...ctx, ...base }, func);
     }
 
-    bridge<T extends object, R>(ctx: T, func: () => R) {
-        return this.asyncLocalStorage.run(ctx, func);
+    bridge<T extends object, R, TArgs extends any[]>(ctx: T, func: (...args1: TArgs) => R): R;
+    bridge<T extends object, R, TArgs extends any[]>(ctx: T, func: (...args1: TArgs) => R, ...args: TArgs): R;
+    bridge<T extends object, R, TArgs extends any[]>(ctx: T, func: (...args1: TArgs) => R, ...args: TArgs) {
+        return this.asyncLocalStorage.run(ctx, func, ...args);
     }
 
     implicitBridge<T extends object>(ctx: T) {
         return this.asyncLocalStorage.enterWith(ctx);
+    }
+
+    bridged<T extends object, R, TArgs extends any[]>(func: (...args: TArgs) => R, ctx: T = this.ctx) {
+        return (...args: TArgs) => {
+            return this.asyncLocalStorage.run(ctx, func, ...args);
+        };
     }
 
     merge<T extends object>(input: T) {
