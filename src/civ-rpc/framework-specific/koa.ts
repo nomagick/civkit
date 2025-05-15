@@ -311,7 +311,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                 }
 
                 const abortController = new AbortController();
-                ctx.res.once('closed', () => {
+                ctx.res.once('close', () => {
                     if (!done) {
                         abortController.abort('Connection closed by the other end.');
                     }
