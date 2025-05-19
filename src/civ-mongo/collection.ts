@@ -188,7 +188,7 @@ export abstract class AbstractMongoCollection<T extends Document, P = ObjectId> 
     ) {
         const r = await this.collection.findOneAndReplace(
             filter,
-            _.omit(replace, '_id') as WithoutId<T>,
+            replace,
             { upsert: true, returnDocument: 'after', ...options, includeResultMetadata: true });
 
         if (!r.ok) {
