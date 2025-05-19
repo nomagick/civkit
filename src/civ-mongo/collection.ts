@@ -5,7 +5,7 @@ import {
     CountDocumentsOptions, DeleteOptions, Document, Filter,
     FindOneAndDeleteOptions, FindOneAndReplaceOptions, FindOneAndUpdateOptions,
     FindOptions, InsertOneOptions, MatchKeysAndValues,
-    OptionalId, UpdateFilter, UpdateOptions, WithTransactionCallback, WithoutId, 
+    OptionalId, UpdateFilter, UpdateOptions, WithTransactionCallback, 
     CollectionInfo, CreateIndexesOptions, IndexSpecification, CreateCollectionOptions
 } from 'mongodb';
 
