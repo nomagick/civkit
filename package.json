@@ -47,7 +47,7 @@
         "smtp-server": "^3.11.0",
         "tld-extract": "^2.1.0",
         "zod": "*",
-        "zod-openai": "*"
+        "zod-openapi": "*"
     },
     "peerDependencies": {
         "mongodb": "^6",
