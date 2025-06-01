@@ -62,7 +62,7 @@
         "@types/lodash": "^4.14.194",
         "@types/mime": "^3.0.1",
         "@types/minio": "^7.0.18",
-        "@types/node": "^20.12.7",
+        "@types/node": "^22.15.29",
         "@types/node-schedule": "^2.1.0",
         "@types/nodemailer": "^6.4.7",
         "@types/smtp-server": "^3.5.7",
