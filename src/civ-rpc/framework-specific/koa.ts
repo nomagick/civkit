@@ -216,7 +216,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
             title: this.title,
             description: `${this.title} openapi document`,
             'x-logo': {
-                url: `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
+                url: `/favicon.ico`,
             }
         };
     }

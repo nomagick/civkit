@@ -200,7 +200,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                         title: this.title,
                         description: `${this.title} openAPI documentations`,
                         'x-logo': {
-                            url: this.logoUrl || `https://www.openapis.org/wp-content/uploads/sites/3/2018/02/OpenAPI_Logo_Pantone-1.png`
+                            url: this.logoUrl || `/favicon.ico`
                         }
                     }
                 }, (this.constructor as typeof AbstractRPCRegistry).envelope, req.query as any);
