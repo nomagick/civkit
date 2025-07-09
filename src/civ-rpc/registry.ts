@@ -385,7 +385,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                                 continue;
                             }
                         }
-                        const cur = inputSingle('Input', patchedInput, paramOption.path, paramOption);
+                        const cur = inputSingle('Input', patchedInput, x.path, x);
                         if (cur !== undefined) {
                             r = cur;
                         }
