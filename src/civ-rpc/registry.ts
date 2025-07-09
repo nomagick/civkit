@@ -174,7 +174,17 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             const propOps = paramPickerConf?.[i];
             const propName = paramNames[i];
 
-            if (propOps) {
+            if (Array.isArray(propOps)) {
+                conf.paramOptions[i] = propOps.map((x) => {
+                    const clone = { type: t, ...x };
+                    if (!clone.path && propName &&
+                        (t !== Object && t !== Promise && NATIVE_CLASS_PROTOTYPES.has(t?.prototype))
+                    ) {
+                        clone.path = propName;
+                    }
+                    return clone;
+                });
+            } else if (propOps) {
                 if (!propOps.path && propName &&
                     (t !== Object && t !== Promise && NATIVE_CLASS_PROTOTYPES.has(t?.prototype))
                 ) {
@@ -360,6 +370,30 @@ export abstract class AbstractRPCRegistry extends AsyncService {
         try {
 
             params = conf!.paramOptions.map((paramOption) => {
+                if (Array.isArray(paramOption)) {
+                    let r;
+
+                    for (const x of paramOption) {
+                        if (x?.required === false) {
+                            try {
+                                const cur = inputSingle('Input', patchedInput, x.path, x);
+                                if (cur !== undefined) {
+                                    r = cur;
+                                    continue;
+                                }
+                            } catch (_err) {
+                                continue;
+                            }
+                        }
+                        const cur = inputSingle('Input', patchedInput, paramOption.path, paramOption);
+                        if (cur !== undefined) {
+                            r = cur;
+                        }
+                    }
+
+                    return r;
+                }
+
                 if (paramOption?.required === false) {
                     try {
                         return inputSingle('Input', patchedInput, paramOption.path, paramOption);
@@ -526,8 +560,14 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             if (conf && !conf.type) {
                 conf.type = designType;
             }
-
-            methodConf[paramIdx] = conf ? __patchPropOptionsEnumToSet(conf, designType) : conf;
+            const cur = methodConf[paramIdx];
+            if (Array.isArray(cur) && conf) {
+                cur.push(__patchPropOptionsEnumToSet(conf, designType));
+            } else if (cur && conf) {
+                methodConf[paramIdx] = [cur, __patchPropOptionsEnumToSet(conf, designType)];
+            } else {
+                methodConf[paramIdx] = conf ? __patchPropOptionsEnumToSet(conf, designType) : conf;
+            }
         };
 
         return PickCtxParamDecorator;

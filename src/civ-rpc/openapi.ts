@@ -763,14 +763,17 @@ export class OpenAPIManager {
 
             if (Array.isArray(conf.paramTypes)) {
                 for (const [i, x] of conf.paramTypes.entries()) {
-                    const conf2 = {
-                        type: x,
-                        path: isAutoCastableClass(x) ? undefined : conf.paramNames?.[i],
-                        ...paramPickerConf[i]
-                    };
-                    _.merge(final, this.collectOperationMeta(
-                        _.pick(conf2, ['type', 'arrayOf', 'dictOf', 'returnType', 'returnArrayOf', 'returnDictOf']),
-                    ));
+                    const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]].filter(Boolean);
+                    for (const ppc of ppcs) {
+                        const conf2 = {
+                            type: x,
+                            path: isAutoCastableClass(x) ? undefined : conf.paramNames?.[i],
+                            ...ppc
+                        };
+                        _.merge(final, this.collectOperationMeta(
+                            _.pick(conf2, ['type', 'arrayOf', 'dictOf', 'returnType', 'returnArrayOf', 'returnDictOf']),
+                        ));
+                    }
                 }
             }
         } else if (conf.arrayOf) {
@@ -840,30 +843,33 @@ export class OpenAPIManager {
 
         if (Array.isArray(rpcOptions.paramTypes)) {
             for (const [i, x] of rpcOptions.paramTypes.entries()) {
-                const conf = {
-                    type: x,
-                    path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
-                    paramOf: rpcOptions.name,
-                    ...paramPickerConf[i]
-                } as PropOptions<unknown>;
-                const partialSchema = this.propOptionsLikeToOpenAPISchema(conf, 'input');
-                if (!partialSchema) {
-                    continue;
-                }
-
-                if (conf.path) {
-                    const flattenedSchema = this.flattenSchema(partialSchema);
-                    if (flattenedSchema) {
-                        properties[conf.path] = _.cloneDeep(flattenedSchema);
-                        this.applyMeta(properties[conf.path], conf, ['parameter', 'request']);
+                const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]].filter(Boolean);
+                for (const ppc of ppcs) {
+                    const conf = {
+                        type: x,
+                        path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
+                        paramOf: rpcOptions.name,
+                        ...ppc
+                    } as PropOptions<unknown>;
+                    const partialSchema = this.propOptionsLikeToOpenAPISchema(conf, 'input');
+                    if (!partialSchema) {
+                        continue;
                     }
 
-                    continue;
-                }
+                    if (conf.path) {
+                        const flattenedSchema = this.flattenSchema(partialSchema);
+                        if (flattenedSchema) {
+                            properties[conf.path] = _.cloneDeep(flattenedSchema);
+                            this.applyMeta(properties[conf.path], conf, ['parameter', 'request']);
+                        }
 
-                const shallowVec = this.getShallowPropertiesFromFullSchema(partialSchema);
-                if (!_.isEmpty(shallowVec)) {
-                    Object.assign(properties, shallowVec);
+                        continue;
+                    }
+
+                    const shallowVec = this.getShallowPropertiesFromFullSchema(partialSchema);
+                    if (!_.isEmpty(shallowVec)) {
+                        Object.assign(properties, shallowVec);
+                    }
                 }
             }
         }
@@ -899,40 +905,43 @@ export class OpenAPIManager {
 
         if (Array.isArray(rpcOptions.paramTypes)) {
             for (const [i, x] of rpcOptions.paramTypes.entries()) {
-                const conf = {
-                    type: x,
-                    path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
-                    paramOf: rpcOptions.name,
-                    ...paramPickerConf[i]
-                } as PropOptionsLike;
+                const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]].filter(Boolean);
+                for (const ppc of ppcs) {
+                    const conf = {
+                        type: x,
+                        path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
+                        paramOf: rpcOptions.name,
+                        ...ppc
+                    } as PropOptionsLike;
 
-                const partialSchema = this.propOptionsLikeToOpenAPISchema(conf, 'input');
+                    const partialSchema = this.propOptionsLikeToOpenAPISchema(conf, 'input');
 
-                if (!partialSchema) {
-                    continue;
-                }
-
-                if (conf.path) {
-                    const flattenedSchema = this.flattenSchema(partialSchema);
-                    if (flattenedSchema) {
-                        shallowObj[conf.path] = _.cloneDeep(flattenedSchema);
-                        this.applyMeta(shallowObj[conf.path], conf, ['parameter', 'request']);
+                    if (!partialSchema) {
+                        continue;
                     }
 
-                    nonDtoParams[conf.path] = _.cloneDeep(partialSchema);
-                    this.applyMeta(nonDtoParams[conf.path], conf, 'request');
-                    if (nonDtoParams[conf.path].required && typeof conf.path === 'string') {
-                        nonDtoParamsRequired.push(conf.path);
+                    if (conf.path) {
+                        const flattenedSchema = this.flattenSchema(partialSchema);
+                        if (flattenedSchema) {
+                            shallowObj[conf.path] = _.cloneDeep(flattenedSchema);
+                            this.applyMeta(shallowObj[conf.path], conf, ['parameter', 'request']);
+                        }
+
+                        nonDtoParams[conf.path] = _.cloneDeep(partialSchema);
+                        this.applyMeta(nonDtoParams[conf.path], conf, 'request');
+                        if (nonDtoParams[conf.path].required && typeof conf.path === 'string') {
+                            nonDtoParamsRequired.push(conf.path);
+                        }
+
+                        continue;
                     }
 
-                    continue;
-                }
+                    openAPISchemas.push(partialSchema);
 
-                openAPISchemas.push(partialSchema);
-
-                const shallowVec = this.getShallowPropertiesFromFullSchema(partialSchema);
-                if (!_.isEmpty(shallowVec)) {
-                    Object.assign(shallowObj, shallowVec);
+                    const shallowVec = this.getShallowPropertiesFromFullSchema(partialSchema);
+                    if (!_.isEmpty(shallowVec)) {
+                        Object.assign(shallowObj, shallowVec);
+                    }
                 }
             }
         }
@@ -1038,30 +1047,33 @@ export class OpenAPIManager {
 
         if (Array.isArray(rpcOptions.paramTypes)) {
             for (const [i, x] of rpcOptions.paramTypes.entries()) {
-                const conf = {
-                    type: x,
-                    path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
-                    paramOf: rpcOptions.name,
-                    ...paramPickerConf[i]
-                } as PropOptionsLike;
+                const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]].filter(Boolean);
+                for (const ppc of ppcs) {
+                    const conf = {
+                        type: x,
+                        path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
+                        paramOf: rpcOptions.name,
+                        ...ppc
+                    } as PropOptionsLike;
 
-                const partialSchema = this.propOptionsLikeToOpenAPISchema(conf, 'input', false);
+                    const partialSchema = this.propOptionsLikeToOpenAPISchema(conf, 'input', false);
 
-                if (!partialSchema) {
-                    continue;
-                }
-
-                if (conf.path) {
-                    nonDtoParams[conf.path] = _.cloneDeep(partialSchema);
-                    this.applyMeta(nonDtoParams[conf.path], conf, 'request');
-                    if (nonDtoParams[conf.path].required && typeof conf.path === 'string') {
-                        nonDtoParamsRequired.push(conf.path);
+                    if (!partialSchema) {
+                        continue;
                     }
 
-                    continue;
-                }
+                    if (conf.path) {
+                        nonDtoParams[conf.path] = _.cloneDeep(partialSchema);
+                        this.applyMeta(nonDtoParams[conf.path], conf, 'request');
+                        if (nonDtoParams[conf.path].required && typeof conf.path === 'string') {
+                            nonDtoParamsRequired.push(conf.path);
+                        }
 
-                openAPISchemas.push(partialSchema);
+                        continue;
+                    }
+
+                    openAPISchemas.push(partialSchema);
+                }
             }
         }
 
