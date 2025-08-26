@@ -763,7 +763,7 @@ export class OpenAPIManager {
 
             if (Array.isArray(conf.paramTypes)) {
                 for (const [i, x] of conf.paramTypes.entries()) {
-                    const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]].filter(Boolean);
+                    const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]];
                     for (const ppc of ppcs) {
                         const conf2 = {
                             type: x,
@@ -843,7 +843,7 @@ export class OpenAPIManager {
 
         if (Array.isArray(rpcOptions.paramTypes)) {
             for (const [i, x] of rpcOptions.paramTypes.entries()) {
-                const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]].filter(Boolean);
+                const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]];
                 for (const ppc of ppcs) {
                     const conf = {
                         type: x,
@@ -905,7 +905,7 @@ export class OpenAPIManager {
 
         if (Array.isArray(rpcOptions.paramTypes)) {
             for (const [i, x] of rpcOptions.paramTypes.entries()) {
-                const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]].filter(Boolean);
+                const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]];
                 for (const ppc of ppcs) {
                     const conf = {
                         type: x,
@@ -1047,7 +1047,7 @@ export class OpenAPIManager {
 
         if (Array.isArray(rpcOptions.paramTypes)) {
             for (const [i, x] of rpcOptions.paramTypes.entries()) {
-                const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]].filter(Boolean);
+                const ppcs = Array.isArray(paramPickerConf[i]) ? paramPickerConf[i] : [paramPickerConf[i]];
                 for (const ppc of ppcs) {
                     const conf = {
                         type: x,
