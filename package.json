@@ -1,6 +1,6 @@
 {
     "name": "civkit",
-    "version": "0.10.0",
+    "version": "0.10.0-b43306a",
     "description": "Sets of tools, in typescript",
     "main": "index.js",
     "types": "index.d.ts",
@@ -15,7 +15,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/nomagick/civkit.git"
+        "url": "git+https://github.com/nomagick/civkit.git"
     },
     "author": "nomagick@naiver.org",
     "license": "Apache-2.0",
