@@ -62,7 +62,7 @@ export abstract class AbstractObjectStorageService extends AsyncService {
 
         const file = typeof inputFileHandle === 'string' ? FancyFile.auto(pathToFileURL(inputFileHandle)) : inputFileHandle;
 
-        const r = await this.minioClient.putObject(this.bucket, objectName, await file.createReadStream(), meta);
+        const r = await this.minioClient.putObject(this.bucket, objectName, await file.createReadStream(), await file.size, meta);
 
         return { ...r, objectName, bucket: this.bucket, region: this.region, sha256Sum: await file.sha256Sum };
     }
@@ -182,7 +182,7 @@ export abstract class AbstractObjectStorageService extends AsyncService {
     signDownloadObject(
         objName: string,
         expirySeconds: number = 1200,
-        respHeaders: { [k: string]: string | number | undefined; } = {}
+        respHeaders: { [k: string]: string; } = {}
     ) {
         return this.minioClient.presignedGetObject(this.bucket, objName, expirySeconds, respHeaders);
     }
@@ -235,7 +235,7 @@ export class ObjectStorageCompanion {
     signFileDownload(
         pathName: string,
         expirySeconds: number = 1200,
-        respHeaders: { [k: string]: string | number | undefined; } = {}
+        respHeaders: { [k: string]: string; } = {}
     ) {
         return this.storageService.signDownloadObject(`${this.dirPrefix}/${pathName}`.replaceAll(/\/+/g, '/'), expirySeconds, respHeaders);
     }
