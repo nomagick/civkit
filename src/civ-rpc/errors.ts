@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-magic-numbers */
 import { get } from 'lodash';
 import {
-    AutoCastable, Prop, autoConstructor, Also
-} from '../lib/auto-castable';
+    Coercible, Prop, autoConstructor, Also
+} from '../lib/coercible';
 import {
     assignTransferProtocolMeta, extractTransferProtocolMeta,
     RPC_TRANSFER_PROTOCOL_META_SYMBOL, RPC_MARSHAL
@@ -109,7 +109,7 @@ export function StatusCode(status: APPLICATION_ERROR | number) {
     dictOf: Object
 })
 @StatusCode(50000)
-export class ApplicationError extends Error implements AutoCastable {
+export class ApplicationError extends Error implements Coercible {
     static from(input: string | object) {
         let _input = input;
         if (typeof input === 'string') {

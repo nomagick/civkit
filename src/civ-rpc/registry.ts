@@ -8,9 +8,9 @@ import {
 } from './errors';
 import type { container as DIContainer } from 'tsyringe';
 import {
-    AutoCastingError,
-    inputSingle, isAutoCastableClass, PropOptions, __patchPropOptionsEnumToSet
-} from '../lib/auto-castable';
+    CoercionError,
+    inputSingle, isCoercibleClass, PropOptions, __patchPropOptionsEnumToSet
+} from '../lib/coercible';
 import { RestParameters, shallowDetectRestParametersKeys } from './magic';
 import { extractMeta, extractTransferProtocolMeta, TransferProtocolMetadata } from './meta';
 import { get } from 'lodash';
@@ -192,7 +192,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
                 }
 
                 conf.paramOptions[i] = { type: t, ...propOps };
-            } else if (isAutoCastableClass(t)) {
+            } else if (isCoercibleClass(t)) {
                 const paramOptions: PropOptions<unknown> = { type: t };
 
                 conf.paramOptions[i] = paramOptions;
@@ -408,7 +408,7 @@ export abstract class AbstractRPCRegistry extends AsyncService {
             if (err instanceof ApplicationError) {
                 throw err;
             }
-            if (err instanceof AutoCastingError) {
+            if (err instanceof CoercionError) {
                 throw new ParamValidationError({
                     ...err,
                     readableMessage: get(err.cause, 'message') || err.reason,

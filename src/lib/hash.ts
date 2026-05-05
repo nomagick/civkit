@@ -138,7 +138,6 @@ export class SaltedHashManager<T extends string | Buffer = Buffer> extends HashM
     }
 }
 
-
 const objHasher = nodeObjHasher({
     alg: 'md5',
     enc: 'base64',

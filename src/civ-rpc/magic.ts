@@ -1,4 +1,4 @@
-import { Also, AutoCastable } from '../lib/auto-castable';
+import { Also, Coercible } from '../lib/coercible';
 
 @Also({
     desc: 'Magic dto that catches all input parameters which were not specifically read. Could be anything.',
@@ -12,7 +12,7 @@ import { Also, AutoCastable } from '../lib/auto-castable';
         }
     }
 })
-export class RestParameters extends AutoCastable {
+export class RestParameters extends Coercible {
     [k: string]: any;
 }
 

@@ -10,10 +10,10 @@ import {
     TPM
 } from './meta';
 import {
-    Also, AutoCastable,
-    AutoCastingError, Prop,
+    Also, Coercible,
+    CoercionError, Prop,
     PropOptions, Combine,
-} from '../lib/auto-castable';
+} from '../lib/coercible';
 import { isPrimitiveLike, marshalErrorLike } from '../utils';
 import { Readable, isReadable } from 'stream';
 import { RPCOptions } from './registry';
@@ -34,7 +34,7 @@ export class RPCHost extends AsyncService {
     }
 }
 
-export class Dto<T = any> extends AutoCastable {
+export class Dto<T = any> extends Coercible {
     protected [RPC_CALL_ENVIRONMENT]?: T;
     protected [RPC_MARSHAL]?: (...args: any[]) => any;
 
@@ -51,7 +51,7 @@ export class Dto<T = any> extends AutoCastable {
             if (err instanceof ApplicationError) {
                 throw err;
             }
-            if (err instanceof AutoCastingError) {
+            if (err instanceof CoercionError) {
                 throw new ParamValidationError({
                     ...err,
                     readableMessage: get(err.cause, 'message') || err.reason,
@@ -212,7 +212,7 @@ export class IntegrityEnvelope extends RPCEnvelope {
                     primitive: true
                 }
             })
-            class WrappedOutput extends AutoCastable {
+            class WrappedOutput extends Coercible {
                 @Prop({
                     type: Number, default: 200, required: true,
                     desc: 'Envelope code.\n\nMirror of HTTP status code',
@@ -283,7 +283,7 @@ export class IntegrityEnvelope extends RPCEnvelope {
                     primitive: true
                 }
             })
-            class WrappedOutput extends AutoCastable {
+            class WrappedOutput extends Coercible {
 
                 protected get [RPC_TRANSFER_PROTOCOL_META_SYMBOL]() {
                     return {

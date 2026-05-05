@@ -5,7 +5,7 @@ import { basename } from 'path';
 import { Defer, Deferred } from './defer';
 import { HashManager } from './hash';
 import { mimeOf, MIMEVec, parseContentType, restoreContentType } from './mime';
-import { Also, AutoConstructor } from './auto-castable';
+import { Also, AutoConstructor } from './coercible';
 import {
     TransferProtocolMetadata, RPC_TRANSFER_PROTOCOL_META_SYMBOL,
     transferProtocolMetaDecorated,

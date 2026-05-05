@@ -3,11 +3,9 @@ import { isConstructor, chainEntriesSimple } from '../../utils/lang';
 
 import _ from 'lodash';
 
-import type { ZodArray, ZodIntersection, ZodObject, ZodType, ZodUnion } from 'zod';
-
 export const AUTO_CONSTRUCTOR_SYMBOL = Symbol('AutoConstructor');
-export const AUTOCASTABLE_OPTIONS_SYMBOL = Symbol('AutoCastable options');
-export const AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL = Symbol('AutoCastable additional options');
+export const COERCIBLE_OPTIONS_SYMBOL = Symbol('Coercible options');
+export const COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL = Symbol('Coercible additional options');
 
 export const NOT_RESOLVED = Symbol('Not-Resolved');
 
@@ -25,14 +23,14 @@ export type AdditionalPropOptions<T> = Pick<
 export type InternalAdditionalPropOptions<T> = AdditionalPropOptions<T> & Pick<PropOptions<T>,
     | 'type'
     | 'arrayOf'
-> & { zod?: ZodObject<any> | ZodArray<any> | ZodUnion<any> | ZodIntersection<any, any> };
+>;
 
 export type Constructor<T> = { new(...args: any[]): T; };
 export type Constructed<T> = T extends Partial<infer U> ? U : T extends object ? T : object;
 
-export class AutoCastableMetaClass {
-    static [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string | symbol]: PropOptions<unknown>; };
-    static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: InternalAdditionalPropOptions<unknown>;
+export class CoercibleMetaClass {
+    static [COERCIBLE_OPTIONS_SYMBOL]?: { [k: string | symbol]: PropOptions<unknown>; };
+    static [COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL]?: InternalAdditionalPropOptions<unknown>;
 
     constructor(..._args: any[]) {
         return this as any;
@@ -52,11 +50,11 @@ export function autoConstructor<T, U extends Constructor<object>>(
     this: U, input: T, ...args: ConstructorParameters<typeof this>
 ): T;
 export function autoConstructor(
-    this: typeof AutoCastableMetaClass, input: object, ...args: unknown[]
+    this: typeof CoercibleMetaClass, input: object, ...args: unknown[]
 ) {
     const instance = new (this as any)(...args);
 
-    const entryVecs = chainEntriesSimple((this as typeof AutoCastableMetaClass)[AUTOCASTABLE_OPTIONS_SYMBOL] || {});
+    const entryVecs = chainEntriesSimple((this as typeof CoercibleMetaClass)[COERCIBLE_OPTIONS_SYMBOL] || {});
 
     for (const [prop, config] of entryVecs) {
         const val = inputSingle(undefined, input, prop, config, this);
@@ -66,8 +64,8 @@ export function autoConstructor(
         (instance as any)[prop] = val;
     }
 
-    if (this[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
-        const additionalConf = this[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+    if (this[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL]) {
+        const additionalConf = this[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL];
         if (additionalConf?.dictOf && _.isObjectLike(input)) {
             const namedEntryKeys = entryVecs.map(([k]) => k);
             const dict = inputSingle(undefined, _.omit(input, ...namedEntryKeys), undefined, additionalConf, this);
@@ -82,7 +80,7 @@ export function autoConstructor(
                 try {
                     result = (validator as Function).call(this, instance, input);
                 } catch (err: any) {
-                    throw new AutoCastingError({
+                    throw new CoercionError({
                         reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                         path: makePropNameArr(undefined, undefined, undefined),
                         hostName: this.name,
@@ -95,7 +93,7 @@ export function autoConstructor(
                 }
 
                 if (result instanceof Error) {
-                    throw new AutoCastingError({
+                    throw new CoercionError({
                         reason: `Rejected by validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
                         path: makePropNameArr(undefined, undefined, undefined),
                         hostName: this.name,
@@ -108,7 +106,7 @@ export function autoConstructor(
                 }
 
                 if (!result) {
-                    throw new AutoCastingError({
+                    throw new CoercionError({
                         reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
                         path: makePropNameArr(undefined, undefined, undefined),
                         hostName: this.name,
@@ -125,9 +123,9 @@ export function autoConstructor(
     return instance as any;
 }
 
-export class AutoCastable implements AutoCastableMetaClass {
-    static [AUTOCASTABLE_OPTIONS_SYMBOL]?: { [k: string | symbol]: PropOptions<unknown>; };
-    static [AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]?: InternalAdditionalPropOptions<unknown>;
+export class Coercible implements CoercibleMetaClass {
+    static [COERCIBLE_OPTIONS_SYMBOL]?: { [k: string | symbol]: PropOptions<unknown>; };
+    static [COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL]?: InternalAdditionalPropOptions<unknown>;
 
     @AutoConstructor
     static from = autoConstructor;
@@ -166,16 +164,16 @@ export function AutoConstructor<T extends Constructor<any>>(tgt: T, propName: st
     );
 }
 
-export function isAutoCastableClass(cls: any): boolean {
+export function isCoercibleClass(cls: any): boolean {
     if (!cls) {
         return false;
     }
 
     if (
-        cls.prototype instanceof AutoCastable ||
-        cls.prototype instanceof AutoCastableMetaClass ||
+        cls.prototype instanceof Coercible ||
+        cls.prototype instanceof CoercibleMetaClass ||
         isAutoConstructable(cls) ||
-        (cls?.[AUTOCASTABLE_OPTIONS_SYMBOL] || cls?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL])
+        (cls?.[COERCIBLE_OPTIONS_SYMBOL] || cls?.[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL])
     ) {
         return true;
     }
@@ -199,7 +197,7 @@ export function isZodType(cls: any): boolean {
     return true;
 }
 
-export class AutoCastingError extends Error {
+export class CoercionError extends Error {
     path: string;
     desc?: string;
     value: any;
@@ -216,7 +214,7 @@ export class AutoCastingError extends Error {
     }
 
     constructor(detail: { [k: string]: any; }) {
-        super('AutocastingError');
+        super('CoercionError');
 
         this.path = detail.path;
         this.reason = detail.reason;
@@ -227,11 +225,11 @@ export class AutoCastingError extends Error {
         this.hostName = detail.hostName;
         this.propName = detail.propName;
 
-        this.message = makeAutoCastingErrorMessage(this);
+        this.message = makeCoercionErrorMessage(this);
     }
 }
 
-function makeAutoCastingErrorMessage(err: AutoCastingError) {
+function makeCoercionErrorMessage(err: CoercionError) {
     const compPath = (err.path && err.propName) ?
         (err.path === err.propName ?
             `(${err.path})` :
@@ -257,8 +255,8 @@ export function castToType(ensureTypes: any[], inputProp: any) {
 
     theLoop:
     for (const typeShouldBe of ensureTypes) {
-        // AutoCastable types
-        if (isAutoCastableClass(typeShouldBe)) {
+        // Coercible types
+        if (isCoercibleClass(typeShouldBe)) {
             if (inputProp instanceof typeShouldBe) {
                 val = inputProp;
                 break;
@@ -273,7 +271,7 @@ export function castToType(ensureTypes: any[], inputProp: any) {
             }
         } else if (isZodType(typeShouldBe)) {
             // Zod types
-            const zodType = typeShouldBe as ZodType;
+            const zodType = typeShouldBe;
             const zodParsed = zodType.safeParse(inputProp);
 
             if (!zodParsed.success) {
@@ -511,7 +509,7 @@ export function inputSingle<T>(
             return config.defaultFactory!.call(undefined, input, access);
         }
         if (config.required) {
-            throw new AutoCastingError({
+            throw new CoercionError({
                 reason: `Required but not provided.`,
                 path: accessText,
                 hostName,
@@ -543,7 +541,7 @@ export function inputSingle<T>(
             return config.defaultFactory!.call(undefined, input, access);
         }
         if (config.required) {
-            throw new AutoCastingError({
+            throw new CoercionError({
                 reason: `Required, non-nullable, but received null.`,
                 path: accessText,
                 hostName,
@@ -579,12 +577,12 @@ export function inputSingle<T>(
                     err.hostName = hostName;
                     err.propName = makePropNameArr(err.propName, propName, i);
                     err.path = makePropNameArr(err.path, accessText, i);
-                    err.message = makeAutoCastingErrorMessage(err);
+                    err.message = makeCoercionErrorMessage(err);
 
                     throw err;
                 }
 
-                throw new AutoCastingError({
+                throw new CoercionError({
                     reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
                     path: `${accessText}[${i}]`,
                     hostName,
@@ -597,7 +595,7 @@ export function inputSingle<T>(
             }
 
             if (elem === NOT_RESOLVED) {
-                throw new AutoCastingError({
+                throw new CoercionError({
                     reason: `Type casting failed [${typeNames.join('|')}].`,
                     path: `${accessText}[${i}]`,
                     hostName,
@@ -616,7 +614,7 @@ export function inputSingle<T>(
                     try {
                         result = (validator as Function).call(host, elem, input);
                     } catch (err: any) {
-                        throw new AutoCastingError({
+                        throw new CoercionError({
                             reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                             path: makePropNameArr(undefined, accessText, i),
                             hostName,
@@ -629,7 +627,7 @@ export function inputSingle<T>(
                     }
 
                     if (result instanceof Error) {
-                        throw new AutoCastingError({
+                        throw new CoercionError({
                             reason: `Rejected by validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
                             path: makePropNameArr(undefined, accessText, i),
                             hostName,
@@ -642,7 +640,7 @@ export function inputSingle<T>(
                     }
 
                     if (!result) {
-                        throw new AutoCastingError({
+                        throw new CoercionError({
                             reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
                             path: makePropNameArr(undefined, accessText, i),
                             hostName,
@@ -671,7 +669,7 @@ export function inputSingle<T>(
                 try {
                     result = (validator as Function).call(host, values, input);
                 } catch (err: any) {
-                    throw new AutoCastingError({
+                    throw new CoercionError({
                         reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                         path: makePropNameArr(undefined, accessText),
                         hostName,
@@ -684,7 +682,7 @@ export function inputSingle<T>(
                 }
 
                 if (result instanceof Error) {
-                    throw new AutoCastingError({
+                    throw new CoercionError({
                         reason: `Rejected by collection validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
                         path: makePropNameArr(undefined, accessText),
                         hostName,
@@ -697,7 +695,7 @@ export function inputSingle<T>(
                 }
 
                 if (!result) {
-                    throw new AutoCastingError({
+                    throw new CoercionError({
                         reason: `Rejected by collection validator ${describeAnonymousValidateFunction(validator)}.`,
                         path: makePropNameArr(undefined, accessText),
                         hostName,
@@ -741,12 +739,12 @@ export function inputSingle<T>(
                     err.hostName = hostName;
                     err.propName = makePropName(err.propName, propName, k);
                     err.path = makePropName(err.path, accessText, k);
-                    err.message = makeAutoCastingErrorMessage(err);
+                    err.message = makeCoercionErrorMessage(err);
 
                     throw err;
                 }
 
-                throw new AutoCastingError({
+                throw new CoercionError({
                     reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
                     path: makePropName(undefined, accessText, k),
                     hostName,
@@ -759,7 +757,7 @@ export function inputSingle<T>(
             }
 
             if (elem === NOT_RESOLVED) {
-                throw new AutoCastingError({
+                throw new CoercionError({
                     reason: `Type casting failed [${typeNames.join('|')}].`,
                     path: makePropName(undefined, accessText, k),
                     hostName,
@@ -778,7 +776,7 @@ export function inputSingle<T>(
                     try {
                         result = (validator as Function).call(host, elem, input);
                     } catch (err: any) {
-                        throw new AutoCastingError({
+                        throw new CoercionError({
                             reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                             path: makePropName(undefined, accessText, k),
                             hostName,
@@ -791,7 +789,7 @@ export function inputSingle<T>(
                     }
 
                     if (result instanceof Error) {
-                        throw new AutoCastingError({
+                        throw new CoercionError({
                             reason: `Rejected by validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
                             path: makePropName(undefined, accessText, k),
                             hostName,
@@ -804,7 +802,7 @@ export function inputSingle<T>(
                     }
 
                     if (!result) {
-                        throw new AutoCastingError({
+                        throw new CoercionError({
                             reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
                             path: makePropName(undefined, accessText, k),
                             hostName,
@@ -833,7 +831,7 @@ export function inputSingle<T>(
                 try {
                     result = (validator as Function).call(host, values, input);
                 } catch (err: any) {
-                    throw new AutoCastingError({
+                    throw new CoercionError({
                         reason: `Collection validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                         path: makePropNameArr(undefined, accessText),
                         hostName,
@@ -846,7 +844,7 @@ export function inputSingle<T>(
                 }
 
                 if (result instanceof Error) {
-                    throw new AutoCastingError({
+                    throw new CoercionError({
                         reason: `Rejected by collection validator '${describeAnonymousValidateFunction(validator)}': ${errorMessageOf(result)}.`,
                         path: makePropNameArr(undefined, accessText),
                         hostName,
@@ -859,7 +857,7 @@ export function inputSingle<T>(
                 }
 
                 if (!result) {
-                    throw new AutoCastingError({
+                    throw new CoercionError({
                         reason: `Rejected by collection validator ${describeAnonymousValidateFunction(validator)}.`,
                         path: makePropNameArr(undefined, accessText),
                         hostName,
@@ -884,12 +882,12 @@ export function inputSingle<T>(
             err.hostName = hostName;
             err.propName = makePropName(err.propName, propName);
             err.path = makePropName(err.path, accessText);
-            err.message = makeAutoCastingErrorMessage(err);
+            err.message = makeCoercionErrorMessage(err);
 
             throw err;
         }
         if (inputProp !== undefined) {
-            throw new AutoCastingError({
+            throw new CoercionError({
                 reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
                 path: makePropNameArr(undefined, accessText),
                 hostName,
@@ -905,7 +903,7 @@ export function inputSingle<T>(
     if (item === NOT_RESOLVED || item === undefined) {
         if (config.required || inputProp !== undefined) {
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
-            throw new AutoCastingError({
+            throw new CoercionError({
                 reason: `Type casting failed [${typeNames.join('|')}].`,
                 path: makePropNameArr(undefined, accessText),
                 hostName,
@@ -927,7 +925,7 @@ export function inputSingle<T>(
             try {
                 result = (validator as Function).call(host, item, input);
             } catch (err: any) {
-                throw new AutoCastingError({
+                throw new CoercionError({
                     reason: `Validator '${describeAnonymousValidateFunction(validator)}' has thrown an error: ${errorMessageOf(err)}.`,
                     path: makePropNameArr(undefined, accessText),
                     hostName,
@@ -941,7 +939,7 @@ export function inputSingle<T>(
             }
 
             if (!result) {
-                throw new AutoCastingError({
+                throw new CoercionError({
                     reason: `Rejected by validator ${describeAnonymousValidateFunction(validator)}.`,
                     path: makePropNameArr(undefined, accessText),
                     hostName,
@@ -1091,31 +1089,31 @@ export function __patchPropOptionsEnumToSet<T = any>(options: PropOptions<T>, de
 
 export function Prop<
     U = any,
-    T extends typeof AutoCastableMetaClass = typeof AutoCastableMetaClass
+    T extends typeof CoercibleMetaClass = typeof CoercibleMetaClass
 >(options: PropOptions<U> | string = {}) {
     const _options = typeof options === 'string' ? { path: options } : options;
 
     return function RPCParamPropDecorator(
         tgt: T['prototype'], propName: string | symbol
     ) {
-        const constructor = tgt.constructor as typeof AutoCastable;
-        if (!constructor[AUTOCASTABLE_OPTIONS_SYMBOL]) {
-            Object.defineProperty(constructor, AUTOCASTABLE_OPTIONS_SYMBOL, {
+        const constructor = tgt.constructor as typeof Coercible;
+        if (!constructor[COERCIBLE_OPTIONS_SYMBOL]) {
+            Object.defineProperty(constructor, COERCIBLE_OPTIONS_SYMBOL, {
                 value: {},
                 configurable: true,
                 enumerable: false,
                 writable: false,
             });
-        } else if (!constructor.hasOwnProperty(AUTOCASTABLE_OPTIONS_SYMBOL)) {
-            Object.defineProperty(constructor, AUTOCASTABLE_OPTIONS_SYMBOL, {
-                value: Object.create(constructor[AUTOCASTABLE_OPTIONS_SYMBOL]!),
+        } else if (!constructor.hasOwnProperty(COERCIBLE_OPTIONS_SYMBOL)) {
+            Object.defineProperty(constructor, COERCIBLE_OPTIONS_SYMBOL, {
+                value: Object.create(constructor[COERCIBLE_OPTIONS_SYMBOL]!),
                 configurable: true,
                 enumerable: false,
                 writable: false,
             });
         }
 
-        const hostConfig = constructor[AUTOCASTABLE_OPTIONS_SYMBOL]!;
+        const hostConfig = constructor[COERCIBLE_OPTIONS_SYMBOL]!;
 
         _options.path = _options.path || propName;
 
@@ -1134,25 +1132,32 @@ export function Also<T = any>(
     options: AdditionalPropOptions<T> & { [k: string]: any; } = {}
 ) {
     return function RPCParamPropDecorator(
-        tgt: typeof AutoCastableMetaClass
+        tgt: typeof CoercibleMetaClass
     ) {
-        if (!tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
-            Object.defineProperty(tgt, AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL, {
+        if (!tgt[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL]) {
+            Object.defineProperty(tgt, COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL, {
                 value: {},
                 configurable: true,
                 enumerable: false,
                 writable: false,
             });
-        } else if (!tgt.hasOwnProperty(AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL)) {
-            Object.defineProperty(tgt, AUTOCASTABLE_OPTIONS_SYMBOL, {
-                value: Object.create(tgt[AUTOCASTABLE_OPTIONS_SYMBOL]!),
+        } else if (!tgt.hasOwnProperty(COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL)) {
+            Object.defineProperty(tgt, COERCIBLE_OPTIONS_SYMBOL, {
+                value: Object.create(tgt[COERCIBLE_OPTIONS_SYMBOL]!),
                 configurable: true,
                 enumerable: false,
                 writable: false,
             });
         }
 
-        const hostConfig = tgt[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]!;
+        const hostConfig = tgt[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL]!;
         Object.assign(hostConfig, __patchPropOptionsEnumToSet(options));
     };
 }
+
+export const AutoCastable = Coercible;
+export const AutoCastableMetaClass = CoercibleMetaClass;
+export const AutoCastingError = CoercionError;
+export const isAutoCastableClass = isCoercibleClass;
+export const AUTOCASTABLE_OPTIONS_SYMBOL = COERCIBLE_OPTIONS_SYMBOL;
+export const AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL = COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL;

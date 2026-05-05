@@ -4,13 +4,14 @@ import { inspect } from 'util';
 import { STATUS_CODES } from 'http';
 import {
     InternalAdditionalPropOptions,
-    AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL, AUTOCASTABLE_OPTIONS_SYMBOL,
-    isAutoCastableClass,
+    COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL,
+    COERCIBLE_OPTIONS_SYMBOL,
+    isCoercibleClass,
     PropOptions,
     describeAnonymousValidateFunction,
     isZodType,
     describeType
-} from '../lib/auto-castable';
+} from '../lib/coercible';
 import {
     chainEntriesSimple as chainEntries, htmlEscape, isConstructor, isPrimitiveType
 } from '../utils';
@@ -271,7 +272,7 @@ export class OpenAPIManager {
     protected getRefNameOfConstructor(inputClass: any, direction: 'input' | 'output' = 'input') {
         const name = describeType(inputClass).replaceAll('~', '~0').replaceAll('/', '~1');
 
-        const propOptions = inputClass?.[AUTOCASTABLE_OPTIONS_SYMBOL];
+        const propOptions = inputClass?.[COERCIBLE_OPTIONS_SYMBOL];
         if (propOptions) {
             for (const [k, v] of chainEntries(propOptions)) {
                 if (v.path !== k) {
@@ -450,16 +451,16 @@ export class OpenAPIManager {
         let additionalOptionsApplied = false;
         let shouldAddToPrimitives = false;
         do {
-            if (isAutoCastableClass(input)) {
+            if (isCoercibleClass(input)) {
                 const openAPIDesc: any = {
                     title: input.name,
                 };
                 const properties: { [k: string]: any; } = {};
                 const requiredProperties: string[] = [];
                 const propOptions: { [k: string]: PropOptions<unknown>; } =
-                    input?.[AUTOCASTABLE_OPTIONS_SYMBOL];
+                    input?.[COERCIBLE_OPTIONS_SYMBOL];
                 const additionalOptions: InternalAdditionalPropOptions<unknown> | undefined =
-                    input[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+                    input[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL];
                 let considerProps = true;
                 if (additionalOptions?.arrayOf) {
                     considerProps = false;
@@ -594,9 +595,9 @@ export class OpenAPIManager {
             }
         } while (false);
 
-        if (!additionalOptionsApplied && input?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL]) {
+        if (!additionalOptionsApplied && input?.[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL]) {
             const additionalOptions: InternalAdditionalPropOptions<unknown> | undefined =
-                input[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+                input[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL];
 
             if (additionalOptions) {
                 this.applyMeta(final, additionalOptions, 'schema');
@@ -653,7 +654,7 @@ export class OpenAPIManager {
         if (Array.isArray(input)) {
             for (const x of input) {
                 const additionalOptions: InternalAdditionalPropOptions<unknown> | undefined =
-                    x?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+                    x?.[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL];
 
                 const partial: any = {};
                 if (additionalOptions) {
@@ -673,7 +674,7 @@ export class OpenAPIManager {
         }
 
         const additionalOptions: InternalAdditionalPropOptions<unknown> | undefined =
-            input?.[AUTOCASTABLE_ADDITIONAL_OPTIONS_SYMBOL];
+            input?.[COERCIBLE_ADDITIONAL_OPTIONS_SYMBOL];
 
         if (additionalOptions) {
             scene ?
@@ -767,7 +768,7 @@ export class OpenAPIManager {
                     for (const ppc of ppcs) {
                         const conf2 = {
                             type: x,
-                            path: isAutoCastableClass(x) ? undefined : conf.paramNames?.[i],
+                            path: isCoercibleClass(x) ? undefined : conf.paramNames?.[i],
                             ...ppc
                         };
                         _.merge(final, this.collectOperationMeta(
@@ -847,7 +848,7 @@ export class OpenAPIManager {
                 for (const ppc of ppcs) {
                     const conf = {
                         type: x,
-                        path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
+                        path: isCoercibleClass(x) ? undefined : rpcOptions.paramNames?.[i],
                         paramOf: rpcOptions.name,
                         ...ppc
                     } as PropOptions<unknown>;
@@ -909,7 +910,7 @@ export class OpenAPIManager {
                 for (const ppc of ppcs) {
                     const conf = {
                         type: x,
-                        path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
+                        path: isCoercibleClass(x) ? undefined : rpcOptions.paramNames?.[i],
                         paramOf: rpcOptions.name,
                         ...ppc
                     } as PropOptionsLike;
@@ -1051,7 +1052,7 @@ export class OpenAPIManager {
                 for (const ppc of ppcs) {
                     const conf = {
                         type: x,
-                        path: isAutoCastableClass(x) ? undefined : rpcOptions.paramNames?.[i],
+                        path: isCoercibleClass(x) ? undefined : rpcOptions.paramNames?.[i],
                         paramOf: rpcOptions.name,
                         ...ppc
                     } as PropOptionsLike;

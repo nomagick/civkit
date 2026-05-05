@@ -1,6 +1,6 @@
 {
     "name": "civkit",
-    "version": "0.9.1",
+    "version": "0.10.0",
     "description": "Sets of tools, in typescript",
     "main": "index.js",
     "types": "index.d.ts",
@@ -21,6 +21,7 @@
     "license": "AGPL",
     "dependencies": {
         "lodash": "^4.17.21",
+        "node-object-hash": "^3.0.0",
         "tslib": "^2.5.0"
     },
     "optionalDependencies": {
@@ -39,7 +40,7 @@
         "mime": "^3.0.0",
         "minimatch": "^10.0.1",
         "minio": "^7.0.33",
-        "node-object-hash": "^3.0.0",
+        "mongodb": "^6",
         "node-schedule": "^2.1.1",
         "nodemailer": "^6.9.1",
         "pino": "^8.11.0",
@@ -50,7 +51,6 @@
         "zod-openapi": "*"
     },
     "peerDependencies": {
-        "mongodb": "^6",
         "tsyringe": "^4"
     },
     "devDependencies": {
@@ -87,7 +87,9 @@
         "./civ-rpc/express": "./civ-rpc/framework-specific/express.js",
         "./civ-rpc/koa": "./civ-rpc/framework-specific/koa.js",
         "./decorators": "./decorators/index.js",
-        "./auto-castable": "./lib/auto-castable.js",
+        "./coercible": "./lib/coercible/index.js",
+        "./coercible-zod": "./lib/coercible/coercible-utils-zod.ts",
+        "./auto-castable": "./lib/coercible/index.js",
         "./async-context": "./lib/async-context.js",
         "./async-service": "./lib/async-service.js",
         "./asar/archive": "./lib/asar/archive.js",
