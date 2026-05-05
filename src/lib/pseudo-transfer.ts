@@ -139,7 +139,9 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
 
     expectPseudoTransferableType(type: Constructor) {
         if (this.pseudoTransferableTypes.has(type.name)) {
-            throw new Error(`Duplicated type name: ${type.name}`);
+            if (this.pseudoTransferableTypes.get(type.name) !== type) {
+                throw new Error(`Duplicated type name: ${type.name}`);
+            }
         }
         this.pseudoTransferableTypes.set(type.name, type);
     }
