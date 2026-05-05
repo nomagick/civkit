@@ -18,7 +18,7 @@
         "url": "ssh://git@git.naiver.org:6022/naiverlabs/typescript-toolkit.git"
     },
     "author": "nomagick@naiver.org",
-    "license": "AGPL",
+    "license": "Apache-2.0",
     "dependencies": {
         "lodash": "^4.17.21",
         "node-object-hash": "^3.0.0",
