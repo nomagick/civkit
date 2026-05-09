@@ -583,7 +583,7 @@ export function inputSingle<T>(
                 }
 
                 throw new CoercionError({
-                    reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
+                    reason: `Type coercion failed [${typeNames.join('|')}]: ${err}.`,
                     path: `${accessText}[${i}]`,
                     hostName,
                     propName: makePropNameArr(undefined, propName, i),
@@ -596,7 +596,7 @@ export function inputSingle<T>(
 
             if (elem === NOT_RESOLVED) {
                 throw new CoercionError({
-                    reason: `Type casting failed [${typeNames.join('|')}].`,
+                    reason: `Type coercion failed [${typeNames.join('|')}].`,
                     path: `${accessText}[${i}]`,
                     hostName,
                     propName: makePropNameArr(undefined, propName, i),
@@ -745,7 +745,7 @@ export function inputSingle<T>(
                 }
 
                 throw new CoercionError({
-                    reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
+                    reason: `Type coercion failed [${typeNames.join('|')}]: ${err}.`,
                     path: makePropName(undefined, accessText, k),
                     hostName,
                     propName: makePropName(undefined, propName, k),
@@ -758,7 +758,7 @@ export function inputSingle<T>(
 
             if (elem === NOT_RESOLVED) {
                 throw new CoercionError({
-                    reason: `Type casting failed [${typeNames.join('|')}].`,
+                    reason: `Type coercion failed [${typeNames.join('|')}].`,
                     path: makePropName(undefined, accessText, k),
                     hostName,
                     propName: makePropName(undefined, accessText, k),
@@ -888,7 +888,7 @@ export function inputSingle<T>(
         }
         if (inputProp !== undefined) {
             throw new CoercionError({
-                reason: `Type casting failed [${typeNames.join('|')}]: ${err}.`,
+                reason: `Type coercion failed [${typeNames.join('|')}]: ${err}.`,
                 path: makePropNameArr(undefined, accessText),
                 hostName,
                 propName: makePropNameArr(undefined, propName),
@@ -904,7 +904,7 @@ export function inputSingle<T>(
         if (config.required || inputProp !== undefined) {
             const typeNames = types.map((t: any) => (t.name ? t.name : t).toString());
             throw new CoercionError({
-                reason: `Type casting failed [${typeNames.join('|')}].`,
+                reason: `Type coercion failed [${typeNames.join('|')}].`,
                 path: makePropNameArr(undefined, accessText),
                 hostName,
                 propName: makePropNameArr(undefined, propName),
