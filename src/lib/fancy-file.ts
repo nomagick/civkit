@@ -238,7 +238,7 @@ export class FancyFile {
         }
 
         if (a instanceof URL && a.protocol === 'file:') {
-            return this._fromLocalFile(fileURLToPath(a.pathname), b);
+            return this._fromLocalFile(fileURLToPath(a), b);
         } else if (a instanceof URL && a.protocol === 'data:') {
             const data = a.toString().slice(a.protocol.length);
             const [mediaType, rest] = data.split(';');
