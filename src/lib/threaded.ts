@@ -282,7 +282,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                     asyncContext,
                 },
             };
-            const { data, profiles, transferList } = this.pseudoTransfer.composeTransferable(m);
+            const { data, profiles, transferList, oidObjMap } = this.pseudoTransfer.composeTransferable(m);
             if (signal) {
                 signal.throwIfAborted();
                 signal.addEventListener('abort', (_evt) => {
@@ -305,6 +305,15 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
             };
             parentPort.once('error', workerCrashHandler);
             port1.on('message', (msg) => {
+                if (msg?.type === 'remoteObjectReference') {
+                    const obj = oidObjMap.get(msg.oid);
+                    const port = msg.port;
+                    if (!(obj && port)) {
+                        return;
+                    }
+                    this.pseudoTransfer.handleRemoteAction(msg.port, obj);
+                    return;
+                }
                 parentPort!.off('error', workerCrashHandler);
                 switch (msg?.kind) {
                     case 'return': {
@@ -315,10 +324,6 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                     case 'throw': {
                         deferred.reject(this.pseudoTransfer.mangleTransferred(port1, msg.data, msg.dataProfiles));
                         port1.close();
-                        break;
-                    }
-                    case 'remoteObjectReference': {
-                        this.pseudoTransfer.handleRemoteAction(msg.port, data);
                         break;
                     }
                     default: {
@@ -386,7 +391,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                     asyncContext,
                 },
             };
-            const { data, profiles, transferList } = this.pseudoTransfer.composeTransferable(m);
+            const { data, profiles, transferList, oidObjMap } = this.pseudoTransfer.composeTransferable(m);
             if (signal) {
                 signal.throwIfAborted();
                 signal.addEventListener('abort', (_evt) => {
@@ -413,6 +418,15 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
             };
             worker.once('error', workerCrashHandler);
             port1.on('message', (msg) => {
+                if (msg?.type === 'remoteObjectReference') {
+                    const obj = oidObjMap.get(msg.oid);
+                    const port = msg.port;
+                    if (!(obj && port)) {
+                        return;
+                    }
+                    this.pseudoTransfer.handleRemoteAction(msg.port, obj);
+                    return;
+                }
                 worker.off('error', workerCrashHandler);
                 switch (msg?.kind) {
                     case 'return': {
@@ -423,10 +437,6 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                     case 'throw': {
                         deferred.reject(this.pseudoTransfer.mangleTransferred(port1, msg.data, msg.dataProfiles));
                         port1.close();
-                        break;
-                    }
-                    case 'remoteObjectReference': {
-                        this.pseudoTransfer.handleRemoteAction(msg.port, data);
                         break;
                     }
                     default: {
