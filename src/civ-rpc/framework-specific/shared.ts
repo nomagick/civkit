@@ -1,3 +1,4 @@
+import { Readable } from "stream";
 import { FancyFile } from "../../lib/fancy-file";
 import { MIMEVec } from "../../lib/mime";
 
@@ -22,4 +23,22 @@ export function cleanParams(params?: Record<string, unknown>) {
     }
 
     return params;
+}
+
+export function normalizeRPCOutput(output: any): any {
+    if (ArrayBuffer.isView(output) && !Buffer.isBuffer(output)) {
+        return Buffer.from(output.buffer, output.byteOffset, output.byteLength);
+    }
+    if (output instanceof ArrayBuffer) {
+        return Buffer.from(output);
+    }
+    if (
+        output !== null
+        && typeof output === 'object'
+        && !(output instanceof Readable || (typeof output?.pipe) === 'function')
+        && typeof output[Symbol.asyncIterator] === 'function'
+    ) {
+        return Readable.from(output);
+    }
+    return output;
 }

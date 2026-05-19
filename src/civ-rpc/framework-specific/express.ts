@@ -22,7 +22,7 @@ import { runOnce } from "../../decorators";
 import { humanReadableDataSize } from "../../utils/readability";
 import { marshalErrorLike } from '../../utils/lang';
 
-import { cleanParams, UploadedFile } from "./shared";
+import { cleanParams, normalizeRPCOutput, UploadedFile } from "./shared";
 import { AbstractAsyncContext, setupTraceId } from '../../lib/async-context';
 export { UploadedFile } from './shared';
 
@@ -281,7 +281,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
                     Object.setPrototypeOf(ctx, { req, res });
                     return this.call(methodName, jointInput, { env: ctx, signal: abortController.signal });
                 });
-                const output = result.output;
+                const output = normalizeRPCOutput(result.output);
                 clearTimeout(keepAliveTimer);
                 if (this._hack_block_unauthorized_send) {
                     Reflect.set(res, '_header', null);

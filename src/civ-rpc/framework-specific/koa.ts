@@ -26,7 +26,7 @@ import type http2 from 'http2';
 import { runOnce } from '../../decorators';
 import { humanReadableDataSize } from '../../utils/readability';
 import { marshalErrorLike } from '../../utils/lang';
-import { cleanParams, UploadedFile } from './shared';
+import { cleanParams, normalizeRPCOutput, UploadedFile } from './shared';
 import { AbstractAsyncContext, setupTraceId } from '../../lib/async-context';
 import { TrieRouter } from '../../lib/trie-router';
 export { UploadedFile } from './shared';
@@ -322,7 +322,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     Object.setPrototypeOf(asyncCtx, ctx);
                     return this.call(methodName, jointInput, { env: ctx, signal: abortController.signal });
                 });
-                const output = result.output;
+                const output = normalizeRPCOutput(result.output);
                 clearTimeout(keepAliveTimer);
 
                 // eslint-disable-next-line @typescript-eslint/no-magic-numbers
