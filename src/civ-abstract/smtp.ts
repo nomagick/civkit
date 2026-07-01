@@ -119,7 +119,7 @@ export abstract class AbstractSMTPSenderService extends AsyncService {
         return this.TATransport;
     }
 
-    parseEmail(input: string | { name: string; address: string; }) {
+    parseEmail(input: string | { name?: string; address: string; }) {
         let address = typeof input === 'string' ? input : input.address;
         let displayName = typeof input === 'string' ? undefined : input.name;
         if (typeof input == 'string') {
