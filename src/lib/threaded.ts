@@ -274,12 +274,13 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                 // Make sure the async context does not go out of scope too early
                 this.lifeCycleTrack.set(port1, asyncContext);
             }
+            const mangledAsyncContext = this.mangleAsyncContext(asyncContext);
             const m = {
                 name,
                 input,
                 env: {
                     ...env,
-                    asyncContext,
+                    asyncContext: mangledAsyncContext,
                 },
             };
             const { data, profiles, transferList, oidObjMap } = this.pseudoTransfer.composeTransferable(m);
@@ -367,6 +368,10 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         }
     }
 
+    mangleAsyncContext(ctx?: unknown) {
+        return ctx;
+    }
+
     override async exec(name: string, input: object, env?: any, signal?: AbortSignal, lateMangleMsg?: any) {
         await this.serviceReady();
         if (this.runInThread === RUN_IN_THREAD.CHILD_THREAD) {
@@ -383,12 +388,13 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
                 // Make sure the async context does not go out of scope too early
                 this.lifeCycleTrack.set(port1, asyncContext);
             }
+            const mangledAsyncContext = this.mangleAsyncContext(asyncContext);
             const m = {
                 name,
                 input,
                 env: {
                     ...env,
-                    asyncContext,
+                    asyncContext: mangledAsyncContext,
                 },
             };
             const { data, profiles, transferList, oidObjMap } = this.pseudoTransfer.composeTransferable(m);

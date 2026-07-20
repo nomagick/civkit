@@ -3,7 +3,7 @@ import _ from 'lodash';
 import busboy from 'busboy';
 
 import os from 'os';
-import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
 
 import { Readable } from 'stream';
 import type { Context, Middleware } from 'koa';
@@ -27,7 +27,7 @@ import { runOnce } from '../../decorators';
 import { humanReadableDataSize } from '../../utils/readability';
 import { marshalErrorLike } from '../../utils/lang';
 import { cleanParams, normalizeRPCOutput, UploadedFile } from './shared';
-import { AbstractAsyncContext, setupTraceId } from '../../lib/async-context';
+import { AbstractAsyncContext, parseTraceparent00, setupTraceCtx } from '../../lib/async-context';
 import { TrieRouter } from '../../lib/trie-router';
 export { UploadedFile } from './shared';
 
@@ -900,8 +900,14 @@ export abstract class KoaServer extends AsyncService {
     @runOnce()
     insertAsyncHookMiddleware() {
         const asyncHookMiddleware = async (ctx: Context, next: () => Promise<void>) => {
-            const googleTraceId = ctx.get('x-cloud-trace-context').split('/')?.[0];
-            setupTraceId(ctx.get('x-request-id') || ctx.get('request-id') || googleTraceId || randomUUID());
+            const parsedTraceparent = parseTraceparent00(ctx.get('traceparent') || '');
+            const googleTraceId = ctx.get('x-cloud-trace-context')?.split('/')?.[0];
+            setupTraceCtx({
+                traceId: parsedTraceparent?.traceId || googleTraceId || randomBytes(16).toString('hex'),
+                spanId: randomBytes(8).toString('hex'),
+                parentSpanId: parsedTraceparent?.spanId,
+                traceDt: new Date()
+            });
 
             return next();
         };

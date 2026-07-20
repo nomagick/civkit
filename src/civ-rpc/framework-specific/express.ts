@@ -2,7 +2,7 @@ import { Readable } from 'stream';
 import os from 'os';
 import http, { IncomingHttpHeaders } from 'http';
 import type http2 from 'http2';
-import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
 
 import _ from 'lodash';
 import busboy from 'busboy';
@@ -23,7 +23,7 @@ import { humanReadableDataSize } from "../../utils/readability";
 import { marshalErrorLike } from '../../utils/lang';
 
 import { cleanParams, normalizeRPCOutput, UploadedFile } from "./shared";
-import { AbstractAsyncContext, setupTraceId } from '../../lib/async-context';
+import { AbstractAsyncContext, parseTraceparent00, setupTraceCtx } from '../../lib/async-context';
 export { UploadedFile } from './shared';
 
 
@@ -848,8 +848,14 @@ export abstract class ExpressServer extends AsyncService {
     @runOnce()
     insertAsyncHookMiddleware() {
         const asyncHookMiddleware = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+            const parsedTraceparent = parseTraceparent00(req.get('traceparent') || '');
             const googleTraceId = req.get('x-cloud-trace-context')?.split('/')?.[0];
-            setupTraceId(req.get('x-request-id') || req.get('request-id') || googleTraceId || randomUUID());
+            setupTraceCtx({
+                traceId: parsedTraceparent?.traceId || googleTraceId || randomBytes(16).toString('hex'),
+                spanId: randomBytes(8).toString('hex'),
+                parentSpanId: parsedTraceparent?.spanId,
+                traceDt: new Date()
+            });
 
             return next();
         };

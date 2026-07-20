@@ -1,9 +1,11 @@
 import { AsyncLocalStorage } from 'async_hooks';
-import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
 import { AsyncService } from './async-service';
 
 export interface TraceCtx {
     traceId?: string;
+    spanId?: string;
+    parentSpanId?: string;
     traceT0?: Date;
     [k: string | symbol]: any;
 }
@@ -58,6 +60,18 @@ export abstract class AbstractAsyncContext extends AsyncService {
         return r;
     }
 
+
+    fork<T extends object, R, TArgs extends any[]>(ctx: T, func: (...args1: TArgs) => R): R;
+    fork<T extends object, R, TArgs extends any[]>(ctx: T, func: (...args1: TArgs) => R, ...args: TArgs): R;
+    fork<T extends object, R, TArgs extends any[]>(ctx: T, func: (...args1: TArgs) => R, ...args: TArgs) {
+        return this.asyncLocalStorage.run(Object.create(ctx), func, ...args);
+    }
+    forked<T extends object, R, TArgs extends any[]>(func: (...args: TArgs) => R, ctx: T = this.ctx) {
+        return (...args: TArgs) => {
+            return this.asyncLocalStorage.run(Object.create(ctx), func, ...args);
+        };
+    }
+
     get ctx() {
         const ctx = this.asyncLocalStorage.getStore();
         if (!ctx) {
@@ -103,8 +117,29 @@ export function setupTraceCtx(input?: Partial<TraceCtx>) {
     return defaultAsyncContext.setup(input);
 }
 
-export function setupTraceId(traceId: string = randomUUID(), traceT0: Date = new Date()) {
-    return setupTraceCtx({ traceId, traceT0 });
+function _getTraceId() {
+    return randomBytes(16).toString('hex');
+}
+function _getSpanId() {
+    return randomBytes(8).toString('hex');
+}
+
+export function parseTraceparent00(traceparent: string) {
+    const parts = traceparent.split('-');
+    const [version, traceId, spanId, traceFlags] = parts;
+    if (version !== '00') {
+        return;
+    }
+
+    return {
+        traceId,
+        spanId,
+        traceFlags,
+    };
+}
+
+export function setupTraceId(traceId: string = _getTraceId(), traceT0: Date = new Date()) {
+    return setupTraceCtx({ traceId, traceT0, spanId: _getSpanId() });
 }
 
 export function getTraceCtx() {
