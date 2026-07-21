@@ -31,11 +31,14 @@ export abstract class AbstractAsyncContext extends AsyncService {
         return ctx;
     }
 
-    run<T extends object, R>(func: () => R, base?: T) {
+    run<T extends object, R>(func: () => R, base: T = {} as any) {
         let ctx = this.asyncLocalStorage.getStore();
         ctx ??= base;
+        if (ctx !== base) {
+            Object.assign(ctx, base);
+        }
 
-        return this.asyncLocalStorage.run({ ...ctx, ...base }, func);
+        return this.asyncLocalStorage.run(ctx, func);
     }
 
     bridge<T extends object, R, TArgs extends any[]>(ctx: T, func: (...args1: TArgs) => R): R;
