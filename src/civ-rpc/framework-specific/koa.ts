@@ -16,8 +16,8 @@ import {
     LoggerInterface, mimeOf, NDJsonStream, parseContentType,
     restoreContentType, TimeoutError
 } from '../../lib';
-import { RPCHost, RPC_CALL_ENVIRONMENT } from '../base';
-import { DataStreamBrokenError } from '../errors';
+import { RPCHost, RPC_CALL_ENVIRONMENT, rpcExport } from '../base';
+import { ApplicationError, DataStreamBrokenError } from '../errors';
 import { extractTransferProtocolMeta, TransferProtocolMetadata } from '../meta';
 import { AbstractRPCRegistry } from '../registry';
 import { OpenAPIManager } from '../openapi';
@@ -73,6 +73,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     _RESPONSE_STREAM_MODE: 'direct' | 'koa' = 'koa';
 
     koaMiddlewares = [
+        this.__basicErrorHandler.bind(this),
         this.__CORSAllowAllMiddleware,
         bodyParser({
             enableTypes: ['json', 'form', 'text'],
@@ -583,15 +584,18 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
 
         const deferred = Defer();
         const deletionOfFiles = () => {
-            return Promise.all(allFiles.map((x) => x.unlink()));
+            return Promise.all(allFiles.map((x) => x.unlink())).catch(() => undefined);
         };
         boy.once('finish', () => {
             deferred.resolve(allFiles);
         });
 
-        boy.once('error', (err: Error) => {
-            deletionOfFiles().catch(this.logger.warn);
-            deferred.reject(new DataStreamBrokenError(err));
+        boy.on('error', (err: Error) => {
+            deletionOfFiles();
+            deferred.reject(new DataStreamBrokenError({
+                message: `${err.message || err}`,
+                cause: err,
+            }));
         });
 
         ctx.req.pipe(boy);
@@ -603,10 +607,10 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         } finally {
             if (ctx.res.writable) {
                 ctx.res.once('close', () => {
-                    deletionOfFiles().catch(this.logger.warn);
+                    deletionOfFiles();
                 });
             } else {
-                deletionOfFiles().catch(this.logger.warn);
+                deletionOfFiles();
             }
         }
     }
@@ -708,6 +712,35 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
         }
 
         return next();
+    }
+
+    protected async __basicErrorHandler(ctx: Context, next: () => Promise<any>) {
+        try {
+            await next();
+        } catch (err: any) {
+            this.logger.warn(`HTTP framework stack error: ${err?.message || err}`, { brief: this.briefKoaRequest(ctx), err });
+
+            ctx.status = 500;
+            ctx.body = 'internal server error';
+            if (err instanceof ApplicationError) {
+                const tpm = extractTransferProtocolMeta(err);
+                if (tpm?.code) {
+                    ctx.status = tpm.code;
+                }
+                if (tpm?.contentType) {
+                    ctx.set('Content-Type', tpm.contentType);
+                }
+                if (tpm?.headers) {
+                    for (const [key, value] of Object.entries(tpm.headers)) {
+                        if (value === undefined) {
+                            continue;
+                        }
+                        ctx.set(key, value);
+                    }
+                }
+                ctx.body = await rpcExport(err);
+            }
+        }
     }
 
     protected __noop(ctx: Context, next: () => Promise<any>) {

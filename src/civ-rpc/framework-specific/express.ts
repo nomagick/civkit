@@ -13,8 +13,8 @@ import {
     LoggerInterface, mimeOf, NDJsonStream, parseContentType,
     restoreContentType, TimeoutError
 } from "../../lib";
-import { RPCHost, RPC_CALL_ENVIRONMENT } from "../base";
-import { DataStreamBrokenError } from "../errors";
+import { RPCHost, RPC_CALL_ENVIRONMENT, rpcExport } from "../base";
+import { ApplicationError, DataStreamBrokenError } from "../errors";
 import { extractTransferProtocolMeta, TransferProtocolMetadata } from "../meta";
 import { AbstractRPCRegistry } from "../registry";
 import { OpenAPIManager } from "../openapi";
@@ -49,16 +49,28 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
         express.json({ limit: this._BODY_PARSER_LIMIT }),
         express.urlencoded({ extended: true, limit: this._BODY_PARSER_LIMIT }),
         this.__CORSAllowAllMiddleware.bind(this),
-        this.__multiParse.bind(this)
+        this.__multiParse.bind(this),
+        this.__basicErrorHandler.bind(this),
     ];
 
     protected __routerRegister(router: express.Router, url: string, methods: string[], controller: express.RequestHandler) {
+        const normalMiddlewares = [];
+        const errorHandlers = [];
+
+        for (const mw of this.expressMiddlewares) {
+            if (mw.length >= 4) {
+                errorHandlers.push(mw);
+                continue;
+            }
+            normalMiddlewares.push(mw);
+        }
+
         for (const method of methods) {
             const func = Reflect.get(router, method.toLowerCase());
             if (!func) {
                 continue;
             }
-            func.call(router, url, ...this.expressMiddlewares, controller);
+            func.call(router, url, ...normalMiddlewares, controller, ...errorHandlers);
         }
     }
 
@@ -539,15 +551,18 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
 
         const deferred = Defer();
         const deletionOfFiles = () => {
-            return Promise.all(allFiles.map((x) => x.unlink()));
+            return Promise.all(allFiles.map((x) => x.unlink())).catch(() => undefined);
         };
         boy.once('finish', () => {
             deferred.resolve(allFiles);
         });
 
-        boy.once('error', (err: Error) => {
-            deletionOfFiles().catch(this.logger.warn);
-            deferred.reject(new DataStreamBrokenError(err));
+        boy.on('error', (err: Error) => {
+            deletionOfFiles();
+            deferred.reject(new DataStreamBrokenError({
+                message: `${err.message || err}`,
+                cause: err,
+            }));
         });
 
         req.pipe(boy);
@@ -558,7 +573,7 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
             return next();
         } finally {
             res.once('close', () => {
-                deletionOfFiles().catch(this.logger.warn);
+                deletionOfFiles();
             });
         }
     }
@@ -655,6 +670,32 @@ export abstract class ExpressRegistry extends AbstractRPCRegistry {
         }
 
         return next();
+    }
+
+    protected async __basicErrorHandler(err: any, req: express.Request, res: express.Response, _next: express.NextFunction) {
+        this.logger.warn(`HTTP framework stack error: ${err?.message || err}`, { brief: this.briefExpressRequest(req, res), err });
+
+        let status = 500;
+        let msg = 'internal server error';
+        if (err instanceof ApplicationError) {
+            const tpm = extractTransferProtocolMeta(err);
+            if (tpm?.code) {
+                status = tpm.code;
+            }
+            if (tpm?.contentType) {
+                res.set('Content-Type', tpm.contentType);
+            }
+            if (tpm?.headers) {
+                for (const [key, value] of Object.entries(tpm.headers)) {
+                    if (value === undefined) {
+                        continue;
+                    }
+                    res.set(key, value);
+                }
+            }
+            msg = await rpcExport(err);
+        }
+        res.status(status).send(msg);
     }
 
     protected __noop(_req: express.Request, res: express.Response) {
