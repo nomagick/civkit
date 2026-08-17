@@ -500,7 +500,7 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
         if (this.runInThread !== RUN_IN_THREAD.THIS_THREAD) {
             return;
         }
-        if (workerData.type !== this.constructor.name) {
+        if (isMainThread || workerData?.type !== this.constructor.name) {
             return;
         }
 
