@@ -160,8 +160,8 @@ export class IntegrityEnvelope extends RPCEnvelope {
         const tpm = extractTransferProtocolMeta(draft) || extractTransferProtocolMeta(data);
 
         if (tpm) {
-            code = tpm.code || code;
-            status = tpm.status || code;
+            code = tpm.code ?? code;
+            status = tpm.status ?? status;
         }
 
         if (
