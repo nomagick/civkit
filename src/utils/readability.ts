@@ -1,5 +1,8 @@
 
 export function humanReadableDataSize(size: number | string | void) {
+    if (size === undefined || size === null) {
+        return '';
+    }
 
     const parsed = parseInt(size as any, 10);
     if (!parsed) {

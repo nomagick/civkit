@@ -381,9 +381,15 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
                     }
                     ctx.socket?.setKeepAlive(true, 1000);
                     this.applyTransferProtocolMeta(ctx, result.tpm);
+
                     const nodeStream = Readable.fromWeb(output.stream());
-                    nodeStream.pipe(ctx.res, { end: true });
                     nodeStream.once('end', () => done = true);
+                    if (this._RESPONSE_STREAM_MODE === 'direct') {
+                        ctx.respond = false;
+                        nodeStream.pipe(ctx.res, { end: true });
+                    } else {
+                        ctx.body = nodeStream;
+                    }
                     ctx.res.once('close', () => {
                         if (!nodeStream.readableEnded) {
                             this.logger.warn(`Response stream closed before readable ended, probably downstream socket closed.`);
@@ -492,7 +498,7 @@ export abstract class KoaRPCRegistry extends AbstractRPCRegistry {
     }
 
     override async exec(name: string, input: object, env?: object, signal?: AbortSignal) {
-        this.emit('run', name, input);
+        this.emit('run', name, input, env);
         const startTime = Date.now();
         try {
             const result = await super.exec(name, input, env, signal);
@@ -960,19 +966,30 @@ export abstract class KoaServer extends AsyncService {
                 this.logger.info(`Incoming request: ${ctx.request.method.toUpperCase()} ${url} ${ctx.request.type || 'unspecified-type'} ${humanReadableDataSize(ctx.request.get('content-length') || ctx.request.socket.bytesRead) || 'N/A'} ${ctx.ip}`);
             }
             let downstreamReturned = false;
+            let respCounter = 0;
             ctx.res.once('close', () => {
                 const duration = Date.now() - startedAt;
                 if (downstreamReturned) {
-                    this.logger.info(`Request completed: ${ctx.status} ${ctx.request.method.toUpperCase()} ${url} ${ctx.response.type || 'unspecified-type'} ${humanReadableDataSize(ctx.response.get('content-length') || ctx.res.socket?.bytesWritten) || 'cancelled'} ${duration}ms`);
+                    this.logger.info(`Request completed: ${ctx.status} ${ctx.request.method.toUpperCase()} ${url} ${ctx.response.type || 'unspecified-type'} ${humanReadableDataSize(respCounter || ctx.response.get('content-length')) || 'N/A'} ${duration}ms`);
                     return;
                 }
 
 
-                this.logger.info(`Request cancelled: ??? ${ctx.request.method.toUpperCase()} ${url} ${ctx.response.type || 'unspecified-type'} ${humanReadableDataSize(ctx.response.get('content-length') || ctx.res.socket?.bytesWritten) || 'cancelled'} ${duration}ms`);
+                this.logger.info(`Request cancelled: ??? ${ctx.request.method.toUpperCase()} ${url} ${ctx.response.type || 'unspecified-type'} ${humanReadableDataSize(respCounter || ctx.response.get('content-length')) || 'N/A'} ${duration}ms`);
             });
 
             const pn = next();
-            pn.finally(() => { downstreamReturned = true; });
+            pn.finally(() => {
+                downstreamReturned = true;
+                respCounter = ctx.response.length || 0;
+                if (!respCounter && (ctx.body as Readable)?.readable) {
+                    (ctx.body as Readable).on('data', (chunk) => {
+                        const byteSize = Buffer.byteLength(chunk);
+                        respCounter += byteSize;
+                        ctx.loggerObservedResponseSize = respCounter;
+                    });
+                }
+            });
 
             return pn;
         };
