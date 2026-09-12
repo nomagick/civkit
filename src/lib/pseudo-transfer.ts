@@ -99,6 +99,8 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
 
     primaryPort = parentPort;
 
+    transferMark = new WeakSet();
+
     portFinalizationRegistry = new FinalizationRegistry((port: MessagePort) => {
         port.close();
     });
@@ -702,7 +704,11 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
             return true;
         }
 
-        if (isTypedArray(thing) && !Buffer.isBuffer(thing)) {
+        if (thing instanceof ArrayBuffer) {
+            return true;
+        }
+
+        if (isTypedArray(thing)) {
             return true;
         }
 
@@ -711,6 +717,13 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
         }
 
         return undefined;
+    }
+
+    markForTransfer(thing: object) {
+        this.transferMark.add(thing);
+    }
+    clearTransferMark(thing: object) {
+        this.transferMark.delete(thing);
     }
 
     protected customDeepClone(obj: any) {
@@ -751,8 +764,8 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
             }
 
             const nativelyTransferable = this.isNativelyTransferable(equv);
-            if (nativelyTransferable) {
-                transferList.push(equv);
+            if (this.transferMark.has(equv)) {
+                transferList.push(isTypedArray(equv) ? equv.buffer : equv);
                 continue;
             }
 
