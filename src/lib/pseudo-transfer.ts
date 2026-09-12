@@ -719,11 +719,15 @@ export abstract class AbstractPseudoTransfer extends AsyncService {
         return undefined;
     }
 
-    markForTransfer(thing: object) {
-        this.transferMark.add(thing);
+    markForTransfer(...things: object[]) {
+        for (const thing of things) {
+            this.transferMark.add(thing);
+        }
     }
-    clearTransferMark(thing: object) {
-        this.transferMark.delete(thing);
+    clearTransferMark(...things: object[]) {
+        for (const thing of things) {
+            this.transferMark.delete(thing);
+        }
     }
 
     protected customDeepClone(obj: any) {

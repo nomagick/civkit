@@ -555,12 +555,12 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
 
     }
 
-    markForTransfer(thing: object) {
-        this.pseudoTransfer.markForTransfer(thing);
+    markForTransfer(...things: object[]) {
+        this.pseudoTransfer.markForTransfer(...things);
     }
 
-    clearTransferMark(thing: object) {
-        this.pseudoTransfer.clearTransferMark(thing);
+    clearTransferMark(...things: object[]) {
+        this.pseudoTransfer.clearTransferMark(...things);
     }
 
     override decorators() {
