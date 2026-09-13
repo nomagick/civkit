@@ -517,8 +517,10 @@ export abstract class AbstractThreadedServiceRegistry extends AbstractRPCRegistr
             require(f);
         }
 
-        this.notifyOngoingTasks();
-        setInterval(() => this.notifyOngoingTasks(), 1000).unref();
+        this.once('ready', ()=> {
+            this.notifyOngoingTasks();
+            setInterval(() => this.notifyOngoingTasks(), 1000).unref();
+        });
 
         parentPort!.on('message', async (msg) => {
             if (msg?.channel === this.constructor.name && msg.event === 'exec') {
